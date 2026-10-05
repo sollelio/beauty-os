@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 120" role="img" aria-label="Sollelio Workforce reversed logo">
+  <rect width="470" height="120" fill="#11152D"/>
+  <g transform="translate(6 10)">
+    <path fill="#FFFFFF" d="M8 8h34c4 0 6 2 6 6v17c0 6-3 10-8 13L8 58V8Z"/>
+    <path fill="#D98A20" d="M58 8h26c5 0 8 3 8 8v20L60 50c-5 2-8-1-8-6V18c0-7 2-10 6-10Z"/>
+    <path fill="#FFFFFF" d="M8 66l32-14c5-2 8 1 8 6v24c0 7-3 10-10 10H16c-5 0-8-3-8-8V66Z"/>
+    <path fill="#FFFFFF" d="M60 56l32-14v42c0 5-3 8-8 8H58c-4 0-6-2-6-6V69c0-6 3-10 8-13Z"/>
+  </g>
+  <text x="126" y="65" fill="#FFFFFF" font-family="Rubik, Arial, sans-serif" font-size="55" font-weight="500" letter-spacing="-1.2">Sollelio</text>
+  <text x="128" y="99" fill="#FFFFFF" font-family="Rubik, Arial, sans-serif" font-size="25" font-weight="400" letter-spacing="0.4">Workforce</text>
+</svg>
