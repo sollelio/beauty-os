@@ -4,9 +4,9 @@ Working rules for Claude Code sessions in this repository.
 
 ## Current phase
 
-**Product / solution discovery.** There is no application code.
+**Architecture Definition approved.** The device/verification spike is the next checkpoint. There is still no application code.
 
-No frontend framework, backend, database, auth provider, hosting platform, architecture or design system has been chosen. Do not pick, propose as settled, or scaffold any of them unless explicitly asked.
+Implementation must not begin unless explicitly requested. The technical direction is fixed by the Accepted ADRs (React + TypeScript web app on Netlify; Supabase PostgreSQL, Auth, RLS, Storage and Edge Functions; modular monolith). The shared-device principal and verification mechanism is **not chosen** until ADR-0009 is accepted on spike evidence. No visual design system has been chosen.
 
 ## Canonical documentation
 
@@ -23,6 +23,8 @@ Read the relevant docs **before** proposing any change, design or plan.
 | [docs/06_DESIGN_PRINCIPLES.md](docs/06_DESIGN_PRINCIPLES.md) | Product experience principles |
 | [docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md](docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md) | Product/design → architecture handoff: V1 coverage, gap-closure decisions, open-question triage, domain and financial invariants, product-level authorization boundaries |
 | `docs/design/slice-NN-*.md` | Design-slice proposals (one per `/design` slice). Proposals, not decisions: they cite the canonical docs and list what they leave open. |
+| [docs/architecture/architecture-definition.md](docs/architecture/architecture-definition.md) | Approved technical architecture |
+| [docs/architecture/adr/](docs/architecture/adr/README.md) | Architecture Decision Records. **Accepted** ADRs are binding architecture decisions; **Proposed** ADRs are not binding. |
 
 ## Rules
 
@@ -59,6 +61,7 @@ Read the relevant docs **before** proposing any change, design or plan.
 13. **Implementation must not begin until explicitly requested.**
 14. **Use `/design` only when explicitly requested.** Any design output must respect the canonical docs; flag deviations instead of making them.
 15. **Do not commit unless explicitly instructed.**
+16. **Follow the Accepted ADRs.** A deviation from an Accepted ADR requires an explicit superseding architecture decision (a new ADR); flag the conflict instead of deviating.
 
 ### Maintaining the docs
 

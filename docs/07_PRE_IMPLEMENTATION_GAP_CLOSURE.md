@@ -342,7 +342,10 @@ Cross-cutting requirements:
 From canon and the approved slices, so the questions in §5.2–§5.3 can stay open safely:
 
 1. **Records are append-only.** Corrections, rule changes, annulled approvals and reopenings are new records referencing what they change; nothing is deleted or silently overwritten (04 J1, J5; Slices 01–06).
-2. **Derived figures are recomputed from records** (production, earned, payable, *Livre*, reserve balance, stock history). Exceptions are explicit snapshots: the approved payable per person (F-G8) and the decision records themselves.
+2. **Derived figures are recomputed from records** (production, earned, payable, *Livre*, reserve balance, stock history), with three distinct kinds of stored data:
+   - **source records** — immutable and reconstructable (services, movements, decisions, payments);
+   - **approval outputs** — the approved payable per person and the decision records themselves, required by the product (F-G8);
+   - **close-time financial outputs** — persisted at close **only** to preserve the historical meaning of a closed period if calculation implementations change ([Architecture Definition §14](architecture/architecture-definition.md#14-historical-financial-stability--audit-model)). They change no product behaviour and are not a ledger or event-sourcing requirement.
 3. **Periods are explicit entities** with their own bounds and the four `Decided` states. Do not derive a period from the calendar month (P6).
 4. **Each event keeps the date it happened separately from when it was recorded and by whom** (P11). Period membership follows the event date.
 5. **Remuneration rules are versioned per person** (standing) with per-period contextual decisions (D4); *pending* is a first-class state, distinct from zero (03 §3).
