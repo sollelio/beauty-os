@@ -4,9 +4,9 @@ Working rules for Claude Code sessions in this repository.
 
 ## Current phase
 
-**Architecture Definition approved.** The device/verification spike is the next checkpoint. There is still no application code.
+**Architecture Definition approved; ADR-0001…0009 Accepted.** The device/verification spike is complete (Android Chrome validated; iOS Safari physical validation deferred until hardware is available — a required gate before pilot sign-off). There is still no application code.
 
-Implementation must not begin unless explicitly requested. The technical direction is fixed by the Accepted ADRs (React + TypeScript web app on Netlify; Supabase PostgreSQL, Auth, RLS, Storage and Edge Functions; modular monolith). The shared-device principal and verification mechanism is **not chosen** until ADR-0009 is accepted on spike evidence. No visual design system has been chosen.
+Implementation must not begin unless explicitly requested. The technical direction is fixed by the Accepted ADRs (React + TypeScript web app on Netlify; Supabase PostgreSQL, Auth, RLS, Storage and Edge Functions; modular monolith). The shared-device principal and verification mechanism is ADR-0009 (Alternative A). No visual design system has been chosen.
 
 ## Canonical documentation
 

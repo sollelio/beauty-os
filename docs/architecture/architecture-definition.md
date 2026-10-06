@@ -1,6 +1,6 @@
 # Beauty OS — Architecture Definition
 
-**Status:** approved (Architecture Definition checkpoint, 2026-10-06). ADR-0001…0008 are Accepted; ADR-0009 stays Proposed until the device/verification spike. Documentation only: no code, configuration, infrastructure or schema exists or is implied by this document.
+**Status:** approved (Architecture Definition checkpoint, 2026-10-06). ADR-0001…0009 are Accepted (ADR-0009 at the device/verification spike checkpoint, 2026-10-06; physical iOS Safari validation deferred, §23.6). Documentation only: no code, configuration, infrastructure or schema exists or is implied by this document.
 **Baseline:** `a39f96d` — product canon [docs/00–07](../07_PRE_IMPLEMENTATION_GAP_CLOSURE.md) and the six approved slices in [docs/design/](../design/).
 **Decision records:** [adr/](adr/) (ADR-0001 … ADR-0009).
 
@@ -11,7 +11,7 @@
 | **Constraint** | Technical direction already agreed by Sollelio before this document (stack, hosting, monolith, RLS as boundary). |
 | **Product** | A product rule taken from the canonical docs; cited, never changed here. |
 | **Defined** | An architecture decision made in this document (and its ADR), pending checkpoint review. |
-| **Spike** | Requirement fixed; mechanism to be chosen by the bounded spike in §23. |
+| **Spike** | Requirement fixed by §23; mechanism chosen by the spike and recorded in ADR-0009 (Alternative A). |
 | **Deferred** | Architecture decision intentionally postponed until implementation evidence exists (§21). |
 | **Open product** | Product behaviour still unresolved in the canon. It does not block this Architecture Definition or the device/verification spike, and its answer should not invalidate the system and module boundaries. Its answer may require **additive** schema, command, state-transition or constraint changes, which are not pre-designed here (§21.1). The architecture does not decide it. |
 
@@ -134,7 +134,7 @@ Principal entities (indicative, not a schema): Organization, Setting lists, Pers
 - Ordinary records store *device + declared operator* (unverified) and recording time.
 - Sensitive records store the *verified actor* and time. The product shows "confirmado por X" only from this level.
 
-**Spike:** how a device principal is created and bound, and how verification and scope are represented, is decided by §23. The model above must hold for every candidate.
+**Mechanism (ADR-0009, Accepted):** the device principal is a Supabase anonymous user bound to one organization by redeeming a single-use enrollment code; verification creates database-held grants bound to the device and its Auth `session_id`, scoped `one_shot` or `private_session`; the actor context checks the Auth session row, the device binding and the grant on every request. Mitigations and revocation layers: ADR-0009.
 
 ## 8. Authorization / RLS model
 
@@ -264,8 +264,8 @@ Changes that cannot alter results (e.g. a catalogue default price, a person's ca
 | **Approval** | active → annulled | Immutable record + annulment record. |
 | **Person in period** | pending (contextual rule undecided) → determined (rule decided/changed while allowed) → frozen (approved) | Derived from rule versions, decisions and approval. |
 | **Payment status per person** | por pagar → parcial → pago · nada a pagar | Derived. *Parcial* and over-payment behaviour **Open product** (07 I2); the data model allows several payments. |
-| **Verification (elevation)** | none → granted (scope, expiry) → used / expired / revoked | **Spike** (§23). |
-| **Device binding** | enrolled → revoked | **Spike** (§23). |
+| **Verification (elevation)** | none → granted (scope, expiry) → used / expired / revoked | **Defined** — ADR-0009. |
+| **Device binding** | enrolled → revoked | **Defined** — ADR-0009. |
 | **Stock product** | OK · Baixo · Comprar — human-set only; list membership independent | **Product** (Slice 05). |
 | **Command attempt** (client) | editing → submitting → succeeded · rejected (domain) · failed (network; data kept, retry with same `command_id`) | **Product** D5 + §12. |
 | **Market trip** (client draft) | planned → in progress → handed to purchase capture | **Defined:** client-local draft, not a business record (§15). |
@@ -316,7 +316,8 @@ This is not an accounting ledger, double entry or event sourcing: inputs stay no
 | Simple configuration lists (categories, origins, unit words, payment methods) | Direct write under RLS (B10), audited | Low risk |
 | Standing rule versions, permission grants, catalogue prices | Database commands (B10), audited | Security- and money-relevant |
 | All financial, production and period mutations (§9) | Database commands | One transaction, invariants, locks, revision, idempotency |
-| Principal provisioning, device binding, verification of a person's secret, person invitation, organization provisioning | Edge Function or admin tooling, **mechanism per §23** | Needs secrets or admin capability |
+| Device enrollment (code redemption) and verification of a person's secret | Database commands (ADR-0009) | Atomic, audited, actor resolved server-side |
+| Deleting a device's Auth user, person invitation/provisioning, organization provisioning | Edge Function or admin tooling (ADR-0009) | Needs the secret key / Admin API |
 
 Edge Functions do not implement domain commands: they cannot hold one database transaction across several API calls, and commands must be atomic.
 
@@ -368,7 +369,7 @@ One package; no monorepo tooling. Module boundaries are a convention first; a li
 ## 20. Delivery / vertical-slice strategy
 
 1. **Checkpoint review** of this document and the ADRs.
-2. **Device/elevation spike** (§23) → ADR-0009 accepted or revised.
+2. **Device/elevation spike** (§23) → **done**: ADR-0009 accepted (Alternative A). Physical iOS Safari validation deferred until hardware is available; required before pilot sign-off.
 3. **Minimal foundation**, only what the first slice needs: scaffold; local Supabase and migration pipeline; CI with type-check and database tests; preview deploy; organization, people, principals and actor context; RLS helpers; command scaffolding (journal, revision, error codes); seed loader.
 4. **Slice 01 (record service on the shared device):** validates tenancy, the device principal, operational reads, the first command with `command_id`, revision bump, Hoje composition, D5 retry.
 5. **Slices 02 + 04:** validates verification, sensitive classes, SQL derivations, self vs manager views.
@@ -391,7 +392,8 @@ No horizontal infrastructure phase beyond step 3.
 
 | Decision | Until |
 |---|---|
-| Device principal, elevation mechanism, verification secret and timeouts | Spike (§23); UX details also need product input (05 §3) |
+| Verification secret format, lockout thresholds and timeout values; idle-timeout extension | Implementation; UX details also need product input (05 §3) — mechanism decided in ADR-0009 |
+| Physical iOS Safari validation of ADR-0009 | Hardware availability; required gate before pilot / production-readiness sign-off |
 | Correction mechanics and records entering a period after approval | **Open product** (07 I1, P11) |
 | Partial payments / over-payments behaviour beyond the canon | **Open product** (07 I2) |
 | Reopen target state | **Open product** (07 I3) |
@@ -404,7 +406,7 @@ No horizontal infrastructure phase beyond step 3.
 | Command-journal retention | Implementation |
 | Dedicated definer-owner role with forced RLS | Implementation (§9 S-7) |
 | Module-boundary lint tooling | First violation |
-| Remote-person sign-in method (email, magic link, phone OTP) | Spike input (SQ-11) |
+| Remote-person sign-in method (email, magic link, phone OTP) | Deferred (ADR-0009); before remote payment confirmation is implemented |
 | PWA / offline sync | After pilot evidence (D5) |
 
 ## 22. Architecture risks
@@ -424,7 +426,7 @@ No horizontal infrastructure phase beyond step 3.
 
 ## 23. Device / elevation spike specification
 
-**Status: Spike.** The conceptual need is accepted; no mechanism is chosen.
+**Status: completed** (2026-10-06). Outcome in §23.6 and ADR-0009 (Accepted).
 
 ### 23.1 Requirements and invariants the mechanism must satisfy
 
@@ -500,6 +502,13 @@ A mechanism is **rejected** if any requirement in §23.1 is unmet without a docu
 - Spike code is throwaway and is not merged into `main`.
 - Time-boxed; out of scope: product UX of the verification step, final schema, any feature code.
 
+### 23.6 Outcome (2026-10-06)
+
+- **Chosen:** Alternative A — anonymous device principal, server-side device binding, database-held verification grants, trusted actor context — with the mandatory mitigations in ADR-0009. **B** is the documented fallback; **C**, **D**, **E** are rejected for the shared device (reasons in ADR-0009).
+- **Evidence:** automated access matrix, timed revocation/expiry/idempotency/brute-force tests, Chromium persistence tests and an Edge Function admin boundary on a disposable local stack; physical **Android Chrome PASSED**, corroborated by server-side records.
+- **Physical iOS Safari: DEFERRED UNTIL HARDWARE IS AVAILABLE.** Required gate before pilot / production-readiness sign-off; it does not block ADR-0009 or the start of implementation; emulated or desktop engines are not a substitute.
+- Acceptance criterion 6 of §23.4 is therefore met for Android Chrome and open for iOS Safari.
+
 ## 24. Architecture Definition readiness checklist
 
 | Item | State |
@@ -507,7 +516,7 @@ A mechanism is **rejected** if any requirement in §23.1 is unmet without a docu
 | Constraints recorded (stack, hosting, monolith, RLS boundary, tenancy) | Done (§2, §3, ADR-0001/0002/0008) |
 | Module ownership and dependency rules | Done (§4, §5) |
 | Data principles traceable to the product canon | Done (§6) |
-| Identity concepts and attribution levels | Done (§7); mechanism pending spike |
+| Identity concepts and attribution levels | Done (§7); mechanism in ADR-0009 |
 | Authorization classes and RLS rules | Done (§8) |
 | Trusted command contract (definer security) | Done (§9, ADR-0003) |
 | Calculation authority and preview rule | Done (§10, ADR-0004) |
@@ -524,4 +533,4 @@ A mechanism is **rejected** if any requirement in §23.1 is unmet without a docu
 | Deferred and open-product items listed | Done (§21) |
 | Spike specification with acceptance criteria | Done (§23) |
 | Checkpoint review of this document | **Done** — approved 2026-10-06 |
-| Device/elevation mechanism | **Pending spike** |
+| Device/elevation mechanism | **Done** — ADR-0009 Accepted; iOS Safari physical validation deferred (pre-pilot gate) |

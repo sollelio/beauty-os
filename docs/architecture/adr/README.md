@@ -14,4 +14,4 @@ Status values: **Proposed** (not binding) · **Accepted** (binding) · **Superse
 | [0006](0006-command-idempotency.md) | Command idempotency with `command_id` | Accepted |
 | [0007](0007-historical-financial-stability.md) | Historical financial stability and separate histories | Accepted |
 | [0008](0008-frontend-stack-and-repository-organization.md) | Frontend stack and repository organization | Accepted |
-| [0009](0009-shared-device-principal-and-verification.md) | Shared-device principal and verified actor | Proposed — **mechanism open, pending spike** |
+| [0009](0009-shared-device-principal-and-verification.md) | Shared-device principal and verified actor | Accepted (iOS Safari physical validation deferred; pre-pilot gate) |
