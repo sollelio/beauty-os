@@ -1,0 +1,1 @@
+Domain modules (`org`, `catalogue`, `services`, `team`, `purchasing`, `money`, `stock`, `period`) are added here as slices need them — see ADR-0001 and ADR-0008. Each module exposes its own access layer; components never call the Supabase client directly.

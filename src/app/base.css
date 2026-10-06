@@ -1,0 +1,5 @@
+/* Structural base only. Visual design (accent, typeface, tokens) is not decided here. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: system-ui, sans-serif; line-height: 1.4; }
+.app-main { width: 100%; max-width: 40rem; margin: 0 auto; padding: 1rem; }
