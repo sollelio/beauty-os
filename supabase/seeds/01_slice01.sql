@@ -1,5 +1,5 @@
 -- Synthetic development data for the Beauty OS Dev project. Not pilot data. Idempotent.
--- Applied with: npx supabase db push --include-seed
+-- Applied with: npx supabase db push --include-seed (each seed file runs once; add new files for new data)
 --
 -- Organizations:
 --   "Salão Demo (Dev)"        — for manual development use.   Enrollment code: DEV-SALAO-2026

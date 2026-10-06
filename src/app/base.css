@@ -51,3 +51,14 @@ button { font: inherit; cursor: pointer; }
 .footer { margin-top: auto; display: flex; flex-direction: column; gap: 0.625rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
 .stack { display: flex; flex-direction: column; gap: 0.5rem; }
 .center { text-align: center; align-items: center; }
+.success-mark { width: 72px; height: 72px; border-radius: 50%; background: var(--success-bg); color: var(--success-icon); display: grid; place-items: center; font-size: 34px; }
+.kv-card { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 0.25rem 1rem; }
+.kv-card > div { display: flex; justify-content: space-between; gap: 1rem; min-height: 2.75rem; align-items: center; border-top: 1px solid var(--line); }
+.kv-card > div:first-child { border-top: 0; }
+.kv-card dt { color: var(--muted); }
+.kv-card dd { margin: 0; font-weight: 600; text-align: right; }
+.lock-note { display: flex; gap: 0.625rem; padding: 0.75rem 1rem; border-radius: 12px; background: var(--accent-tint); font-size: 0.9rem; }
+.quick-actions { display: flex; gap: 0.5rem; }
+.quick-actions a { flex: 1; min-height: 2.75rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); text-decoration: none; font-weight: 600; }
+.sheet { position: fixed; inset: 0; background: rgba(37, 39, 43, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet-body { width: 100%; max-width: 40rem; background: var(--surface); border-radius: 20px 20px 0 0; padding: 1.25rem 1.25rem 2rem; display: flex; flex-direction: column; gap: 0.75rem; }

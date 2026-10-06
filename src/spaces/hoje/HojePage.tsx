@@ -21,6 +21,9 @@ export function HojePage() {
       <Link to="/servicos/registar" className="btn btn-primary btn-tall" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
         Registar serviço
       </Link>
+      <nav className="quick-actions" aria-label="Outras ações">
+        <Link to="/equipa/adiantamento">Adiantamento</Link>
+      </nav>
 
       {summary.isError && (
         <div className="notice notice-error" role="alert">

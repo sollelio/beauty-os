@@ -4,7 +4,7 @@ Working rules for Claude Code sessions in this repository.
 
 ## Current phase
 
-**Architecture Definition approved; ADR-0001…0009 Accepted.** The device/verification spike is complete (Android Chrome validated; iOS Safari physical validation deferred until hardware is available — a required gate before pilot sign-off). Implementation is on the `dev` branch (local app against the remote Supabase Dev project; no local Supabase). Implemented: application foundation and Slice 01 (shared-device enrollment, actor context, record a service, Hoje).
+**Architecture Definition approved; ADR-0001…0009 Accepted.** The device/verification spike is complete (Android Chrome validated; iOS Safari physical validation deferred until hardware is available — a required gate before pilot sign-off). Implementation is on the `dev` branch (local app against the remote Supabase Dev project; no local Supabase). Implemented: application foundation, Slice 01 (shared-device enrollment, actor context, record a service, Hoje) and Slice 02 (advance with verified-person confirmation).
 
 Implementation proceeds only as explicitly requested, one slice at a time. The technical direction is fixed by the Accepted ADRs (React + TypeScript web app on Netlify; Supabase PostgreSQL, Auth, RLS, Storage and Edge Functions; modular monolith). The shared-device principal and verification mechanism is ADR-0009 (Alternative A). No visual design system has been chosen.
 

@@ -30,3 +30,21 @@ export async function enrollDevice(code: string): Promise<void> {
   const { error } = await sb.rpc('redeem_enrollment', { p_code: code })
   if (error) throw toAppError(error)
 }
+
+export type Confirmer = { id: string; display_name: string }
+
+export const verificationKeys = { confirmers: ['org', 'confirmers'] as const }
+
+export async function listConfirmers(): Promise<Confirmer[]> {
+  const { data, error } = await getSupabase().rpc('list_confirmers')
+  if (error) throw toAppError(error)
+  return data as Confirmer[]
+}
+
+/** Server-side verification of a person's secret (ADR-0009). Creates a one-shot grant for this device session. */
+export async function verifyPerson(personId: string, secret: string): Promise<void> {
+  const { data, error } = await getSupabase().rpc('verify_person', { p_person_id: personId, p_secret: secret })
+  if (error) throw toAppError(error)
+  const r = data as { ok: boolean; error?: string }
+  if (!r.ok) throw toAppError({ message: r.error ?? 'NOT_AUTHORIZED' })
+}

@@ -27,6 +27,8 @@ npm run dev
 
 Open the app: an unbound browser shows **Ligar este dispositivo**. Enter the development code **`DEV-SALAO-2026`** (organization *Salão Demo (Dev)*, synthetic data from `supabase/seed.sql`). The browser becomes an anonymous device principal bound to that organization (ADR-0009) and keeps the session across reloads. To enroll again, clear the site's storage.
 
+Sensitive actions (e.g. *Adiantamento*) need a verified person: on *Confirmação necessária* choose **Duarte** and enter the development PIN **`135790`** (synthetic; five wrong PINs lock that person for 15 minutes).
+
 ### Quality gates and tests
 
 ```sh
@@ -48,8 +50,10 @@ npx supabase login                                      # once per machine (brow
 npx supabase link --project-ref plukxnjnmowlnplpgsnm    # once per clone; asks for the Dev database password
 npx supabase migration new <name>                       # create a migration file, then edit it
 npx supabase db push --dry-run --include-seed           # review what would be applied
-npx supabase db push --include-seed                     # apply pending migrations (+ idempotent synthetic seed) to Dev
+npx supabase db push --include-seed                     # apply pending migrations (+ idempotent synthetic seeds) to Dev
 npx supabase config push                                # Auth settings in supabase/config.toml (e.g. anonymous sign-ins); review each prompt
 ```
+
+Seeds live in `supabase/seeds/*.sql` and are synthetic. The CLI runs each seed file once and does not re-run an edited file, so add a new seed file for new data.
 
 Never create tables through the Dashboard. Never link a production project to this workflow.

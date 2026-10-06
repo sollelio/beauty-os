@@ -3,6 +3,7 @@ import { RootLayout } from './RootLayout'
 import { DeviceGate } from './DeviceGate'
 import { HojePage } from '../spaces/hoje/HojePage'
 import { RecordServiceFlow } from '../spaces/servicos/RecordServiceFlow'
+import { AdvanceFlow } from '../spaces/equipa/AdvanceFlow'
 
 export const router = createBrowserRouter([
   {
@@ -14,6 +15,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <HojePage /> },
           { path: 'servicos/registar', element: <RecordServiceFlow /> },
+          { path: 'equipa/adiantamento', element: <AdvanceFlow /> },
         ],
       },
     ],

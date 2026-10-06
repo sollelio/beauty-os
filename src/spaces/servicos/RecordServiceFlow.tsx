@@ -76,7 +76,7 @@ export function RecordServiceFlow() {
     return (
       <main className="app-main">
         <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
-          <span aria-hidden style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--success-bg)', color: 'var(--success-icon)', display: 'grid', placeItems: 'center', fontSize: 34 }}>✓</span>
+          <span aria-hidden className="success-mark">✓</span>
           <h2>Serviço registado com sucesso.</h2>
           <p className="muted" style={{ margin: 0 }}>{service.name} · {person.display_name} · {methodText}</p>
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
