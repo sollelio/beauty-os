@@ -126,10 +126,10 @@ Open: exact visibility per person/permission.
 **Goal:** from *reconstruct the month* to *review and approve the month*.
 **Space:** Fecho.
 
-Period states:
+Period states — `Decided` for V1 ([03 §2 · Period states](03_V1_SCOPE.md#period-states--decided)):
 
 ```text
-Open → Ready for payment → Payment in progress → Closed
+Open (Aberto) → Ready for payment (Pronto para pagamento) → Payment in progress (Em pagamento) → Closed (Fechado)
 ```
 
 1. Open current period.
@@ -146,6 +146,9 @@ Open → Ready for payment → Payment in progress → Closed
 Rules:
 
 - `Decided` Closed periods are **not** casually editable. Corrections and reopening require traceability.
+- `Decided` Confirmed payments may exist before *Closed*: a payment is recorded when it is confirmed, in *Ready for payment* or *Payment in progress*.
+- `Decided` A period cannot become *Closed* while approved payable amounts remain unpaid.
+- `Decided` Remaining payable per professional = `max(earned − advances − confirmed payments, 0)`; it is never negative. An advance above earned value does not become a negative payable and is not converted into earned remuneration, a debt or a credit: the excess stays a separate case for management review. What happens to it (carry-over, recovery, write-off/absorption or another policy) is open ([03 §5](03_V1_SCOPE.md#5-open-scope-questions) · Advance policy).
 - Replaces the current notebook review + WhatsApp hand-off ([01 §1](01_DISCOVERY_SUMMARY.md#1-current-operating-workflow)).
 
 Open:
@@ -153,7 +156,7 @@ Open:
 - What qualifies as an exception. Candidates derived from other journeys: advance exceeding earnings (J2), remuneration pending determination (J1), corrections, contribution cases (J3).
 - **Unresolved business-rule question: remuneration ↔ owner distribution circularity.** Contextual service remuneration can depend on whether owners take a distribution. But whether a distribution is affordable depends partly on remuneration obligations. Pilot example: Fernando may lower his rate in a month when owners take a distribution. **Not solved yet. Resolve during the Monthly Close design/domain work.**
 - Where owner distribution, retained/reinvested amounts and any cash reconciliation fit in the close ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
-- Exact transition conditions between states (e.g. partial payment).
+- Whether partial payments or overpayments are allowed; when the first payment becomes authorized; payment correction mechanics; the state a reopened period returns to ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
 
 ## J6 — Stock / prepare purchase
 

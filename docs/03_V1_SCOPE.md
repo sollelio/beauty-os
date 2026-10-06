@@ -27,11 +27,25 @@ Journeys: [04](04_CORE_USER_JOURNEYS.md) · Experience: [05](05_PRODUCT_EXPERIEN
 | 7 | Personal advances | Reduce amount payable; not an expense. | J2 |
 | 8 | Business expenses / money movements | Includes reserve allocations (distinct from expenses) and unexpected losses. | J3 |
 | 9 | Purchases and purchase contributions | Multiple contributors; contribution at total-purchase level. | J3, J6 |
-| 10 | Monthly close | Open → Ready for payment → Payment in progress → Closed. | J5 |
+| 10 | Monthly close | States as decided below; exception-driven review, approval, payment confirmation, closure. | J5 |
 | 11 | Amount payable per professional | Explainable from its components. | J4, J5 |
 | 12 | Basic operational financial overview | Not financial statements; informal "profit" ≠ accounting profit. | J5 |
 | 13 | Stock Lite / replenishment visibility | Approximate levels, reserve status, attention list, purchase list, emergency replenishment. No forecasting. | J6 |
 | 14 | History / audit trail | Corrections, reopening of closed periods, sensitive actions. | All |
+
+### Period states — `Decided`
+
+The close period moves through four states (UI labels in the pilot's language):
+
+```text
+Open (Aberto) → Ready for payment (Pronto para pagamento) → Payment in progress (Em pagamento) → Closed (Fechado)
+```
+
+- `Decided` Confirmed payments may exist before `Closed`: a payment is recorded when it is confirmed, while the period is *Ready for payment* or *Payment in progress*.
+- `Decided` A period cannot become `Closed` while approved payable amounts remain unpaid.
+- This is a product progression, not a technical state machine. Still `Open / requires validation` (§5): partial payments and overpayments, when the first payment becomes authorized, payment correction mechanics, and the state a reopened period returns to.
+
+Design reference: [Slice 06](design/slice-06-fecho-periodo.md).
 
 ## 3. Remuneration cases V1 must support — `Confirmed` evidence
 
@@ -72,8 +86,9 @@ All `Open / requires validation`. Do not resolve these by assumption.
 - **Retained / reinvested amounts.** Whether and how V1 records a professional voluntarily leaving part of their entitlement in the business.
 - **Contextual rate timing.** When and by whom a contextual per-period rate is determined. (What is shown before then is decided: see §3.) This includes the remuneration ↔ owner-distribution circularity recorded in [04 · J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).
 - **Contribution scope and settlement.** Which purchases a contribution applies to; whether it is settled at purchase time or at close.
-- **Advance policy.** Whether advances exceeding earned value need a limit (J2 currently warns only).
+- **Advance policy.** Whether advances exceeding earned value need a limit (J2 currently warns only), and what happens at close to an amount advanced above earned value: carry-over, recovery, write-off/absorption or another policy. (The payable clamp itself is decided: [04 J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).)
 - **Authorization.** Who may confirm advances, approve amounts payable, close and reopen periods.
+- **Payments within the close.** Whether partial payments or overpayments are allowed; when the first payment becomes authorized; how a confirmed payment is corrected; the state a reopened period returns to. (The states themselves are decided: §2 · Period states.)
 - **Self-recording.** Whether professionals record their own services in V1 or only the manager records.
 - **Payment methods.** Whether the set of payment methods is configurable per organization.
 - **Period length.** Whether the close period is always a calendar month.
