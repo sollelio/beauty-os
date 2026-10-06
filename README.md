@@ -23,13 +23,21 @@ npm run dev
 | `VITE_SUPABASE_URL` | `https://plukxnjnmowlnplpgsnm.supabase.co` |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | the Dev project's **publishable** key (`sb_publishable_…`). Never a secret/service-role key. |
 
-### Quality gates
+### Enroll the development device
+
+Open the app: an unbound browser shows **Ligar este dispositivo**. Enter the development code **`DEV-SALAO-2026`** (organization *Salão Demo (Dev)*, synthetic data from `supabase/seed.sql`). The browser becomes an anonymous device principal bound to that organization (ADR-0009) and keeps the session across reloads. To enroll again, clear the site's storage.
+
+### Quality gates and tests
 
 ```sh
 npm run typecheck
 npm run lint
 npm run build
+npm test            # frontend unit tests (jsdom)
+npm run test:db     # database/security tests against Supabase Dev (uses the "Teste Isolamento A/B" organizations)
 ```
+
+`test:db` refuses to run unless `.env.local` points at the Dev project. Each run creates a few anonymous Auth users in Dev (anonymous sign-ins are rate-limited per IP).
 
 ### Database migrations (remote Dev)
 
@@ -39,7 +47,9 @@ Migrations live in `supabase/migrations/` and are applied to the Dev project wit
 npx supabase login                                      # once per machine (browser sign-in)
 npx supabase link --project-ref plukxnjnmowlnplpgsnm    # once per clone; asks for the Dev database password
 npx supabase migration new <name>                       # create a migration file, then edit it
-npx supabase db push                                    # apply pending migrations to the linked Dev project
+npx supabase db push --dry-run --include-seed           # review what would be applied
+npx supabase db push --include-seed                     # apply pending migrations (+ idempotent synthetic seed) to Dev
+npx supabase config push                                # Auth settings in supabase/config.toml (e.g. anonymous sign-ins); review each prompt
 ```
 
 Never create tables through the Dashboard. Never link a production project to this workflow.

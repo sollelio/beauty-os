@@ -340,7 +340,7 @@ Risk-first; the harness is built at implementation, not now.
 | Concurrency / idempotency | Two sessions racing approve vs a new service (`STALE_REVIEW`); payment duplicates; reserve use races; `command_id` replay and conflict; committed-but-unacknowledged retry. |
 | Historical stability | A changed calculation version does not alter a closed period's displayed close statement. |
 | Frontend unit | Only where client logic exists: input checks, formatting, trip-draft reducer, error-code mapping. |
-| Integration | Module access layers against a local Supabase with generated types. |
+| Integration | Module access layers and database tests against the remote **Supabase Dev** project (no local Supabase stack), using dedicated synthetic test organizations. |
 | End-to-end | A few phone-viewport journeys: record a service with nothing sensitive visible; advance through confirmation; private context ends and caches are gone; close happy path; network failure then retry without duplicates. |
 
 ## 19. Repository organization
@@ -370,7 +370,7 @@ One package; no monorepo tooling. Module boundaries are a convention first; a li
 
 1. **Checkpoint review** of this document and the ADRs.
 2. **Device/elevation spike** (§23) → **done**: ADR-0009 accepted (Alternative A). Physical iOS Safari validation deferred until hardware is available; required before pilot sign-off.
-3. **Minimal foundation**, only what the first slice needs: scaffold; local Supabase and migration pipeline; CI with type-check and database tests; preview deploy; organization, people, principals and actor context; RLS helpers; command scaffolding (journal, revision, error codes); seed loader.
+3. **Minimal foundation**, only what the first slice needs: scaffold; remote Supabase Dev project with a CLI migration pipeline (no local Supabase stack); CI with type-check and database tests; preview deploy; organization, people, principals and actor context; RLS helpers; command scaffolding (journal, revision, error codes); seed loader.
 4. **Slice 01 (record service on the shared device):** validates tenancy, the device principal, operational reads, the first command with `command_id`, revision bump, Hoje composition, D5 retry.
 5. **Slices 02 + 04:** validates verification, sensitive classes, SQL derivations, self vs manager views.
 6. **Slice 03, then Slice 05** (Stock depends on purchasing).
