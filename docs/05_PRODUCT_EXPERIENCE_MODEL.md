@@ -55,7 +55,7 @@ Entry points from Hoje are `Candidate / hypothesis`.
 - Native-like mobile interaction patterns are acceptable and desirable **where they improve speed and usability** (stated by Sollelio with the decision). Which specific patterns are adopted (e.g. the bottom navigation and full-screen steps proposed in Slice 01) remains `Candidate / hypothesis` until validated.
 - Tablet and desktop later **adapt layout and information density**; they do not merely stretch the mobile UI.
 - Core operational workflows stay excellent on the smartphone regardless of larger-screen layouts.
-- `Open / requires validation` PWA / offline behaviour is neither designed nor decided.
+- `Decided` **Connectivity in V1** ([07 §2 D5](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d5--connectivity-a1-saving-requires-a-network-connection)): saving requires a network connection; on a recoverable network/save failure the entered data is preserved and the person can retry. No offline queue, offline persistence/sync engine or conflict resolution in V1. Offline/PWA sync may be revisited after pilot evidence.
 
 ## 3. Operator and authorization model — `Decided` (concepts only)
 
@@ -70,7 +70,7 @@ Three distinct concepts:
 | Authorization for sensitive actions | Extra confirmation that the operator may perform this action. |
 
 - `Candidate / hypothesis` Sensitive actions may use lightweight re-verification (e.g. a manager PIN).
-- `Open / requires validation` Which actions are sensitive. Candidates from the journeys: confirming advances (J2), approving payables, closing and reopening periods (J5), correcting recorded financial events.
+- `Open / requires validation` Which actions are sensitive. Candidates from the journeys: confirming advances (J2), approving payables, closing and reopening periods (J5), correcting recorded financial events. Minimum product-level boundaries for architecture: [07 §8](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#8-product-level-authorization-boundaries) (who holds each one stays open).
 - `Open / requires validation` Auth architecture — not to be designed or finalized yet.
 
 ## 4. Shared-device privacy — `Decided`

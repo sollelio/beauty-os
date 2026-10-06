@@ -21,6 +21,7 @@ Read the relevant docs **before** proposing any change, design or plan.
 | [docs/04_CORE_USER_JOURNEYS.md](docs/04_CORE_USER_JOURNEYS.md) | The six core journeys |
 | [docs/05_PRODUCT_EXPERIENCE_MODEL.md](docs/05_PRODUCT_EXPERIENCE_MODEL.md) | Product spaces, device and operator model, shared-device privacy, remuneration determinacy display |
 | [docs/06_DESIGN_PRINCIPLES.md](docs/06_DESIGN_PRINCIPLES.md) | Product experience principles |
+| [docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md](docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md) | Product/design → architecture handoff: V1 coverage, gap-closure decisions, open-question triage, domain and financial invariants, product-level authorization boundaries |
 | `docs/design/slice-NN-*.md` | Design-slice proposals (one per `/design` slice). Proposals, not decisions: they cite the canonical docs and list what they leave open. |
 
 ## Rules

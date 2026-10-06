@@ -92,6 +92,7 @@ Rules:
 Rules:
 
 - `Decided` A **reserve allocation is distinct from an incurred expense**.
+- Reserve allocation and reserve use (an expense, or a purchase's salon part, paid with money set aside earlier) are captured in Fecho, not in this flow — `Decided` ([07 §2 D1](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d1--reserve-one-operational-reserve-two-records-no-double-counting)).
 - Expense categories are defined per organization, not fixed.
 
 Open: which purchases a contribution rule applies to; whether a contribution is settled at purchase or at close ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
@@ -148,14 +149,14 @@ Rules:
 - `Decided` Closed periods are **not** casually editable. Corrections and reopening require traceability.
 - `Decided` Confirmed payments may exist before *Closed*: a payment is recorded when it is confirmed, in *Ready for payment* or *Payment in progress*.
 - `Decided` A period cannot become *Closed* while approved payable amounts remain unpaid.
-- `Decided` Remaining payable per professional = `max(earned − advances − confirmed payments, 0)`; it is never negative. An advance above earned value does not become a negative payable and is not converted into earned remuneration, a debt or a credit: the excess stays a separate case for management review. What happens to it (carry-over, recovery, write-off/absorption or another policy) is open ([03 §5](03_V1_SCOPE.md#5-open-scope-questions) · Advance policy).
+- `Decided` Remaining payable per professional = `max(earned − advances − confirmed payments, 0)`; it is never negative. Excess advanced/paid = `max(advances + confirmed payments − earned, 0)` ([07 §2 D6](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d6--remaining-payable-and-excess-delivered-financial-robustness-rule)). An amount advanced or paid above earned value does not become a negative payable and is not classified automatically as earned remuneration, salary, debt, credit or receivable: the excess is a review condition only, a separate case for management review. What happens to it (carry-over, recovery, write-off/absorption or another policy) is open ([03 §5](03_V1_SCOPE.md#5-open-scope-questions) · Advance policy).
 - Replaces the current notebook review + WhatsApp hand-off ([01 §1](01_DISCOVERY_SUMMARY.md#1-current-operating-workflow)).
 
 Open:
 
 - What qualifies as an exception. Candidates derived from other journeys: advance exceeding earnings (J2), remuneration pending determination (J1), corrections, contribution cases (J3).
 - **Unresolved business-rule question: remuneration ↔ owner distribution circularity.** Contextual service remuneration can depend on whether owners take a distribution. But whether a distribution is affordable depends partly on remuneration obligations. Pilot example: Fernando may lower his rate in a month when owners take a distribution. **Not solved yet. Resolve during the Monthly Close design/domain work.**
-- Where owner distribution, retained/reinvested amounts and any cash reconciliation fit in the close ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
+- Where owner distribution, retained/reinvested amounts and any cash reconciliation fit in the close ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)). Owner distribution and retained amounts: `Decided` in [07 §2 D2–D3](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#2-decisions-closed) (payout/split mechanics still open); cash reconciliation stays open.
 - Whether partial payments or overpayments are allowed; when the first payment becomes authorized; payment correction mechanics; the state a reopened period returns to ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
 
 ## J6 — Stock / prepare purchase

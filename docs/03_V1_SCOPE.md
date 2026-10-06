@@ -25,7 +25,7 @@ Journeys: [04](04_CORE_USER_JOURNEYS.md) · Experience: [05](05_PRODUCT_EXPERIEN
 | 5 | Professional production totals | Per professional, per period. | J4 |
 | 6 | Configurable remuneration rules | Sufficient for the validated cases in §3. | J1, J4, J5 |
 | 7 | Personal advances | Reduce amount payable; not an expense. | J2 |
-| 8 | Business expenses / money movements | Includes reserve allocations (distinct from expenses) and unexpected losses. | J3 |
+| 8 | Business expenses / money movements | Includes reserve allocations (distinct from expenses) and unexpected losses. Reserve allocation and use: `Decided` ([07 §2 D1](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d1--reserve-one-operational-reserve-two-records-no-double-counting)). | J3 |
 | 9 | Purchases and purchase contributions | Multiple contributors; contribution at total-purchase level. | J3, J6 |
 | 10 | Monthly close | States as decided below; exception-driven review, approval, payment confirmation, closure. | J5 |
 | 11 | Amount payable per professional | Explainable from its components. | J4, J5 |
@@ -67,6 +67,10 @@ A general distinction, independent of any named person:
 
 Pilot example of contextual remuneration: Fernando's per-period rate. Behaviour in the journeys: [04 · J1](04_CORE_USER_JOURNEYS.md#j1--record-completed-service).
 
+### V1 rule shape — `Decided`
+
+A V1 rule is a percentage of the person's own production in the period, either **standing** (valid until changed) or **per period** (contextual). Earned = rule % × production, per person per period. A share of purchase costs is recorded as a purchase contribution, not as part of the rule. No other rule shapes in V1. Detail: [07 §2 D4](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d4--v1-remuneration-rule-shape-clarification-of-03-3-no-new-behaviour).
+
 ## 4. Explicitly not V1 — `Decided`
 
 | Area | Excluded |
@@ -81,12 +85,12 @@ Pilot example of contextual remuneration: Fernando's per-period rate. Behaviour 
 
 All `Open / requires validation`. Do not resolve these by assumption.
 
-- **Reconciliation / cash count.** Whether V1 includes an explicit cash-count or discrepancy flow, or only reduces discrepancies through capture-once.
-- **Owner distribution.** Whether V1 records owner distributions explicitly or treats them as a generic money movement.
-- **Retained / reinvested amounts.** Whether and how V1 records a professional voluntarily leaving part of their entitlement in the business.
+- **Reconciliation / cash count.** Whether V1 includes an explicit cash-count or discrepancy flow, or only reduces discrepancies through capture-once. The Slice 06 candidate formula is not approved: it is incomplete ([07 §7 F-G5](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#7-financial-consistency-findings)).
+- **Owner distribution payout.** `Decided`: V1 records the owners' distribution as an explicit decision record per period ([07 §2 D3](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d3--owner-distribution-explicit-period-level-decision-record)). Still open: payout mechanics (method, date) and any per-owner split.
+- **Retained / reinvested amounts.** `Decided`: no separate V1 financial event; the behaviour is represented by the per-period rule, the owners' decision and the reserve ([07 §2 D2](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d2--retained--reinvested-amount-no-separate-v1-event)). Still open: whether a professional on a determinate rule ever leaves part of an amount already earned (not evidenced).
 - **Contextual rate timing.** When and by whom a contextual per-period rate is determined. (What is shown before then is decided: see §3.) This includes the remuneration ↔ owner-distribution circularity recorded in [04 · J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).
 - **Contribution scope and settlement.** Which purchases a contribution applies to; whether it is settled at purchase time or at close.
-- **Advance policy.** Whether advances exceeding earned value need a limit (J2 currently warns only), and what happens at close to an amount advanced above earned value: carry-over, recovery, write-off/absorption or another policy. (The payable clamp itself is decided: [04 J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).)
+- **Advance policy.** Whether advances exceeding earned value need a limit (J2 currently warns only), and what happens at close to an amount advanced or paid above earned value: carry-over, recovery, write-off/absorption or another policy. (The payable clamp and the excess definition are decided: [04 J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).)
 - **Authorization.** Who may confirm advances, approve amounts payable, close and reopen periods.
 - **Payments within the close.** Whether partial payments or overpayments are allowed; when the first payment becomes authorized; how a confirmed payment is corrected; the state a reopened period returns to. (The states themselves are decided: §2 · Period states.)
 - **Self-recording.** Whether professionals record their own services in V1 or only the manager records.
