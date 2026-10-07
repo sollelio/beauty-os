@@ -285,3 +285,117 @@ describe('owners decision and reserve (D1, D3)', () => {
     expect(m2.reserve.balance_minor).toBe(money.reserve.balance_minor - K(3000))
   })
 })
+
+// ---------------------------------------------------------------------------------------------------------------
+// Decisions closed 2026-10-07: reopen (B8) and no new records in an approved period.
+const C = { cash: id('c101'), pro: id('c201'), mgr: id('c202'), svc: id('c301'), cat: id('c401'), origin: id('c501'), product: id('c601') }
+
+describe('reopen', () => {
+  let p: string
+  const reopen = async (period: string, revision: number, reason: string | null, cmd = randomUUID(), g?: string) =>
+    call(dev, 'reopen_period', { p_command_id: cmd, p_grant_id: g ?? await grant(), p_period_id: period, p_review_revision: revision, p_reason: reason })
+  beforeAll(async () => {
+    p = await freshPeriod()
+    await decide(p, P206, 50)
+    await approve(p, (await fecho(p)).review_revision)
+    await pay(p, P201, K(10000)); await pay(p, P206, K(4500))
+    expect((await close(p, (await fecho(p)).review_revision)).error).toBeNull()
+  })
+
+  it('needs a reason, the reopen permission, this device\'s exact grant and the reviewed revision', async () => {
+    const r = (await fecho(p)).review_revision
+    expect((await reopen(p, r, '  ')).error?.message).toBe('VALIDATION_FAILED')
+    expect((await reopen(p, r, 'motivo', randomUUID(), await grant(dev, CONF2, '555555'))).error?.message).toBe('NOT_AUTHORIZED')   // period.decide/close, but not period.reopen
+    expect((await reopen(p, r, 'motivo', randomUUID(), await grant(dev2))).error?.message).toBe('VERIFICATION_REQUIRED')
+    expect((await reopen(p, r - 1, 'motivo')).error?.message).toBe('STALE_REVIEW')
+    expect((await fecho(p)).period.state).toBe('fechado')
+  })
+  it('with confirmed payments → Em pagamento; replay is idempotent; everything recorded stays', async () => {
+    const before = await fecho(p)
+    const cmd = randomUUID()
+    const r = await reopen(p, before.review_revision, 'Distribuição registada com valor errado', cmd)
+    expect([r.error, r.data.state]).toEqual([null, 'em_pagamento'])
+    expect((await reopen(p, before.review_revision, 'Distribuição registada com valor errado', cmd)).data.replayed).toBe(true)
+    expect((await reopen(p, before.review_revision, 'Outro motivo', cmd)).error?.message).toBe('IDEMPOTENCY_CONFLICT')
+    const f = await fecho(p)
+    expect([f.period.state, f.source, f.close_statements_count]).toEqual(['em_pagamento', 'live', 1])
+    expect(f.reopened).toMatchObject({ reason: 'Distribuição registada com valor errado', by: 'Confirmador Teste A', to_state: 'em_pagamento' })
+    expect(f.approval.id).toBe(before.approval.id)
+    expect(f.approval.lines).toEqual(before.approval.lines)
+    expect(f.position.livre_minor).toBe(before.position.livre_minor)
+    const h = (await dev.rpc('fecho_history', { p_period_id: p })).data as Row[]
+    expect(h[0]).toMatchObject({ kind: 'reopen', reason: 'Distribuição registada com valor errado' })
+    expect(h.filter((x) => x.kind === 'close')).toHaveLength(1)
+    expect(h.filter((x) => x.kind === 'payment')).toHaveLength(2)
+  })
+  it('reopened: owners decision can be revised; rules and approval stay frozen; closing again adds a statement', async () => {
+    expect((await call(dev, 'record_owners_decision', { p_command_id: randomUUID(), p_grant_id: await grant(), p_period_id: p, p_kind: 'amount', p_amount_minor: K(1000) })).error).toBeNull()
+    expect((await decide(p, P206, 10)).error?.message).toBe('PERIOD_STATE_INVALID')
+    expect((await call(dev, 'annul_approval', { p_command_id: randomUUID(), p_grant_id: await grant(), p_period_id: p, p_review_revision: (await fecho(p)).review_revision })).error?.message).toBe('PERIOD_STATE_INVALID')
+    expect((await close(p, (await fecho(p)).review_revision)).error).toBeNull()
+    const f = await fecho(p)
+    expect([f.period.state, f.source, f.close_statements_count, f.position.distribution_minor]).toEqual(['fechado', 'close_statement', 2, K(1000)])
+    expect(((await dev.rpc('fecho_history', { p_period_id: p })).data as Row[]).filter((x) => x.kind === 'close')).toHaveLength(2)
+  })
+  it('without confirmed payments → Pronto para pagamento (and the approval can then be annulled)', async () => {
+    const devC = await device('TEST-ORG-C-2026')
+    await enterPrivate(devC, C.mgr, '343434')
+    const g = () => grant(devC, C.mgr, '343434')
+    const all = (await devC.rpc('fecho_periods')).data as Row[]
+    let q: string | undefined
+    for (const x of all.filter((y) => y.label.startsWith('Reabrir Teste') && y.state === 'aberto').reverse()) { q = x.id; break }
+    expect(q, 'no Reabrir Teste period left — add a seed file').toBeDefined()
+    const fc = async () => (await devC.rpc('fecho_period', { p_period_id: q })).data as Row
+    expect((await call(devC, 'approve_period', { p_command_id: randomUUID(), p_grant_id: await g(), p_period_id: q, p_review_revision: (await fc()).review_revision })).data.total_minor).toBe(0)
+    expect((await call(devC, 'close_period', { p_command_id: randomUUID(), p_grant_id: await g(), p_period_id: q, p_review_revision: (await fc()).review_revision })).error).toBeNull()
+    const r = await call(devC, 'reopen_period', { p_command_id: randomUUID(), p_grant_id: await g(), p_period_id: q, p_review_revision: (await fc()).review_revision, p_reason: 'Rever decisão' })
+    expect(r.data.state).toBe('pronto_para_pagamento')
+    const f = await fc()
+    expect([f.period.state, f.readiness.can_annul, f.close_statements_count]).toEqual(['pronto_para_pagamento', true, 1])
+  })
+})
+
+describe('no new records in an approved period', () => {
+  let devC: SupabaseClient
+  const g = (c = devC) => grant(c, C.mgr, '343434')
+  const service = (cmd = randomUUID()) => devC.rpc('record_service', { p_command_id: cmd, p_person_id: C.pro, p_service_id: C.svc, p_value_minor: K(10000),
+    p_payments: [{ method_id: C.cash, amount_minor: K(10000) }] })
+  const advance = async () => devC.rpc('record_advance', { p_command_id: randomUUID(), p_grant_id: await g(), p_person_id: C.pro, p_amount_minor: K(100), p_payment_method_id: C.cash })
+  const expense = async () => devC.rpc('record_expense', { p_command_id: randomUUID(), p_grant_id: await g(), p_category_id: C.cat, p_amount_minor: K(100),
+    p_payments: [{ method_id: C.cash, amount_minor: K(100) }] })
+  const purchase = async () => devC.rpc('record_purchase', { p_command_id: randomUUID(), p_grant_id: await g(), p_lines: [{ product_id: C.product, quantity: 1, line_cost_minor: K(100) }],
+    p_salon_amount_minor: K(100), p_contributions: [], p_origin_id: C.origin })
+  const today = async () => (await devC.rpc('fecho_period', { p_period_id: null })).data as Row
+  const cmd = (fn: string, args: Row) => devC.rpc(fn, { p_command_id: randomUUID(), ...args })
+
+  beforeAll(async () => {
+    devC = await device('TEST-ORG-C-2026')
+    await enterPrivate(devC, C.mgr, '343434')
+  })
+
+  it('approved without payments: capture rejected; annul, then capture succeeds', async () => {
+    const f0 = await today()
+    expect(f0.period.is_current).toBe(true)
+    if (f0.period.state !== 'aberto') return                                        // already consumed today: covered by the next test
+    const committed = randomUUID()
+    expect((await service(committed)).error).toBeNull()
+    expect((await cmd('approve_period', { p_grant_id: await g(), p_period_id: f0.period.id, p_review_revision: (await today()).review_revision })).error).toBeNull()
+    for (const r of [await service(), await advance(), await expense(), await purchase()]) expect(r.error?.message).toBe('PERIOD_APPROVED')
+    expect((await service(committed)).data.replayed).toBe(true)                    // a committed record still replays
+    const before = await today()
+    expect(before.approval.lines[0].approved_minor).toBe(K(5000))                  // approved values unchanged by the rejected attempts
+    expect((await cmd('annul_approval', { p_grant_id: await g(), p_period_id: f0.period.id, p_review_revision: before.review_revision })).error).toBeNull()
+    expect((await service()).error).toBeNull()
+    expect((await today()).position.payable_minor).toBe(K(10000))
+    // approve again and confirm one payment: from here the inputs stay locked
+    expect((await cmd('approve_period', { p_grant_id: await g(), p_period_id: f0.period.id, p_review_revision: (await today()).review_revision })).error).toBeNull()
+    expect((await cmd('confirm_payment', { p_grant_id: await g(), p_period_id: f0.period.id, p_person_id: C.pro, p_amount_minor: K(1000), p_payment_method_id: C.cash })).error).toBeNull()
+  })
+  it('with payments: capture stays rejected and the approval cannot be annulled', async () => {
+    const f = await today()
+    expect(f.period.state).toBe('em_pagamento')
+    for (const r of [await service(), await advance(), await expense(), await purchase()]) expect(r.error?.message).toBe('PERIOD_APPROVED')
+    expect((await cmd('annul_approval', { p_grant_id: await g(), p_period_id: f.period.id, p_review_revision: f.review_revision })).error?.message).toBe('PERIOD_STATE_INVALID')
+    expect((await today()).review_revision).toBe(f.review_revision)                // nothing changed
+  })
+})

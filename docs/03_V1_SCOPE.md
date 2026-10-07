@@ -43,7 +43,7 @@ Open (Aberto) → Ready for payment (Pronto para pagamento) → Payment in progr
 
 - `Decided` Confirmed payments may exist before `Closed`: a payment is recorded when it is confirmed, while the period is *Ready for payment* or *Payment in progress*.
 - `Decided` A period cannot become `Closed` while approved payable amounts remain unpaid.
-- This is a product progression, not a technical state machine. Still `Open / requires validation` (§5): partial payments and overpayments, when the first payment becomes authorized, payment correction mechanics, and the state a reopened period returns to.
+- This is a product progression, not a technical state machine. Partial payments, approval annulment, closing without an owners' decision, records after approval and the reopen target are `Decided` ([07 D7](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d7--close-rules-payments-approval-closing-records-after-approval-reopen)). Still `Open / requires validation` (§5): payment correction mechanics.
 
 Design reference: [Slice 06](design/slice-06-fecho-periodo.md).
 
@@ -92,7 +92,7 @@ All `Open / requires validation`. Do not resolve these by assumption.
 - **Contribution scope and settlement.** Which purchases a contribution applies to; whether it is settled at purchase time or at close.
 - **Advance policy.** Whether advances exceeding earned value need a limit (J2 currently warns only), and what happens at close to an amount advanced or paid above earned value: carry-over, recovery, write-off/absorption or another policy. (The payable clamp and the excess definition are decided: [04 J5](04_CORE_USER_JOURNEYS.md#j5--monthly-close).)
 - **Authorization.** Who may confirm advances, approve amounts payable, close and reopen periods.
-- **Payments within the close.** Whether partial payments or overpayments are allowed; when the first payment becomes authorized; how a confirmed payment is corrected; the state a reopened period returns to. (The states themselves are decided: §2 · Period states.)
+- **Payments within the close.** How a confirmed payment is corrected. (Partial and over payments, approval and annulment, closing and reopening are decided: [07 D7](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d7--close-rules-payments-approval-closing-records-after-approval-reopen).)
 - **Self-recording.** Whether professionals record their own services in V1 or only the manager records.
 - **Payment methods.** Whether the set of payment methods is configurable per organization.
 - **Period length.** Whether the close period is always a calendar month.

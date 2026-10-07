@@ -13,6 +13,7 @@ import { useRecordAdvance } from '../../modules/team/useRecordAdvance'
 import type { RecordAdvanceInput } from '../../modules/team/api'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
+import { captureFailure } from '../../shared/periodLock'
 
 type Step = 1 | 2 | 3 | 'done'
 type Method = 'numerario' | 'transferencia'
@@ -165,7 +166,7 @@ export function AdvanceFlow() {
             {advance.status === 'error' && advance.error?.kind === 'network' && (
               <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>
             )}
-            {otherDomainError && <div className="notice notice-error" role="alert">Não foi possível guardar este adiantamento.</div>}
+            {otherDomainError && <div className="notice notice-error" role="alert">{captureFailure(advance.error, 'Não foi possível guardar este adiantamento.')}</div>}
           </section>
           <div className="footer">
             {advance.status === 'error' && advance.error?.kind === 'network' ? (

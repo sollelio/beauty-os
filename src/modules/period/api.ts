@@ -56,6 +56,8 @@ export type Fecho = {
   position: Position; approval: Approval | null; exceptions: FechoException[]
   readiness: { can_approve: boolean; can_annul: boolean; can_pay: boolean; can_close: boolean; unpaid_minor: number }
   closed: { closed_at: string; closed_by: string; calculation_version: string; review_revision: number } | null
+  reopened: { at: string; by: string; reason: string; to_state: PeriodState } | null
+  close_statements_count: number
 }
 export type FechoPeriod = { id: string; label: string; state: PeriodState; starts_on: string; ends_on: string }
 export type MoneyReview = {
@@ -120,6 +122,9 @@ export const annulApproval = (c: string, g: string, i: ReviewedInput) =>
   rpc<R>('annul_approval', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_review_revision: i.revision })
 export const closePeriod = (c: string, g: string, i: ReviewedInput) =>
   rpc<R>('close_period', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_review_revision: i.revision })
+export type ReopenInput = ReviewedInput & { reason: string }
+export const reopenPeriod = (c: string, g: string, i: ReopenInput) =>
+  rpc<R & { state: PeriodState }>('reopen_period', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_review_revision: i.revision, p_reason: i.reason })
 export type PaymentInput = { periodId: string; personId: string; amountMinor: number; methodId: string }
 export const confirmPayment = (c: string, g: string, i: PaymentInput) =>
   rpc<R & { outstanding_minor: number; paid_at: string }>('confirm_payment',

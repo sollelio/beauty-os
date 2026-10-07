@@ -12,6 +12,7 @@ import { checkPayment, type PaymentMode } from '../../shared/payment'
 import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
+import { captureFailure } from '../../shared/periodLock'
 
 type Step = 1 | 2 | 3 | 'done'
 type Method = 'numerario' | 'transferencia' | 'mixed'
@@ -181,7 +182,7 @@ export function RecordServiceFlow() {
             <div className="notice notice-error" role="alert">
               {record.error.kind === 'network'
                 ? 'Não foi possível guardar. Os dados continuam aqui.'
-                : 'Não foi possível guardar este registo.'}
+                : captureFailure(record.error, 'Não foi possível guardar este registo.')}
             </div>
           )}
 

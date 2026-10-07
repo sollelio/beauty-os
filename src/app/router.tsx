@@ -22,6 +22,7 @@ import { PositionPage } from '../spaces/fecho/PositionPage'
 import { ApprovePage } from '../spaces/fecho/ApprovePage'
 import { PaymentsPage } from '../spaces/fecho/PaymentsPage'
 import { ClosePage, HistoryPage } from '../spaces/fecho/ClosePage'
+import { ReopenPage } from '../spaces/fecho/ReopenPage'
 
 export const router = createBrowserRouter([
   {
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
               { path: 'fecho/pagamentos', element: <PaymentsPage /> },
               { path: 'fecho/fechar', element: <ClosePage /> },
               { path: 'fecho/historico', element: <HistoryPage /> },
+              { path: 'fecho/reabrir', element: <ReopenPage /> },
             ],
           },
         ],

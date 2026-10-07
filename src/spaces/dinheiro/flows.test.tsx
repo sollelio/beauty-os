@@ -141,3 +141,16 @@ describe('PurchaseFlow', () => {
     })
   })
 })
+
+describe('period locks (Slice 06 decisions)', () => {
+  it('an expense in an approved period is refused with the reason, not a generic error', async () => {
+    vi.mocked(recordExpense).mockReset().mockRejectedValue(new AppError('domain', 'PERIOD_APPROVED', 'PERIOD_APPROVED'))
+    renderIt(<ExpenseFlow />)
+    fireEvent.click(await screen.findByText('Electricidade'))
+    fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
+    fireEvent.click(button('Continuar'))
+    await confirmWith()
+    fireEvent.click(button('Confirmar despesa'))
+    expect(await screen.findByText(/Este período já tem os valores aprovados: não entram novos registos/)).toBeTruthy()
+  })
+})

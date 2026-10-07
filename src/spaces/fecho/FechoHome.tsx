@@ -50,6 +50,10 @@ export function FechoHome() {
       return <div className="lock-card" role="status"><strong>Fechado em {formatDayShort(f.closed.closed_at, org.timezone)} às {formatTime(f.closed.closed_at, org.timezone)} por {f.closed.closed_by}</strong>
         <span>Só de leitura; reabrir exige autorização e motivo.</span></div>
     }
+    if (f.reopened) {
+      return <div className="notice notice-success" role="status"><strong style={{ display: 'block' }}>{outstanding.length ? `${paidCount} de ${lines.length} pagamentos confirmados` : 'Todos os pagamentos confirmados'}</strong>
+        Reaberto por {f.reopened.by} · {when(f.reopened.at, org.timezone)} · motivo: {f.reopened.reason}.</div>
+    }
     if (st === 'aberto' && pending.length > 0) {
       return <div className="notice notice-warning" role="status"><strong style={{ display: 'block' }}>Ainda não pode aprovar</strong>
         {pending.length} {pending.length === 1 ? 'regra' : 'regras'} por definir. Depois pode aprovar e passar a pagamento.</div>
@@ -84,7 +88,7 @@ export function FechoHome() {
         ? <button className="btn btn-primary btn-tall" onClick={() => navigate(to(`/privado/fecho/regra/${first.person.person_id}`))}>Decidir regra · {first.person.display_name}</button>
         : <button className="btn btn-primary btn-tall" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
     }
-    if (st === 'fechado') return null
+    if (st === 'fechado') return <button className="link-btn" onClick={() => navigate(to('/privado/fecho/reabrir'))}>Reabrir período (autorização necessária)</button>
     return (
       <>
         {outstanding.length > 0
@@ -96,6 +100,7 @@ export function FechoHome() {
             <span className="muted" style={{ textAlign: 'center', fontSize: '0.8125rem' }}>Só fecha depois de todos os pagamentos confirmados.</span>
           </>
         )}
+        {st === 'em_pagamento' && outstanding.length === 0 && <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ver pagamentos</button>}
         {f.readiness.can_annul && <button className="link-btn" onClick={() => setSheet('annul')}>Voltar a rever (anula a aprovação)</button>}
       </>
     )

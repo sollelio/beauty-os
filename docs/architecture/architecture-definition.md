@@ -235,7 +235,7 @@ Changes that cannot alter results (e.g. a catalogue default price, a person's ca
 
 **Invariant R-4.** All commands that change a period's revision or state serialize on that period (row lock or equivalent), so compare-and-commit is atomic. The salon's volume makes this contention negligible; it is measured, not assumed (§22).
 
-**Not decided here (Open product):** whether a record or correction may enter a period after approval, and what happens then (07 I1, P11). Either answer — rejecting such writes, or accepting them and surfacing a difference against the persisted approval outputs (§14) — fits the module boundaries and the revision invariants, but may require additive schema, command or constraint changes that are not pre-designed here (§21.1).
+**Decided by product (07 D7, 2026-10-07):** new records in an approved period are rejected. **Still open:** correction mechanics; formerly: whether a record or correction may enter a period after approval, and what happens then (07 I1, P11). Either answer — rejecting such writes, or accepting them and surfacing a difference against the persisted approval outputs (§14) — fits the module boundaries and the revision invariants, but may require additive schema, command or constraint changes that are not pre-designed here (§21.1).
 
 ## 12. Idempotency model
 
@@ -258,7 +258,7 @@ Changes that cannot alter results (e.g. a catalogue default price, a person's ca
 | Machine | States and transitions | Status |
 |---|---|---|
 | **Period** | Aberto → Pronto para pagamento (approve) → Em pagamento (first confirmed payment) → Fechado (close) | States, "payments may exist before Fechado", "cannot close while approved amounts are unpaid", "closed not casually editable; reopening traced": **Product** (03 §2, 04 J5). |
-| | Annul approval: Pronto para pagamento → Aberto | Designed in Slice 06 (only before any payment); canonical adoption **Open product** (07 I4). The state model allows the transition; its guard follows the product decision and may need additive command or constraint changes (§21.1). |
+| | Annul approval: Pronto para pagamento → Aberto | Only before any payment — `Decided` (07 D7). The state model allows the transition; its guard follows the product decision and may need additive command or constraint changes (§21.1). |
 | | Reopen: Fechado → target | Reopen with mandatory reason and trace: **Product**. Target state **Open product** (07 I3). |
 | | Every transition | Persisted with actor, time, reason (where required) and the revision; changes the review revision (§11). |
 | **Approval** | active → annulled | Immutable record + annulment record. |

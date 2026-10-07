@@ -30,5 +30,7 @@ The period states are decided: Aberto → Pronto para pagamento → Em pagamento
 
 ## Deferred (product)
 
+*Update 2026-10-07:* the items below were decided by product in [07 D7](../../07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d7--close-rules-payments-approval-closing-records-after-approval-reopen) (records after approval rejected; annulment only before any payment; closing without an owners' decision warns; reopen target by payments). They were additive within this lifecycle; correction mechanics (07 I1) remain deferred.
+
 - Whether records or corrections may enter a period after approval (07 I1, P11). Either answer (rejecting them, or surfacing a difference against the persisted approval outputs of ADR-0007) fits this lifecycle and the revision invariants, but may require additive schema, command, transition or constraint changes, not pre-designed here.
 - Reopen target state (07 I3); annulment guard and approval granularity (07 I4); closing without an owners' decision (07 I5). Same position: not blocking; answers may need additive changes; boundaries unaffected.

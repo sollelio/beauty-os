@@ -157,7 +157,7 @@ Open:
 - What qualifies as an exception. Candidates derived from other journeys: advance exceeding earnings (J2), remuneration pending determination (J1), corrections, contribution cases (J3).
 - **Unresolved business-rule question: remuneration ↔ owner distribution circularity.** Contextual service remuneration can depend on whether owners take a distribution. But whether a distribution is affordable depends partly on remuneration obligations. Pilot example: Fernando may lower his rate in a month when owners take a distribution. **Not solved yet. Resolve during the Monthly Close design/domain work.**
 - Where owner distribution, retained/reinvested amounts and any cash reconciliation fit in the close ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)). Owner distribution and retained amounts: `Decided` in [07 §2 D2–D3](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#2-decisions-closed) (payout/split mechanics still open); cash reconciliation stays open.
-- Whether partial payments or overpayments are allowed; when the first payment becomes authorized; payment correction mechanics; the state a reopened period returns to ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)).
+- Payment correction mechanics ([03 §5](03_V1_SCOPE.md#5-open-scope-questions)). Partial payments, approval and annulment, closing, records after approval and reopening are `Decided` ([07 D7](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d7--close-rules-payments-approval-closing-records-after-approval-reopen)).
 
 ## J6 — Stock / prepare purchase
 

@@ -17,9 +17,10 @@ vi.mock('../../modules/services/api', async (orig) => ({
 }))
 vi.mock('../../modules/period/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/period/api')>()),
-  getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]),
+  getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]), reopenPeriod: vi.fn(),
 }))
-import { approvePeriod, closePeriod, confirmPayment, getFecho, getFechoHistory } from '../../modules/period/api'
+import { approvePeriod, closePeriod, confirmPayment, getFecho, getFechoHistory, reopenPeriod } from '../../modules/period/api'
+import { ReopenPage } from './ReopenPage'
 import { FechoHome } from './FechoHome'
 import { ProfessionalsPage } from './ProfessionalsPage'
 import { ApprovePage } from './ApprovePage'
@@ -54,7 +55,7 @@ function fecho(over: Partial<Fecho> = {}, people = [nadia, laurindo, carla]): Fe
     exceptions: [...pending.map((x) => ({ kind: 'rule_pending' as const, blocking: true as const, person: x })),
       ...people.filter((x) => (x.excess_minor ?? 0) > 0).map((x) => ({ kind: 'above_earned' as const, blocking: false as const, person: x }))],
     readiness: { can_approve: pending.length === 0, can_annul: false, can_pay: false, can_close: false, unpaid_minor: 0 },
-    closed: null, ...over,
+    closed: null, reopened: null, close_statements_count: 0, ...over,
   }
 }
 const line = (id: string, name: string, approved: number, paid = 0): ApprovalLine => ({
@@ -83,6 +84,7 @@ function renderAt(path: string) {
             <Route path="/privado/fecho/pagamentos" element={<PaymentsPage />} />
             <Route path="/privado/fecho/fechar" element={<ClosePage />} />
             <Route path="/privado/fecho/historico" element={<HistoryPage />} />
+            <Route path="/privado/fecho/reabrir" element={<ReopenPage />} />
             <Route path="*" element={<p>Outro ecrã</p>} />
           </Routes>
         </MemoryRouter>
@@ -115,14 +117,15 @@ describe('Fecho home', () => {
     expect(await screen.findByText('Pronto para aprovar')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Aprovar valores a pagar' })).toBeTruthy()
   })
-  it('closed: lock card, a summary that adds up, no actions and no reopen (07 I3 open)', async () => {
+  it('closed: lock card, a summary that adds up, and only the authorized reopen', async () => {
     const f = approved([line('n', 'Nádia', 45000, 45000)], 'fechado')
     vi.mocked(getFecho).mockResolvedValue({ ...f, source: 'close_statement', exceptions: [], closed: { closed_at: '2026-11-03T10:45:00Z', closed_by: 'Mercy', calculation_version: '2026-10.1', review_revision: 12 } })
     renderAt('/privado/fecho')
     expect(await screen.findByText('Fechado em 3 nov às 11:45 por Mercy')).toBeTruthy()
     expect(screen.getByText('Só de leitura; reabrir exige autorização e motivo.')).toBeTruthy()
     expect(screen.getByText('Sem decisão registada ao fechar')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Fechar período|Aprovar|Confirmar pagamentos|Reabrir/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Fechar período|Aprovar|Confirmar pagamentos/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Reabrir período (autorização necessária)' })).toBeTruthy()
   })
 })
 
@@ -214,5 +217,34 @@ describe('history', () => {
     expect(screen.getByText('Regra alterada · Carla')).toBeTruthy()
     expect(screen.getByText('de 50% para 40% · por Mercy')).toBeTruthy()
     expect(screen.getAllByTestId('history-day')).toHaveLength(2)
+  })
+})
+
+describe('reopen', () => {
+  const closedFecho = () => {
+    const f = approved([line('n', 'Nádia', 45000, 45000)], 'fechado')
+    return { ...f, source: 'close_statement' as const, exceptions: [], close_statements_count: 1,
+      closed: { closed_at: '2026-11-03T10:45:00Z', closed_by: 'Mercy', calculation_version: '2026-10.1', review_revision: 12 } }
+  }
+  it('needs a reason, then confirms with the reviewed revision', async () => {
+    vi.mocked(getFecho).mockResolvedValue(closedFecho())
+    vi.mocked(reopenPeriod).mockResolvedValue({ review_revision: 13, state: 'em_pagamento' })
+    renderAt('/privado/fecho/reabrir')
+    expect(await screen.findByText('Escreva o motivo para continuar.')).toBeTruthy()
+    expect(screen.queryByLabelText('PIN')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Motivo (obrigatório)'), { target: { value: '  Distribuição com valor errado ' } })
+    expect(screen.getByText('3 nov às 11:45 por Mercy')).toBeTruthy()
+    await confirmAs()
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir período' }))
+    await waitFor(() => expect(reopenPeriod).toHaveBeenCalled())
+    expect(vi.mocked(reopenPeriod).mock.calls[0]![2]).toEqual({ periodId: 'p10', revision: 7, reason: 'Distribuição com valor errado' })
+  })
+  it('a reopened period says who reopened it, when and why', async () => {
+    const f = approved([line('n', 'Nádia', 45000, 45000)], 'em_pagamento')
+    vi.mocked(getFecho).mockResolvedValue({ ...f, close_statements_count: 1, reopened: { at: '2026-11-04T08:30:00Z', by: 'Mercy', reason: 'distribuição aos sócios registada com valor errado', to_state: 'em_pagamento' } })
+    renderAt('/privado/fecho')
+    expect(await screen.findByText('Todos os pagamentos confirmados')).toBeTruthy()
+    expect(screen.getByText(/Reaberto por Mercy · 4 nov 09:30 · motivo: distribuição aos sócios registada com valor errado./)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Fechar período' })).toBeTruthy()
   })
 })

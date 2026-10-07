@@ -137,12 +137,21 @@ excess advanced / paid     = max(advances + confirmed payments − earned, 0)
 - While a contextual rule is pending, earned is undefined, so neither figure exists (03 §3).
 - In the period position the excess is subtracted from *Livre* as its own term (*Acima do ganho · a rever*), because the money has already left the business (Slice 06 §7).
 
+### D7 — Close rules: payments, approval, closing, records after approval, reopen
+
+`Decided` (Sollelio, 2026-10-07), closing I2–I5 and the "records after approval" part of I1.
+
+- **Partial payments (I2).** A payment may not exceed the person's remaining approved amount (blocked). A lower amount is recorded and the person shows *Parcial*; the period cannot close while anything approved is unpaid. Correcting a confirmed payment stays open (I1).
+- **Approval and annulment (I4).** Approval is period-level, for everyone at once. It can be annulled (back to *Aberto*) only while no payment exists against it. A rule changes after approval only through that annulment.
+- **Closing without an owners' decision (I5).** Warning only, never a blocker; the close statement and the history record explicitly that no decision existed.
+- **Records after approval (I1, partial).** Once a period is *Pronto para pagamento* or *Em pagamento*, new services, advances, expenses and purchases in it are rejected; approved calculations never change silently. To change those inputs without payments, annul the approval first. With payments, the rejection stands until a correction flow exists (I1).
+- **Reopen (I3).** Authorized (B8) with a mandatory reason. *Fechado* → *Em pagamento* if the period has confirmed payments, otherwise → *Pronto para pagamento*. Approval, payments, decisions, close statements and history stay as recorded; the reopen is its own history entry. Reopening makes the post-approval operations available again (owners' decision, reserve records, unconfirmed payments, annulment when no payment exists, closing again — which adds a new close statement); rules and approved amounts stay frozen.
+
 ## 3. Gaps intentionally left open
 
 None of these blocks architecture, provided the architecture follows §10:
 
-- **Corrections** of recorded events (who, until when, effect in approved periods) — the entry points exist, the flow does not (I1).
-- **Close details** proposed by Slice 06 but not adopted canonically: partial and over payments, approval granularity, rule change after approval, closing without an owners' decision, the reopen target (I2–I5).
+- **Corrections** of recorded events (who, until when, how shown) — the entry points exist, the flow does not (I1). New records in an approved period are rejected (D7).
 - **Configuration UIs**: people/ownership/capabilities, standing rules, service catalogue, categories, payment methods (I6–I8).
 - **Dinheiro space** timeline (I9).
 - **Contribution settlement**, **advance-excess policy**, **cash check**, **period length**, **self-recording**, **who holds each authorization** — pilot validation (§5).
@@ -164,7 +173,7 @@ Classification: **Covered** (approved slice/journey) · **Conceptual** (covered 
 | 7 | Personal advances | **Covered** | Slice 02; above-earned warn-only (`Decided`); excess policy open (P4). |
 | 8 | Business expenses / money movements (incl. reserve allocations, unexpected losses) | **Covered** + **Gap closed** | Expenses: Slice 03. Unexpected losses (e.g. compensating a customer) are expenses (Slice 06 sample "Outros · indemnização a cliente"). Reserve allocation **and use**: was a Gap, closed by D1. |
 | 9 | Purchases and purchase contributions | **Covered** | Slices 03, 05 (multiple contributors, total level, zero salon share valid). Settlement open (P2). |
-| 10 | Monthly close | **Covered** | Slice 06 (states `Decided`). Sub-rules open (I2–I5). |
+| 10 | Monthly close | **Covered** | Slice 06 (states `Decided`; close rules `Decided` in D7). |
 | 11 | Amount payable per professional, explainable | **Covered** | Slices 04, 06; clamp `Decided` (04 J5). |
 | 12 | Basic operational financial overview | **Covered** | Slice 06 *Posição do período*, extended by D1. Whether it is the number owners use: pilot (P13). |
 | 13 | Stock Lite / replenishment visibility | **Covered** | Slice 05 (approved after correction). |
@@ -189,11 +198,11 @@ Deduplicated across 00–06 and Slices 01–06. Each question is in exactly one 
 
 | ID | Question | Sources | Blocks |
 |---|---|---|---|
-| I1 | Correction of recorded events: who may correct, until when, how a correction is shown, and what happens when the event sits in an approved, paying or closed period | J1 · 05 §3 · Slices 01 Q3, 02 Q6, 03 Q8, 04 Q5, 06 Q14 | Correction flows (and corrections as Fecho exceptions) |
-| I2 | Partial payments / overpayments; when the first payment becomes authorized; correcting a confirmed payment | 03 §5 · J5 · Slice 04 Q1 · Slice 06 Q2 | Fecho payments (Slice 06 proposes: lower = *Parcial* with warning, higher = blocked) |
-| I3 | Reopen target state and what reopening unlocks | 03 §5 · J5 · Slice 06 Q6 (+ D1 reserve records) | Fecho reopen |
-| I4 | Approval granularity (period-level, all at once vs per person) and rule change after approval | Slice 06 Q3 | Fecho approval |
-| I5 | Closing without an owners' decision (Slice 06: warn only) | Slice 06 Q5 | Fecho close |
+| I1 | Correction of recorded events: who may correct, until when, how a correction is shown, and how an event in an approved, paying or closed period is corrected (new records there are rejected — D7) | J1 · 05 §3 · Slices 01 Q3, 02 Q6, 03 Q8, 04 Q5, 06 Q14 | Correction flows (and corrections as Fecho exceptions) |
+| I2 | ~~Partial payments / overpayments~~ — `Decided` (D7). Still open: correcting a confirmed payment (I1) | 03 §5 · J5 · Slice 04 Q1 · Slice 06 Q2 | — |
+| I3 | ~~Reopen target state and what reopening unlocks~~ — `Decided` (D7) | 03 §5 · J5 · Slice 06 Q6 (+ D1 reserve records) | — |
+| I4 | ~~Approval granularity and rule change after approval~~ — `Decided` (D7) | Slice 06 Q3 | — |
+| I5 | ~~Closing without an owners' decision~~ — `Decided` (D7): warn only | Slice 06 Q5 | — |
 | I6 | Standing-rule configuration: where it is set, and whether a change applies to the current period or from the next | Slice 04 Q9 · D4 | People/rule configuration |
 | I7 | People, ownership and capability configuration; adding a new or temporary professional | 03 §2 #1 · Slice 01 Q6 | Definições → Pessoas; Equipa list |
 | I8 | Service catalogue management; price visibility on the full Serviços list | 03 §2 #2 · 05 §4 · Slice 01 §8b | Serviços space |

@@ -21,6 +21,7 @@ import { formatMoney, minorToWholeUnits, wholeUnitsToMinor } from '../../shared/
 import { formatTime } from '../../shared/time'
 import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { captureFailure } from '../../shared/periodLock'
 
 type Step = 1 | 2 | 3 | 'done'
 type Line = { key: string; productId: string | null; name: string; unitWord: string; quantity: number; costDigits: string; insteadOf?: string | null }
@@ -255,7 +256,7 @@ export function PurchaseFlow() {
             <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
             {err?.kind === 'domain' && err.code && VERIFY_MESSAGES[err.code] && <div className="notice notice-error" role="alert">{VERIFY_MESSAGES[err.code]}</div>}
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
-            {err && err.kind !== 'network' && !(err.code && VERIFY_MESSAGES[err.code]) && <div className="notice notice-error" role="alert">Não foi possível guardar esta compra.</div>}
+            {err && err.kind !== 'network' && !(err.code && VERIFY_MESSAGES[err.code]) && <div className="notice notice-error" role="alert">{captureFailure(err, 'Não foi possível guardar esta compra.')}</div>}
           </section>
           <div className="footer">
             {err?.kind === 'network' ? (

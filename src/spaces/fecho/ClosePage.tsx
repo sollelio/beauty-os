@@ -85,6 +85,7 @@ export function HistoryPage() {
         return ['Valores a pagar aprovados', `${e.people} pessoas · ${m(e.total_minor)}${cases.length ? ` · ${cases.map((c) => c.display_name).join(', ')} nada a pagar` : ''} · aprovado por ${e.by}`]
       }
       case 'annulment': return ['Aprovação anulada', `por ${e.by}`]
+      case 'reopen': return ['Período reaberto', `motivo: ${e.reason} · reaberto por ${e.by}`]
       case 'payment': return [`Pagamento · ${e.person}`, `${m(e.amount_minor)} · ${String(e.method).toLocaleLowerCase('pt-PT')} · confirmado por ${e.by}`]
       case 'close': return ['Período fechado', `${e.payments_count} pagamentos · ${m(e.paid_minor)}${e.distribution_minor !== null && e.distribution_minor !== undefined ? ` · distribuição ${m(e.distribution_minor)}` : ''} · fechado por ${e.by}`]
       default: return [e.kind, `por ${e.by}`]
