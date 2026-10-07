@@ -52,3 +52,13 @@ export async function verifyPerson(personId: string, secret: string): Promise<st
   if (!r.ok || !r.grant_id) throw toAppError({ message: r.error ?? 'NOT_AUTHORIZED' })
   return r.grant_id
 }
+
+export type PersonRow = { id: string; display_name: string }
+export const peopleKeys = { all: ['org', 'people'] as const }
+
+/** Active people of this organization (operational names only). */
+export async function listPeople(): Promise<PersonRow[]> {
+  const { data, error } = await getSupabase().from('people').select('id, display_name').eq('active', true).order('display_name')
+  if (error) throw toAppError(error)
+  return data
+}

@@ -8,7 +8,7 @@ import {
   listCapturePeople, listFrequentServices, listPaymentMethods, servicesKeys,
   type CapturePerson, type PaymentPart, type RecordServiceInput,
 } from '../../modules/services/api'
-import { checkPayment, type PaymentMode } from '../../modules/services/payment'
+import { checkPayment, type PaymentMode } from '../../shared/payment'
 import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'

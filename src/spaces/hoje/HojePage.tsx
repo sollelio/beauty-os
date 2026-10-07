@@ -1,6 +1,7 @@
 // Hoje (Slice 01 §3): primary action, salon-level count line, recent records. No money totals, no per-person totals.
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
 import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
@@ -10,6 +11,8 @@ import { formatTime, formatToday } from '../../shared/time'
 export function HojePage() {
   const org = useOrganization()
   const summary = useQuery({ queryKey: servicesKeys.hoje, queryFn: getHojeSummary })
+  const [choosing, setChoosing] = useState(false)
+  const navigate = useNavigate()
 
   return (
     <main className="app-main">
@@ -23,6 +26,7 @@ export function HojePage() {
       </Link>
       <nav className="quick-actions" aria-label="Outras ações">
         <Link to="/equipa/adiantamento">Adiantamento</Link>
+        <button onClick={() => setChoosing(true)}>Despesa ou compra</button>
       </nav>
 
       {summary.isError && (
@@ -54,6 +58,20 @@ export function HojePage() {
             </section>
           )}
         </>
+      )}
+      {choosing && (
+        <div className="sheet" role="dialog" aria-labelledby="chooser-title" onClick={() => setChoosing(false)}>
+          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
+            <h2 id="chooser-title" style={{ fontSize: '1.25rem' }}>O que quer registar?</h2>
+            <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => navigate('/dinheiro/despesa')}>
+              <span><strong style={{ display: 'block' }}>Registar despesa</strong><span className="muted">Contas e gastos do salão — não entra no stock</span></span>
+            </button>
+            <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => navigate('/dinheiro/compra')}>
+              <span><strong style={{ display: 'block' }}>Registar compra</strong><span className="muted">Produtos que usamos nos serviços e ficam no stock</span></span>
+            </button>
+            <button className="btn btn-secondary" onClick={() => setChoosing(false)}>Cancelar</button>
+          </div>
+        </div>
       )}
     </main>
   )

@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { listConfirmers, verificationKeys } from '../../modules/org/api'
+import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
+import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { AmountField } from '../../shared/ui/AmountField'
 import { listCapturePeople, listPaymentMethods, servicesKeys, type CapturePerson } from '../../modules/services/api'
 import { useRecordAdvance } from '../../modules/team/useRecordAdvance'
 import type { RecordAdvanceInput } from '../../modules/team/api'
@@ -13,13 +16,6 @@ import { formatTime } from '../../shared/time'
 
 type Step = 1 | 2 | 3 | 'done'
 type Method = 'numerario' | 'transferencia'
-
-const VERIFY_MESSAGES: Record<string, string> = {
-  INVALID: 'PIN incorreto.',
-  LOCKED: 'Demasiadas tentativas. Tente mais tarde.',
-  NOT_AUTHORIZED: 'Esta pessoa não pode confirmar adiantamentos.',
-  VERIFICATION_REQUIRED: 'É necessária a confirmação de uma pessoa autorizada.',
-}
 
 export function AdvanceFlow() {
   const org = useOrganization()
@@ -37,7 +33,6 @@ export function AdvanceFlow() {
 
   const people = useQuery({ queryKey: servicesKeys.people, queryFn: listCapturePeople })
   const methods = useQuery({ queryKey: servicesKeys.paymentMethods, queryFn: listPaymentMethods })
-  const confirmers = useQuery({ queryKey: verificationKeys.confirmers, queryFn: listConfirmers, enabled: step === 3 })
 
   const amountMinor = wholeUnitsToMinor(amount, org)
   const methodRow = methods.data?.find((m) => m.code === method)
@@ -123,11 +118,7 @@ export function AdvanceFlow() {
             <div><button className="chip" onClick={() => setStep(1)} aria-label={`Mudar pessoa: ${person.display_name}`}>{person.display_name} ✎</button></div>
             <div className="stack" style={{ gap: '0.375rem' }}>
               <span className="label">Valor entregue</span>
-              <label className="field">
-                <input inputMode="numeric" aria-label="Valor entregue" placeholder="0" value={amount.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-                  onChange={(e) => setAmount(e.target.value.replace(/\D/g, '').slice(0, 9))} className="amount-input" />
-                <span className="muted">{org.currency_symbol}</span>
-              </label>
+              <AmountField label="Valor entregue" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
               <span className="muted" style={{ fontSize: '0.875rem' }}>Valor em {org.currency_symbol}, sem cêntimos.</span>
             </div>
             <div className="stack">
@@ -169,19 +160,7 @@ export function AdvanceFlow() {
               <span aria-hidden>🔒</span>
               <span>Fica no histórico com data, hora e quem confirmou. É descontado ao valor a receber no fecho do período.</span>
             </div>
-            <div className="stack">
-              <span className="label">Quem confirma?</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {confirmers.data?.map((c) => (
-                  <button key={c.id} className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={confirmerId === c.id} onClick={() => setConfirmerId(c.id)}>{c.display_name}</button>
-                ))}
-                {confirmers.data?.length === 0 && <span className="muted">Nenhuma pessoa autorizada configurada.</span>}
-              </div>
-              <label className="field">
-                <input type="password" inputMode="numeric" autoComplete="off" aria-label="PIN" placeholder="PIN" value={secret}
-                  onChange={(e) => setSecret(e.target.value.replace(/\D/g, '').slice(0, 12))} />
-              </label>
-            </div>
+            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
             {verifyError && <div className="notice notice-error" role="alert">{verifyError}</div>}
             {advance.status === 'error' && advance.error?.kind === 'network' && (
               <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>
@@ -203,16 +182,7 @@ export function AdvanceFlow() {
         </>
       )}
 
-      {discarding && (
-        <div className="sheet" role="dialog" aria-labelledby="discard-title">
-          <div className="sheet-body">
-            <h2 id="discard-title" style={{ fontSize: '1.25rem' }}>Descartar este adiantamento?</h2>
-            <p className="muted" style={{ margin: 0 }}>Nada foi registado.</p>
-            <button className="btn btn-primary" onClick={leaveNow}>Descartar</button>
-            <button className="btn btn-secondary" onClick={() => setDiscarding(false)}>Continuar a editar</button>
-          </div>
-        </div>
-      )}
+      {discarding && <DiscardSheet title="Descartar este adiantamento?" onDiscard={leaveNow} onKeep={() => setDiscarding(false)} />}
     </main>
   )
 }

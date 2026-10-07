@@ -1,5 +1,5 @@
-// Client-side UX check for Slice 01 payment entry. The record_service command re-validates everything.
-import { formatMoney, type CurrencySettings } from '../../shared/money'
+// Client-side UX check for payment entry (Slices 01 and 03). The commands re-validate everything.
+import { formatMoney, type CurrencySettings } from './money'
 
 export type PaymentMode = 'single' | 'mixed'
 

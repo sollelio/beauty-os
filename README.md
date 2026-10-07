@@ -27,7 +27,7 @@ npm run dev
 
 Open the app: an unbound browser shows **Ligar este dispositivo**. Enter the development code **`DEV-SALAO-2026`** (organization *Salão Demo (Dev)*, synthetic data from `supabase/seed.sql`). The browser becomes an anonymous device principal bound to that organization (ADR-0009) and keeps the session across reloads. To enroll again, clear the site's storage.
 
-Sensitive actions (e.g. *Adiantamento*) need a verified person: on *Confirmação necessária* choose **Duarte** and enter the development PIN **`135790`** (synthetic; five wrong PINs lock that person for 15 minutes).
+Sensitive actions (*Adiantamento*, *Despesa*, *Compra*) need a verified person: on *Confirmação necessária* choose **Duarte** and enter the development PIN **`135790`** (synthetic; five wrong PINs lock that person for 15 minutes).
 
 ### Quality gates and tests
 
