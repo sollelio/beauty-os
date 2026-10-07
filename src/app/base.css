@@ -106,3 +106,23 @@ button { font: inherit; cursor: pointer; }
 .market-name { display: block; font-size: 1.1875rem; font-weight: 600; }
 .market-qty { font-size: 1.25rem; font-weight: 700; white-space: nowrap; }
 .market-row.skipped .market-name, .market-row.skipped .market-qty { text-decoration: line-through; color: var(--muted); }
+
+/* Slice 06 — Fecho */
+.pill { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap; }
+.pill-block { background: var(--warning-bg); color: var(--warning-fg); }
+.pill-review { background: var(--surface); border: 1px solid #B7791F; color: var(--warning-fg); }
+.pill-ok { background: var(--success-bg); color: var(--success-fg); }
+.pill-neutral { background: var(--disabled-bg); color: var(--ink); }
+.xrow { display: flex; align-items: center; gap: 0.75rem; min-height: 3.25rem; padding: 0.25rem 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); width: 100%; }
+.stack > .label + .xrow { border-top: 0; }
+.xdot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.xdot-amber { background: #B7791F; }
+.xdot-neutral { background: var(--muted); }
+.prow { display: flex; align-items: center; gap: 0.75rem; min-height: 4.5rem; padding: 0.375rem 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); width: 100%; }
+.stack > .prow:first-child { border-top: 0; }
+.amount-cell { font-size: 1.0625rem; font-weight: 600; white-space: nowrap; flex: 0 0 auto; }
+.notice-neutral { background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+.lock-card { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.875rem 1rem; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-strong); }
+.totals-card { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.totals-card > span { display: flex; flex-direction: column; gap: 0.125rem; }
+.totals-card strong { font-size: 1rem; white-space: nowrap; }

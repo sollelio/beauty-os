@@ -1,7 +1,7 @@
 // Situação do profissional / A minha situação (Slice 04). Every figure is read from the database read model; this
 // screen only arranges and words them. Manager view (B4) shows attributions; the self view (B3) never does.
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, exitPrivateContext } from '../../modules/org/privateContext'
@@ -28,7 +28,8 @@ export function SituationPage() {
   const org = useOrganization()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [periodId, setPeriodId] = useState<string | null>(null)
+  const [sp] = useSearchParams()
+  const [periodId, setPeriodId] = useState<string | null>(sp.get('p'))
   const [tab, setTab] = useState<'resumo' | 'hist'>('resumo')
   const [filter, setFilter] = useState<HistoryKind | null>(null)
   const [sheet, setSheet] = useState<null | 'explain' | 'period'>(null)
@@ -113,7 +114,7 @@ function Summary({ s, onExplain, onHistory }: { s: Situation; onExplain: () => v
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
   const manager = s.view === 'manager'
-  const determinate = s.rule.kind === 'standing' && s.earned_minor !== null
+  const determinate = s.rule.kind !== 'none' && s.earned_minor !== null      // standing, or contextual once decided (Slice 06)
   const rule = s.rule.kind === 'none' ? null : s.rule
   const state = STATE_LABEL[s.period.state]
   const derivation = `ganho ${g(s.earned_minor ?? 0)} − adiantamentos ${g(s.advances.total_minor)} − pagamentos ${g(s.payments.total_minor)}`
@@ -200,8 +201,8 @@ function ExplainSheet({ s, onClose }: { s: Situation; onClose: () => void }) {
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
   const manager = s.view === 'manager'
-  const rule = s.rule.kind === 'standing' ? s.rule : null
-  const determinate = rule !== null && s.earned_minor !== null
+  const rule = s.rule.kind !== 'none' && s.earned_minor !== null ? s.rule : null
+  const determinate = rule !== null
   const excess = (s.excess_minor ?? 0) > 0
   const services = `${count(s.production.count, 'serviço registado', 'serviços registados')} = ${m(s.production.total_minor)}`
   const steps: [string, string][] = determinate ? [

@@ -24,6 +24,7 @@ export function EquipaPage() {
           </button>
         ))}
       </div>
+      <button className="pick" onClick={() => navigate('/privado/fecho')}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>
   )

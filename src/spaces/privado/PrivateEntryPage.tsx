@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { enterPrivateContext, listPrivatePeople, privateKeys } from '../../modules/org/privateContext'
+import { enterPrivateContext, getPrivateStatus, listPrivatePeople, privateKeys } from '../../modules/org/privateContext'
 import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { toAppError } from '../../shared/errors'
 
@@ -16,11 +16,15 @@ export function PrivateEntryPage() {
   const [secret, setSecret] = useState('')
   const enter = useMutation({
     mutationFn: () => enterPrivateContext(personId!, secret),
-    onSuccess: async () => { setSecret(''); await qc.invalidateQueries({ queryKey: privateKeys.status }); navigate('/privado', { replace: true }) },
+    onSuccess: async () => {
+      setSecret('')
+      // fetch, not just invalidate: the status query has no observer here, and a stale "inactive" would bounce the gate
+      await qc.fetchQuery({ queryKey: privateKeys.status, queryFn: getPrivateStatus, staleTime: 0 })
+      navigate(next && next.startsWith('/privado/') ? next : '/privado', { replace: true }) },
     onError: () => setSecret(''),
   })
   const err = enter.error ? toAppError(enter.error) : null
-  const ended = (location.state as { ended?: boolean } | null)?.ended
+  const { ended, next } = (location.state as { ended?: boolean; next?: string } | null) ?? {}
 
   return (
     <main className="app-main">

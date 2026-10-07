@@ -31,6 +31,7 @@ export function HojePage() {
         <button onClick={() => setChoosing(true)}>Despesa ou compra</button>
         <Link to="/stock">Stock</Link>
         <Link to="/privado/entrar">Área privada</Link>
+        <Link to="/privado/fecho">Fecho</Link>
       </nav>
 
       {(toBuy.data ?? 0) > 0 && (

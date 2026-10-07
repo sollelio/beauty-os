@@ -144,6 +144,17 @@ describe('private data lifetime', () => {
     expect(cached(qc)).toBe(0)
   })
 
+  it('a stale cached "inactive" status never ends a context that was just opened (gate visited before entering)', async () => {
+    serve(base)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(['org', 'private-status'], { active: false })
+    await qc.invalidateQueries({ queryKey: ['org', 'private-status'], refetchType: 'none' })     // stale, as after a previous exit
+    renderAt(qc)
+    expect(await screen.findByTestId('remaining')).toBeTruthy()
+    expect(screen.queryByText('Entrada privada')).toBeNull()
+    expect(rpc).not.toHaveBeenCalledWith('end_private_context')
+  })
+
   it('explicit exit ends the context server-side and clears the cache', async () => {
     serve(base)
     const qc = renderAt()

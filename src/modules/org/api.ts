@@ -33,10 +33,12 @@ export async function enrollDevice(code: string): Promise<void> {
 
 export type Confirmer = { id: string; display_name: string }
 
-export const verificationKeys = { confirmers: ['org', 'confirmers'] as const }
+export type ConfirmPermission = 'movement.confirm' | 'period.decide' | 'payment.confirm' | 'period.close'
+export const verificationKeys = { confirmers: (permission: ConfirmPermission = 'movement.confirm') => ['org', 'confirmers', permission] as const }
 
-export async function listConfirmers(): Promise<Confirmer[]> {
-  const { data, error } = await getSupabase().rpc('list_confirmers')
+/** People who may confirm a boundary (names only), for the boundary's permission (07 §8 B2, B5–B7). */
+export async function listConfirmers(permission: ConfirmPermission = 'movement.confirm'): Promise<Confirmer[]> {
+  const { data, error } = await getSupabase().rpc('list_confirmers', { p_permission: permission })
   if (error) throw toAppError(error)
   return data as Confirmer[]
 }

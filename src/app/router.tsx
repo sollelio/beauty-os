@@ -14,6 +14,14 @@ import { StockPage } from '../spaces/stock/StockPage'
 import { ListPage } from '../spaces/stock/ListPage'
 import { HandoffPage, MarketPage } from '../spaces/stock/MarketPage'
 import { ReviewPage } from '../spaces/stock/ReviewPage'
+import { FechoHome } from '../spaces/fecho/FechoHome'
+import { ProfessionalsPage } from '../spaces/fecho/ProfessionalsPage'
+import { RuleFlow } from '../spaces/fecho/RuleFlow'
+import { MoneyPage, ReserveFlow } from '../spaces/fecho/MoneyPage'
+import { PositionPage } from '../spaces/fecho/PositionPage'
+import { ApprovePage } from '../spaces/fecho/ApprovePage'
+import { PaymentsPage } from '../spaces/fecho/PaymentsPage'
+import { ClosePage, HistoryPage } from '../spaces/fecho/ClosePage'
 
 export const router = createBrowserRouter([
   {
@@ -41,6 +49,16 @@ export const router = createBrowserRouter([
               { index: true, element: <PrivateHome /> },
               { path: 'equipa', element: <EquipaPage /> },
               { path: 'situacao/:personId', element: <SituationPage /> },
+              { path: 'fecho', element: <FechoHome /> },
+              { path: 'fecho/profissionais', element: <ProfessionalsPage /> },
+              { path: 'fecho/regra/:personId', element: <RuleFlow /> },
+              { path: 'fecho/dinheiro', element: <MoneyPage /> },
+              { path: 'fecho/reserva/:mode', element: <ReserveFlow /> },
+              { path: 'fecho/posicao', element: <PositionPage /> },
+              { path: 'fecho/aprovar', element: <ApprovePage /> },
+              { path: 'fecho/pagamentos', element: <PaymentsPage /> },
+              { path: 'fecho/fechar', element: <ClosePage /> },
+              { path: 'fecho/historico', element: <HistoryPage /> },
             ],
           },
         ],

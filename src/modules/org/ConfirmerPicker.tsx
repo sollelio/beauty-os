@@ -1,15 +1,15 @@
 // "Quem confirma?" + PIN inside a Confirmação necessária boundary (Slices 02–03). The mechanism is ADR-0009;
 // its visual form is a placeholder pending product input (05 §3).
 import { useQuery } from '@tanstack/react-query'
-import { listConfirmers, verificationKeys } from './api'
+import { listConfirmers, verificationKeys, type ConfirmPermission } from './api'
 
 
 
 
-export function ConfirmerPicker({ confirmerId, onConfirmer, secret, onSecret }: {
-  confirmerId: string | null; onConfirmer: (id: string) => void; secret: string; onSecret: (s: string) => void
+export function ConfirmerPicker({ confirmerId, onConfirmer, secret, onSecret, permission = 'movement.confirm' }: {
+  confirmerId: string | null; onConfirmer: (id: string) => void; secret: string; onSecret: (s: string) => void; permission?: ConfirmPermission
 }) {
-  const confirmers = useQuery({ queryKey: verificationKeys.confirmers, queryFn: listConfirmers })
+  const confirmers = useQuery({ queryKey: verificationKeys.confirmers(permission), queryFn: () => listConfirmers(permission) })
   return (
     <div className="stack">
       <span className="label">Quem confirma?</span>
