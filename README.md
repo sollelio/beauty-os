@@ -29,6 +29,8 @@ Open the app: an unbound browser shows **Ligar este dispositivo**. Enter the dev
 
 Sensitive actions (*Adiantamento*, *Despesa*, *Compra*) need a verified person: on *Confirmação necessária* choose **Duarte** and enter the development PIN **`135790`** (synthetic; five wrong PINs lock that person for 15 minutes).
 
+*Área privada* (Slice 04) opens a short private context (5 minutes; it also ends on *Sair* or when the area is left). Synthetic Dev PINs: **Duarte** `135790` (team finance: Equipa → any person), **Ana** `246810`, **Bruno** `975310`, **Carla** `864200` (own situation only). Dev cases: Ana — determinate rule, Agosto fechado / Setembro em pagamento with recorded payments; Carla — Setembro advances above earned (excess); Bruno — rule pending.
+
 ### Quality gates and tests
 
 ```sh

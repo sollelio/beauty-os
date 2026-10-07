@@ -27,6 +27,7 @@ export function HojePage() {
       <nav className="quick-actions" aria-label="Outras ações">
         <Link to="/equipa/adiantamento">Adiantamento</Link>
         <button onClick={() => setChoosing(true)}>Despesa ou compra</button>
+        <Link to="/privado/entrar">Área privada</Link>
       </nav>
 
       {summary.isError && (

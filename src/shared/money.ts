@@ -3,12 +3,17 @@ export type CurrencySettings = { currency_exponent: number; currency_symbol: str
 
 /** "3.500 Kz" — thousands with ".", decimals (only when present) with ",", as in the approved designs. */
 export function formatMoney(minor: number, c: CurrencySettings): string {
+  return `${formatAmount(minor, c)} ${c.currency_symbol}`
+}
+
+/** The same figure without the symbol, for derivation lines ("= ganho 70.000 − adiantamentos 25.000"). */
+export function formatAmount(minor: number, c: CurrencySettings): string {
   const scale = 10 ** c.currency_exponent
   const whole = Math.trunc(Math.abs(minor) / scale)
   const frac = Math.abs(minor) % scale
   const grouped = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   const decimals = frac > 0 ? ',' + String(frac).padStart(c.currency_exponent, '0') : ''
-  return `${minor < 0 ? '−' : ''}${grouped}${decimals} ${c.currency_symbol}`
+  return `${minor < 0 ? '−' : ''}${grouped}${decimals}`
 }
 
 /** Whole units typed by the operator (digits only, as Slice 01 designs) to minor units. */
