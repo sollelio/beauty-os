@@ -19,15 +19,26 @@ export async function getDeviceContext(): Promise<DeviceContext> {
   return data as DeviceContext
 }
 
-/** Development enrollment: the device signs in anonymously (once) and redeems an enrollment code. */
-export async function enrollDevice(code: string): Promise<void> {
+/**
+ * Enrollment (ADR-0009): the device signs in anonymously (once) and redeems an operator-issued code. Where Auth
+ * CAPTCHA is enabled the anonymous sign-in carries a Turnstile token (mitigation 4). A browser whose earlier
+ * binding was revoked (lost/replaced device) starts a fresh anonymous identity and enrolls again (mitigation 5).
+ */
+export async function enrollDevice(code: string, captchaToken?: string): Promise<void> {
   const sb = getSupabase()
-  const { data: session } = await sb.auth.getSession()
-  if (!session.session) {
-    const { error } = await sb.auth.signInAnonymously()
+  const signIn = async () => {
+    const { error } = await sb.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined)
     if (error) throw toAppError(error)
   }
-  const { error } = await sb.rpc('redeem_enrollment', { p_code: code })
+  const { data: session } = await sb.auth.getSession()
+  if (!session.session) await signIn()
+  let { error } = await sb.rpc('redeem_enrollment', { p_code: code })
+  if (error && toAppError(error).code === 'ALREADY_BOUND' && session.session) {
+    // this browser's identity is bound to a revoked device (the app shows it as unbound): replace the identity
+    await sb.auth.signOut({ scope: 'local' })
+    await signIn()
+    ;({ error } = await sb.rpc('redeem_enrollment', { p_code: code }))
+  }
   if (error) throw toAppError(error)
 }
 

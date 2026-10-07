@@ -24,6 +24,7 @@ Read the relevant docs **before** proposing any change, design or plan.
 | [docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md](docs/07_PRE_IMPLEMENTATION_GAP_CLOSURE.md) | Product/design → architecture handoff: V1 coverage, gap-closure decisions, open-question triage, domain and financial invariants, product-level authorization boundaries |
 | `docs/design/slice-NN-*.md` | Design-slice proposals (one per `/design` slice). Proposals, not decisions: they cite the canonical docs and list what they leave open. |
 | [docs/architecture/architecture-definition.md](docs/architecture/architecture-definition.md) | Approved technical architecture |
+| [docs/operations/](docs/operations/pilot-runbook.md) | Pilot operator runbook and pilot-readiness record |
 | [docs/architecture/adr/](docs/architecture/adr/README.md) | Architecture Decision Records. **Accepted** ADRs are binding architecture decisions; **Proposed** ADRs are not binding. |
 
 ## Rules
