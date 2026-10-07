@@ -81,6 +81,7 @@ export function RecordServiceFlow() {
           <h2>Serviço registado com sucesso.</h2>
           <p className="muted" style={{ margin: 0 }}>{service.name} · {person.display_name} · {methodText}</p>
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
+          <button className="link-btn" onClick={() => navigate(`/registos/anular/service/${record.result!.record_id}`)}>Corrigir este registo</button>
         </div>
         <div className="footer">
           <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>

@@ -44,7 +44,7 @@ export function PrivateEntryPage() {
         </div>
         <label className="field">
           <input type="password" inputMode="numeric" autoComplete="off" aria-label="PIN" placeholder="PIN" value={secret}
-            onChange={(e) => setSecret(e.target.value.replace(/\D/g, '').slice(0, 12))} />
+            onChange={(e) => setSecret(e.target.value.replace(/\D/g, '').slice(0, 6))} />
         </label>
         {err && <div className="notice notice-error" role="alert">{(err.code && VERIFY_MESSAGES[err.code]) || 'Não foi possível entrar.'}</div>}
       </section>

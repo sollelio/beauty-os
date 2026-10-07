@@ -79,6 +79,7 @@ describe('ExpenseFlow', () => {
     await screen.findByText('Não foi possível guardar. Os dados continuam aqui.')
     fireEvent.click(button('Tentar novamente'))
     await screen.findByText('Despesa registada com sucesso.')
+    expect(screen.getByRole('button', { name: 'Corrigir este registo' })).toBeTruthy()          // the correction entry (pilot)
     const calls = vi.mocked(recordExpense).mock.calls
     expect(calls[0]![0]).toBe(calls[1]![0])
     expect([calls[0]![1], calls[1]![1]]).toEqual(['g1', 'g1'])
@@ -130,6 +131,7 @@ describe('PurchaseFlow', () => {
     await screen.findByText('Não foi possível guardar. Os dados continuam aqui.')
     fireEvent.click(button('Tentar novamente'))
     await screen.findByText('Compra registada com sucesso.')
+    expect(screen.getByRole('button', { name: 'Corrigir este registo' })).toBeTruthy()
     expect(screen.getByText('Stock actualizado: 1 produto')).toBeTruthy()
     expect(screen.getByText(/pago por Nádia/)).toBeTruthy()
     const calls = vi.mocked(recordPurchase).mock.calls

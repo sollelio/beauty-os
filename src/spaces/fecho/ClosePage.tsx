@@ -7,6 +7,7 @@ import { closePeriod, fechoKeys, getFechoHistory, type HistoryEntry } from '../.
 import { formatAmount, formatMoney } from '../../shared/money'
 import { dayKey, formatDayShort, formatTime } from '../../shared/time'
 import { rangeLabel, useFecho } from './fecho'
+import { KIND_LABEL, type RecordKind } from '../../modules/corrections/api'
 import { Boundary, FechoHeader, KV, Loading } from './ui'
 
 export function ClosePage() {
@@ -86,6 +87,10 @@ export function HistoryPage() {
       }
       case 'annulment': return ['Aprovação anulada', `por ${e.by}`]
       case 'reopen': return ['Período reaberto', `motivo: ${e.reason} · reaberto por ${e.by}`]
+      case 'cancellation': {
+        const r = e.record as { title: string; amount_minor: number; person: string | null }
+        return [`Registo anulado · ${KIND_LABEL[e.record_kind as RecordKind]}`, `${r.title}${r.person ? ` · ${r.person}` : ''} · ${m(r.amount_minor)} · motivo: ${e.reason} · anulado por ${e.by}`]
+      }
       case 'payment': return [`Pagamento · ${e.person}`, `${m(e.amount_minor)} · ${String(e.method).toLocaleLowerCase('pt-PT')} · confirmado por ${e.by}`]
       case 'close': return ['Período fechado', `${e.payments_count} pagamentos · ${m(e.paid_minor)}${e.distribution_minor !== null && e.distribution_minor !== undefined ? ` · distribuição ${m(e.distribution_minor)}` : ''} · fechado por ${e.by}`]
       default: return [e.kind, `por ${e.by}`]

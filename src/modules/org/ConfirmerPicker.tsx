@@ -21,7 +21,7 @@ export function ConfirmerPicker({ confirmerId, onConfirmer, secret, onSecret, pe
       </div>
       <label className="field">
         <input type="password" inputMode="numeric" autoComplete="off" aria-label="PIN" placeholder="PIN" value={secret}
-          onChange={(e) => onSecret(e.target.value.replace(/\D/g, '').slice(0, 12))} />
+          onChange={(e) => onSecret(e.target.value.replace(/\D/g, '').slice(0, 6))} />
       </label>
     </div>
   )

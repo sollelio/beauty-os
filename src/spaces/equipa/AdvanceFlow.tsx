@@ -69,6 +69,7 @@ export function AdvanceFlow() {
           <h2>Adiantamento registado com sucesso.</h2>
           <p className="muted num" style={{ margin: 0 }}>{person.display_name} · {formatMoney(amountMinor, org)} · {methodRow?.label}</p>
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(advance.result.occurred_at, org.timezone)}</p>
+          <button className="link-btn" onClick={() => navigate(`/registos/anular/advance/${advance.result!.advance_id}`)}>Corrigir este registo</button>
         </div>
         <div className="footer">
           <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>

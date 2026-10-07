@@ -209,6 +209,7 @@ describe('history', () => {
     vi.mocked(getFechoHistory).mockResolvedValue([
       { kind: 'close', at: '2026-11-03T10:45:00Z', by: 'Mercy', payments_count: 3, paid_minor: K(106000), distribution_minor: K(40000) },
       { kind: 'rule', at: '2026-10-31T17:20:00Z', by: 'Mercy', person: 'Carla', percent: 40, previous_percent: 50 },
+      { kind: 'cancellation', at: '2026-10-31T17:15:00Z', by: 'Mercy', reason: 'Valor errado', record_kind: 'service', record: { title: 'Corte', person: 'Nádia', amount_minor: K(3500) } },
       { kind: 'rule', at: '2026-10-31T17:12:00Z', by: 'Mercy', person: 'Carla', percent: 50, previous_percent: null },
     ])
     renderAt('/privado/fecho/historico')
@@ -216,6 +217,8 @@ describe('history', () => {
     expect(screen.getByText('3 pagamentos · 106.000 Kz · distribuição 40.000 Kz · fechado por Mercy')).toBeTruthy()
     expect(screen.getByText('Regra alterada · Carla')).toBeTruthy()
     expect(screen.getByText('de 50% para 40% · por Mercy')).toBeTruthy()
+    expect(screen.getByText('Registo anulado · Serviço')).toBeTruthy()
+    expect(screen.getByText('Corte · Nádia · 3.500 Kz · motivo: Valor errado · anulado por Mercy')).toBeTruthy()
     expect(screen.getAllByTestId('history-day')).toHaveLength(2)
   })
 })

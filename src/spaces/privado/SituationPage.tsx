@@ -239,6 +239,7 @@ function HistoryView({ s, filter, onFilter, rows, total }: {
   s: Situation; filter: HistoryKind | null; onFilter: (k: HistoryKind | null) => void; rows?: HistoryRow[]; total?: number
 }) {
   const org = useOrganization()
+  const navigate = useNavigate()
   const m = (n: number) => formatMoney(n, org)
   const manager = s.view === 'manager'
   const sumLine = filter === 'service' ? `Produção ${m(s.production.total_minor)}`
@@ -287,6 +288,9 @@ function HistoryView({ s, filter, onFilter, rows, total }: {
               <span className="num muted" style={{ width: '2.75rem', fontSize: '0.875rem' }}>{formatTime(r.occurred_at, org.timezone)}</span>
               <span className="grow"><strong style={{ display: 'block' }}>{r.title}</strong><span className="muted" style={{ fontSize: '0.8125rem' }}>{sub(r)}</span></span>
               <span className={`num${r.kind === 'contribution' ? ' muted' : ''}`} style={{ fontWeight: 600 }}>{signed(r)}</span>
+              {manager && (r.kind === 'service' || r.kind === 'advance') && s.period.state === 'aberto' && (
+                <button className="icon-btn" aria-label={`Opções: ${r.title} · corrigir`} onClick={() => navigate(`/registos/anular/${r.kind}/${r.record_id}`)}>⋯</button>
+              )}
             </div>
           ))}
         </div>

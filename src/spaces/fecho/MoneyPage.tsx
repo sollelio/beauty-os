@@ -43,6 +43,7 @@ export function MoneyPage() {
             <span className="grow"><strong style={{ display: 'block' }}>{e.category}{e.note ? ` · ${e.note}` : ''}</strong>
               <span className="muted" style={{ fontSize: '0.8125rem' }}>{[day(e.occurred_at), e.method?.toLocaleLowerCase('pt-PT'), e.reserve_used_minor ? `pago pela reserva ${g(e.reserve_used_minor)}` : null].filter(Boolean).join(' · ')}</span></span>
             <span className="num" style={{ fontWeight: 600 }}>{m(e.amount_minor)}</span>
+            {f.period.state === 'aberto' && !e.reserve_used_minor && <button className="link-btn" onClick={() => navigate(`/registos/anular/expense/${e.id}`)}>Anular</button>}
           </div>
         ))}
       </section>
@@ -55,6 +56,7 @@ export function MoneyPage() {
               <span className="muted num" style={{ fontSize: '0.8125rem' }}>{[day(x.occurred_at), `Salão ${g(x.salon_minor)}`, ...x.contributors.map((c) => `${c.name} ${g(c.amount_minor)}`),
                 ...(x.reserve_used_minor ? [`pago pela reserva ${g(x.reserve_used_minor)}`] : [])].join(' · ')}</span></span>
             <span className="num" style={{ fontWeight: 600 }}>{m(x.total_minor)}</span>
+            {f.period.state === 'aberto' && !x.reserve_used_minor && <button className="link-btn" onClick={() => navigate(`/registos/anular/purchase/${x.id}`)}>Anular</button>}
           </div>
         ))}
         <p className="muted num" style={{ margin: '0.5rem 0 0', fontSize: '0.8125rem' }}>Parte do salão {g(pos.purchases.salon_minor)} · contribuições de pessoas {g(pos.purchases.contributions_minor)} (à parte, na situação de cada pessoa).</p>

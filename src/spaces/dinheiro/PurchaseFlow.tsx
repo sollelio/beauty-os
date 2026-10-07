@@ -121,6 +121,7 @@ export function PurchaseFlow() {
           <p className="muted num" style={{ margin: 0 }}>{plural(r.line_count)} · {formatMoney(r.total_minor, org)} · {payersText(r.salon_amount_minor, r.contributors)}</p>
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(r.occurred_at, org.timezone)}</p>
           <span className="notice notice-success">Stock actualizado: {plural(r.line_count)}</span>
+          <button className="link-btn" onClick={() => navigate(`/registos/anular/purchase/${r.purchase_id}`)}>Corrigir este registo</button>
         </div>
         {reviewLines && (
           <section className="stock-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.625rem' }}>

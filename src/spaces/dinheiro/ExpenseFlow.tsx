@@ -75,6 +75,7 @@ export function ExpenseFlow() {
           <h2>Despesa registada com sucesso.</h2>
           <p className="muted num" style={{ margin: 0 }}>{category.label} · {formatMoney(amountMinor, org)} · {methodText}</p>
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(command.result.occurred_at, org.timezone)}</p>
+          <button className="link-btn" onClick={() => navigate(`/registos/anular/expense/${command.result!.expense_id}`)}>Corrigir este registo</button>
         </div>
         <div className="footer">
           <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>

@@ -23,7 +23,7 @@ export type Situation = {
 
 export type HistoryKind = 'service' | 'advance' | 'payment' | 'contribution'
 export type HistoryRow = {
-  kind: HistoryKind; occurred_at: string; title: string; method_label: string | null; confirmed_by: string | null
+  kind: HistoryKind; record_id: string; occurred_at: string; title: string; method_label: string | null; confirmed_by: string | null
   note: string | null; amount_minor: number
   purchase: { origin: string | null; line_count: number; total_minor: number; salon_minor: number } | null
 }

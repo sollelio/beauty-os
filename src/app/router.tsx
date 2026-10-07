@@ -23,6 +23,7 @@ import { ApprovePage } from '../spaces/fecho/ApprovePage'
 import { PaymentsPage } from '../spaces/fecho/PaymentsPage'
 import { ClosePage, HistoryPage } from '../spaces/fecho/ClosePage'
 import { ReopenPage } from '../spaces/fecho/ReopenPage'
+import { CancelRecordFlow } from '../spaces/registos/CancelRecordFlow'
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
           { path: 'stock/mercado', element: <MarketPage /> },
           { path: 'stock/passagem', element: <HandoffPage /> },
           { path: 'stock/rever', element: <ReviewPage /> },
+          { path: 'registos/anular/:kind/:recordId', element: <CancelRecordFlow /> },
           { path: 'privado/entrar', element: <PrivateEntryPage /> },
           {
             path: 'privado',

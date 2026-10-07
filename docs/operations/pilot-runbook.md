@@ -28,7 +28,7 @@ commit;
 ```
 
 Then, per person: **rule** (`select private.admin_set_rule(:person, 'standing' | 'contextual', <percent or null>, '<effective from>', :set_by)`),
-**PIN** for anyone who confirms or enters the private area (`select private.admin_set_person_secret(:person, '<digits>')`),
+**PIN** (exactly 6 digits) for anyone who confirms or enters the private area (`select private.admin_set_person_secret(:person, '<6 digits>')`); PINs are chosen at production setup and never stored in the repository,
 and **permissions** (§4).
 
 ## 2. Periods
@@ -64,8 +64,9 @@ select private.admin_create_period(:org, '<label>', '<first day>', '<last day>')
 | `payment.confirm` | B6 | Confirm payments |
 | `period.close` | B7 | Close |
 | `period.reopen` | B8 | Reopen (mandatory reason) |
+| `records.correct` | B9 | Cancel (anular) a mistaken service, advance, expense or purchase while its period is *Aberto* |
 
-Own situation (B3) needs only a PIN. **Who holds each permission is the owner's decision (07 P1).**
+Own situation (B3) needs only a PIN. **Pilot assignments (07 D8):** run [`pilot-permissions.sql`](pilot-permissions.sql) after the people exist — Fernando: movement.confirm, team.finance.read, period.decide, period.close, period.reopen, records.correct; Mercy: movement.confirm, team.finance.read, period.decide, payment.confirm, records.correct; everyone else none.
 
 ## 5. Abuse controls (ADR-0009 mitigation 4)
 
@@ -75,3 +76,11 @@ Own situation (B3) needs only a PIN. **Who holds each permission is the owner's 
   *Auth → Bot and Abuse Protection → CAPTCHA (Turnstile)* with its secret in the Supabase project, and set
   `VITE_TURNSTILE_SITE_KEY` in the app build. The enrollment screen then requires the challenge. Not enabled on Dev
   (the automated tests sign in anonymously).
+
+## 6. Pilot verification defaults (07 D8)
+
+PIN 6 digits · confirmation (one-shot grant) 2 minutes · private area 5 minutes · 5 wrong PINs per person within 15 min → 15-minute lockout · 10 wrong PINs per device within 15 min → 15-minute lockout. These are the values the database applies today; `admin_set_person_secret` accepts only 6-digit PINs.
+
+## 7. Corrections (07 D8)
+
+A mistaken record is cancelled, never edited or deleted: *Corrigir este registo* on the success screen (or ⋯ in a person's history, or *Anular* in Fecho → Dinheiro do período) → reason → a person with `records.correct` confirms → the original stays in the history as *anulado* and stops counting; record the right value again through the normal flow. Only while the record's period is *Aberto*. After approval: annul the approval first (only before payments); with payments or a closed period there is no correction yet.

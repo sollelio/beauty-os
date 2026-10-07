@@ -44,7 +44,7 @@ export async function enrollDevice(code: string, captchaToken?: string): Promise
 
 export type Confirmer = { id: string; display_name: string }
 
-export type ConfirmPermission = 'movement.confirm' | 'period.decide' | 'payment.confirm' | 'period.close' | 'period.reopen'
+export type ConfirmPermission = 'movement.confirm' | 'period.decide' | 'payment.confirm' | 'period.close' | 'period.reopen' | 'records.correct'
 export const verificationKeys = { confirmers: (permission: ConfirmPermission = 'movement.confirm') => ['org', 'confirmers', permission] as const }
 
 /** People who may confirm a boundary (names only), for the boundary's permission (07 §8 B2, B5–B7). */

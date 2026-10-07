@@ -147,6 +147,14 @@ excess advanced / paid     = max(advances + confirmed payments − earned, 0)
 - **Records after approval (I1, partial).** Once a period is *Pronto para pagamento* or *Em pagamento*, new services, advances, expenses and purchases in it are rejected; approved calculations never change silently. To change those inputs without payments, annul the approval first. With payments, the rejection stands until a correction flow exists (I1).
 - **Reopen (I3).** Authorized (B8) with a mandatory reason. *Fechado* → *Em pagamento* if the period has confirmed payments, otherwise → *Pronto para pagamento*. Approval, payments, decisions, close statements and history stay as recorded; the reopen is its own history entry. Reopening makes the post-approval operations available again (owners' decision, reserve records, unconfirmed payments, annulment when no payment exists, closing again — which adds a new close statement); rules and approved amounts stay frozen.
 
+### D8 — Pilot corrections, permissions and verification defaults
+
+`Decided` (Sollelio, 2026-10-07), for the pilot; narrows I1 and settles the pilot values of 05 §3 and P1.
+
+- **Cancellation (anular) of a mistaken service, advance, expense or purchase**, only while its period is *Aberto*: a person holding **`records.correct`** (B9), the exact one-shot verification, a mandatory reason, who and when. Nothing is deleted or edited in place: the original stays in the history marked *anulado* and stops counting in every active figure; the right record is captured again through the normal flow. Not in *Pronto para pagamento*, *Em pagamento* or *Fechado*. Correcting a confirmed payment and any post-approval correction remain open (I1).
+- **Pilot permissions:** Fernando — `movement.confirm`, `team.finance.read`, `period.decide`, `period.close`, `period.reopen`, `records.correct`; Mercy — `movement.confirm`, `team.finance.read`, `period.decide`, `payment.confirm`, `records.correct`; everyone else none of these. Set as pilot data ([operations](operations/pilot-permissions.sql)), never in code.
+- **Pilot verification defaults:** PIN of 6 digits; one-shot confirmation valid 2 minutes; private area 5 minutes; 5 wrong PINs per person or 10 per device within 15 minutes → 15-minute lockout.
+
 ## 3. Gaps intentionally left open
 
 None of these blocks architecture, provided the architecture follows §10:
@@ -198,7 +206,7 @@ Deduplicated across 00–06 and Slices 01–06. Each question is in exactly one 
 
 | ID | Question | Sources | Blocks |
 |---|---|---|---|
-| I1 | Correction of recorded events: who may correct, until when, how a correction is shown, and how an event in an approved, paying or closed period is corrected (new records there are rejected — D7) | J1 · 05 §3 · Slices 01 Q3, 02 Q6, 03 Q8, 04 Q5, 06 Q14 | Correction flows (and corrections as Fecho exceptions) |
+| I1 | Correction of recorded events after approval, and of confirmed payments (pilot: cancellation in an open period — D8; new records in approved periods rejected — D7) | J1 · 05 §3 · Slices 01 Q3, 02 Q6, 03 Q8, 04 Q5, 06 Q14 | Correction flows (and corrections as Fecho exceptions) |
 | I2 | ~~Partial payments / overpayments~~ — `Decided` (D7). Still open: correcting a confirmed payment (I1) | 03 §5 · J5 · Slice 04 Q1 · Slice 06 Q2 | — |
 | I3 | ~~Reopen target state and what reopening unlocks~~ — `Decided` (D7) | 03 §5 · J5 · Slice 06 Q6 (+ D1 reserve records) | — |
 | I4 | ~~Approval granularity and rule change after approval~~ — `Decided` (D7) | Slice 06 Q3 | — |
