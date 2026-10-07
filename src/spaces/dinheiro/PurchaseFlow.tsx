@@ -1,14 +1,18 @@
 // Registar compra (Slice 03 §4): O que comprou? → Quem pagou? → Confirmação necessária → Sucesso.
 // A purchase never changes stock state (Slice 05); its lines are recorded against products.
+// Started from Modo mercado (Slice 05 K6b), P1 is pre-filled from the trip draft with costs empty; the draft is cleared
+// and the bought plan entries leave the list only after the purchase is recorded. The human state is never touched.
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import { listPeople, peopleKeys } from '../../modules/org/api'
-import { listProducts, listUnitWords, stockKeys } from '../../modules/stock/api'
+import { listProducts, listUnitWords, stockKeys, updateStock } from '../../modules/stock/api'
+import { boughtItems, clearTrip, endedPlanIds, isSubstituted, loadTrip, type Trip } from '../../modules/stock/trip'
+import type { ReviewLine } from '../stock/ReviewPage'
 import {
   listPurchaseOrigins, purchasingKeys, recordPurchase, type RecordPurchaseInput, type RecordPurchaseResult,
 } from '../../modules/purchasing/api'
@@ -19,7 +23,12 @@ import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 
 type Step = 1 | 2 | 3 | 'done'
-type Line = { key: string; productId: string | null; name: string; unitWord: string; quantity: number; costDigits: string }
+type Line = { key: string; productId: string | null; name: string; unitWord: string; quantity: number; costDigits: string; insteadOf?: string | null }
+
+const linesFromTrip = (trip: Trip | null): Line[] => (trip ? boughtItems(trip) : []).map((i) => ({
+  key: i.key, productId: i.productId, name: i.name, unitWord: i.unitWord, quantity: i.qty, costDigits: '',
+  insteadOf: isSubstituted(i) ? i.plannedName : null,
+}))
 type Sheet = null | { stage: 'search' } | { stage: 'line'; draft: Line; editing: boolean }
 type PersonRow = { personId: string; name: string; digits: string }
 
@@ -31,8 +40,11 @@ export function PurchaseFlow() {
   const queryClient = useQueryClient()
   const command = useVerifiedCommand<RecordPurchaseInput, RecordPurchaseResult>(recordPurchase)
 
+  const fromTrip = Boolean((useLocation().state as { fromTrip?: boolean } | null)?.fromTrip)
+  const [trip, setTrip] = useState<Trip | null>(() => (fromTrip ? loadTrip(org.id) : null))
+  const [reviewLines, setReviewLines] = useState<ReviewLine[] | null>(null)
   const [step, setStep] = useState<Step>(1)
-  const [lines, setLines] = useState<Line[]>([])
+  const [lines, setLines] = useState<Line[]>(() => linesFromTrip(trip))
   const [sheet, setSheet] = useState<Sheet>(null)
   const [query, setQuery] = useState('')
   const [lastAdded, setLastAdded] = useState<string | null>(null)
@@ -69,7 +81,7 @@ export function PurchaseFlow() {
     originId,
   } : null
 
-  function leaveNow() { command.reset(); setSecret(''); navigate('/') }
+  function leaveNow() { command.reset(); setSecret(''); navigate(trip ? '/stock/mercado' : '/') }
   function requestLeave() { if (hasData) setDiscarding(true); else leaveNow() }
   function saveLine(draft: Line, editing: boolean) {
     setLines((ls) => editing ? ls.map((l) => (l.key === draft.key ? draft : l)) : [...ls, draft])
@@ -80,13 +92,22 @@ export function PurchaseFlow() {
     command.confirm({ input, confirmerId, secret }, {
       onSuccess: () => {
         setSecret(''); setStep('done')
-        void queryClient.invalidateQueries({ queryKey: stockKeys.products })   // products created on the way join the catalogue
+        if (trip) {
+          setReviewLines(lines.map((l) => ({ name: l.name, quantity: l.quantity, unitWord: l.unitWord, insteadOf: l.insteadOf ?? null })))
+          clearTrip(org.id)                                                     // only now: the real purchase exists
+          const ended = endedPlanIds(trip)
+          setTrip(null)
+          // The plan for what was bought ends (list membership only — state, level and reserve stay as marked).
+          void Promise.allSettled(ended.map((id) => updateStock(id, { on_list: false })))
+            .then(() => queryClient.invalidateQueries({ queryKey: ['stock'] }))
+        }
+        void queryClient.invalidateQueries({ queryKey: ['stock'] })            // catalogue, bought today, purchase history
       },
     })
   }
   function startOver() {
     command.reset()
-    setStep(1); setLines([]); setSalonDigits(null); setRows([]); setOriginId(null); setConfirmerId(null); setSecret(''); setLastAdded(null)
+    setReviewLines(null); setStep(1); setLines([]); setSalonDigits(null); setRows([]); setOriginId(null); setConfirmerId(null); setSecret(''); setLastAdded(null)
   }
 
   if (step === 'done' && command.result) {
@@ -100,8 +121,16 @@ export function PurchaseFlow() {
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(r.occurred_at, org.timezone)}</p>
           <span className="notice notice-success">Stock actualizado: {plural(r.line_count)}</span>
         </div>
+        {reviewLines && (
+          <section className="stock-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.625rem' }}>
+            <span className="label">Stock</span>
+            <span className="muted" style={{ fontSize: '0.9rem' }}>As compras ficaram no histórico de cada produto. O estado (OK · Baixo · Comprar) só muda se alguém o mudar — agora ou mais tarde, no Stock.</span>
+            <button className="btn btn-secondary" onClick={() => navigate('/stock/rever', { state: { lines: reviewLines } })}>Rever stock · {plural(reviewLines.length)}</button>
+            <button className="link-btn" onClick={() => navigate('/stock')}>Voltar a Stock</button>
+          </section>
+        )}
         <div className="footer">
-          <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>
+          <button className="btn btn-primary btn-tall" onClick={() => { command.reset(); navigate('/') }}>Voltar a Hoje</button>
           <button className="btn btn-secondary" onClick={startOver}>Registar outra compra</button>
         </div>
       </main>
@@ -131,6 +160,7 @@ export function PurchaseFlow() {
         <>
           <section className="stack">
             <h2>O que comprou?</h2>
+            {trip && <div className="lock-note"><span>Pré-preenchido pela lista de compras. Ajuste as quantidades e introduza o que pagou por cada linha.</span></div>}
             {lines.length === 0 && <p className="muted" style={{ margin: 0 }}>Ainda não há produtos nesta compra.</p>}
             <div className="list">
               {lines.map((l) => (
@@ -138,14 +168,15 @@ export function PurchaseFlow() {
                   <button className="grow pick" style={{ border: 0, padding: 0, background: 'transparent' }} onClick={() => setSheet({ stage: 'line', draft: { ...l }, editing: true })}>
                     <span className="grow" style={{ textAlign: 'left' }}>
                       <strong>{l.name}</strong>
-                      <span className="muted num" style={{ display: 'block', fontSize: '0.9rem' }}>{l.quantity} × {l.unitWord}</span>
+                      <span className="muted num" style={{ display: 'block', fontSize: '0.9rem' }}>{l.quantity} × {l.unitWord}{l.insteadOf ? ` · em vez de ${l.insteadOf}` : ''}</span>
                     </span>
-                    <span className="num" style={{ fontWeight: 600 }}>{formatMoney(lineCost(l), org)}</span>
+                    {l.costDigits === '' ? <span className="muted" style={{ fontSize: '0.875rem' }}>custo por introduzir</span> : <span className="num" style={{ fontWeight: 600 }}>{formatMoney(lineCost(l), org)}</span>}
                   </button>
                   <button className="icon-btn" aria-label={`Remover ${l.name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>🗑</button>
                 </div>
               ))}
             </div>
+            {trip && <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Toque numa linha para corrigir quantidade ou custo. Pode remover ou acrescentar produtos — a compra real não tem de ser igual ao plano.</p>}
           </section>
           <div className="footer">
             <div style={{ display: 'flex', justifyContent: 'space-between' }} className="num">
@@ -153,7 +184,7 @@ export function PurchaseFlow() {
             </div>
             <div style={{ display: 'flex', gap: '0.625rem' }}>
               <button className="btn btn-secondary" style={{ flex: '0 0 auto', width: 'auto' }} onClick={() => { setQuery(''); setLastAdded(null); setSheet({ stage: 'search' }) }}>+ Produto</button>
-              <button className="btn btn-primary btn-tall" disabled={lines.length === 0 || totalMinor <= 0} onClick={() => setStep(2)}>Continuar</button>
+              <button className="btn btn-primary btn-tall" disabled={lines.length === 0 || totalMinor <= 0 || lines.some((l) => l.costDigits === '')} onClick={() => setStep(2)}>Continuar</button>
             </div>
           </div>
         </>

@@ -80,3 +80,29 @@ button { font: inherit; cursor: pointer; }
 .tone-warning { color: #8A5A00; }
 .filter-chips { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 2px; }
 .explain { margin: 0; padding: 0 0 0 1.375rem; display: flex; flex-direction: column; gap: 0.75rem; line-height: 1.45; }
+
+/* Slice 05 — Stock Lite */
+.quick-actions { flex-wrap: wrap; }
+.state-pill { display: inline-flex; align-items: center; min-height: 1.75rem; padding: 0 0.625rem; border-radius: 14px; font-size: 0.8125rem; font-weight: 700; flex: 0 0 auto; }
+.st-ok { background: var(--success-bg); color: var(--success-fg); }
+.st-baixo { background: var(--surface); color: var(--warning-fg); border: 1px solid #B7791F; }
+.st-comprar { background: var(--warning-bg); color: var(--warning-fg); }
+.stock-row { display: flex; align-items: center; gap: 0.75rem; min-height: 3.75rem; padding: 0.5rem 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); width: 100%; }
+.stack > .label + .stock-row { border-top: 0; }
+.urgent-dot { width: 10px; height: 10px; border-radius: 50%; background: #B7791F; flex: 0 0 auto; }
+.list-icon { color: var(--accent); font-size: 1.05rem; }
+.group-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 2.75rem; border: 0; background: none; padding: 0; color: var(--muted); }
+.stock-card { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.625rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.stepper { display: flex; align-items: center; gap: 0.625rem; }
+.step { width: 2.75rem; height: 2.75rem; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 1.375rem; font-weight: 600; color: var(--ink); }
+.stepper-value { min-width: 3rem; text-align: center; font-size: 1.125rem; font-weight: 700; }
+.plan-row { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.625rem 0; border-top: 1px solid var(--line); }
+.stack > .label + .plan-row { border-top: 0; }
+.btn-dashed { border-style: dashed; color: var(--accent); }
+.market-row { display: flex; align-items: center; gap: 0.875rem; min-height: 4.5rem; padding: 0.375rem 0; border-top: 1px solid var(--line); }
+.stack > .label + .market-row { border-top: 0; }
+.market-row .check { width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); color: #fff; font-weight: 700; flex: 0 0 auto; padding: 0; }
+.market-row .check.on { background: var(--accent); border-color: var(--accent); }
+.market-name { display: block; font-size: 1.1875rem; font-weight: 600; }
+.market-qty { font-size: 1.25rem; font-weight: 700; white-space: nowrap; }
+.market-row.skipped .market-name, .market-row.skipped .market-qty { text-decoration: line-through; color: var(--muted); }

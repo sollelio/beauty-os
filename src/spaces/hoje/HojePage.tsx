@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
+import { countMarkedToBuy, stockKeys } from '../../modules/stock/api'
 import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
@@ -11,6 +12,7 @@ import { formatTime, formatToday } from '../../shared/time'
 export function HojePage() {
   const org = useOrganization()
   const summary = useQuery({ queryKey: servicesKeys.hoje, queryFn: getHojeSummary })
+  const toBuy = useQuery({ queryKey: stockKeys.toBuy, queryFn: countMarkedToBuy })
   const [choosing, setChoosing] = useState(false)
   const navigate = useNavigate()
 
@@ -27,8 +29,18 @@ export function HojePage() {
       <nav className="quick-actions" aria-label="Outras ações">
         <Link to="/equipa/adiantamento">Adiantamento</Link>
         <button onClick={() => setChoosing(true)}>Despesa ou compra</button>
+        <Link to="/stock">Stock</Link>
         <Link to="/privado/entrar">Área privada</Link>
       </nav>
+
+      {(toBuy.data ?? 0) > 0 && (
+        <section className="stack" aria-label="Atenção">
+          <span className="label">Atenção</span>
+          <Link to="/stock" className="pick" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span>{toBuy.data} {toBuy.data === 1 ? 'produto marcado' : 'produtos marcados'} a comprar</span><span aria-hidden className="muted">›</span>
+          </Link>
+        </section>
+      )}
 
       {summary.isError && (
         <div className="notice notice-error" role="alert">

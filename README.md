@@ -31,6 +31,8 @@ Sensitive actions (*Adiantamento*, *Despesa*, *Compra*) need a verified person: 
 
 *Área privada* (Slice 04) opens a short private context (5 minutes; it also ends on *Sair* or when the area is left). Synthetic Dev PINs: **Duarte** `135790` (team finance: Equipa → any person), **Ana** `246810`, **Bruno** `975310`, **Carla** `864200` (own situation only). Dev cases: Ana — determinate rule, Agosto fechado / Setembro em pagamento with recorded payments; Carla — Setembro advances above earned (excess); Bruno — rule pending.
 
+*Stock* (Slice 05) opens from Hoje (quick action, or the *Atenção* row when products are marked *Comprar*). State (OK · Baixo · Comprar), level and reserve units are set by people and kept with an append-only history; a recorded purchase never changes them. *Preparar compra* → *Ir às compras* starts a market trip kept on this device until the real purchase is recorded through *Registar compra*.
+
 ### Quality gates and tests
 
 ```sh

@@ -10,6 +10,10 @@ import { PrivateGate, PrivateHome } from './PrivateGate'
 import { PrivateEntryPage } from '../spaces/privado/PrivateEntryPage'
 import { EquipaPage } from '../spaces/privado/EquipaPage'
 import { SituationPage } from '../spaces/privado/SituationPage'
+import { StockPage } from '../spaces/stock/StockPage'
+import { ListPage } from '../spaces/stock/ListPage'
+import { HandoffPage, MarketPage } from '../spaces/stock/MarketPage'
+import { ReviewPage } from '../spaces/stock/ReviewPage'
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +28,11 @@ export const router = createBrowserRouter([
           { path: 'equipa/adiantamento', element: <AdvanceFlow /> },
           { path: 'dinheiro/despesa', element: <ExpenseFlow /> },
           { path: 'dinheiro/compra', element: <PurchaseFlow /> },
+          { path: 'stock', element: <StockPage /> },
+          { path: 'stock/lista', element: <ListPage /> },
+          { path: 'stock/mercado', element: <MarketPage /> },
+          { path: 'stock/passagem', element: <HandoffPage /> },
+          { path: 'stock/rever', element: <ReviewPage /> },
           { path: 'privado/entrar', element: <PrivateEntryPage /> },
           {
             path: 'privado',
