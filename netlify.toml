@@ -1,7 +1,7 @@
 # Beauty OS production frontend (Netlify). Environment values (public only) live in Netlify, never in Git:
 # VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, VITE_TURNSTILE_SITE_KEY. See docs/operations/production-checkpoint.md.
 [build]
-  command = "npm ci && npm run build"
+  command = "npm run build"
   publish = "dist"
 
 [build.environment]
