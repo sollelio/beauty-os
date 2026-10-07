@@ -13,7 +13,7 @@ vi.mock('../../modules/services/api', async (orig) => ({
 vi.mock('../../modules/org/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/org/api')>()),
   listConfirmers: vi.fn().mockResolvedValue([{ id: 'c1', display_name: 'Duarte' }]),
-  verifyPerson: vi.fn().mockResolvedValue(undefined),
+  verifyPerson: vi.fn().mockResolvedValue('g1'),
 }))
 vi.mock('../../modules/team/api', async (orig) => ({ ...(await orig<typeof import('../../modules/team/api')>()), recordAdvance: vi.fn() }))
 import { verifyPerson } from '../../modules/org/api'
@@ -58,8 +58,10 @@ describe('AdvanceFlow', () => {
     await screen.findByText('Adiantamento registado com sucesso.')
     const calls = vi.mocked(recordAdvance).mock.calls
     expect(calls).toHaveLength(2)
-    expect(calls[0]![0]).toBe(calls[1]![0])
-    expect(calls[0]![1]).toEqual({ personId: 'p1', amountMinor: 1000000, paymentMethodId: 'm1', note: 'pedido ontem' })
+    expect(calls[0]![0]).toBe(calls[1]![0])                 // same command_id
+    expect(calls[0]![1]).toBe('g1')                         // the exact grant from verification…
+    expect(calls[1]![1]).toBe('g1')                         // …reused on retry
+    expect(calls[0]![2]).toEqual({ personId: 'p1', amountMinor: 1000000, paymentMethodId: 'm1', note: 'pedido ontem' })
     expect(verifyPerson).toHaveBeenCalledTimes(1)
   })
 
@@ -71,5 +73,27 @@ describe('AdvanceFlow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
     await waitFor(() => expect(screen.getByText('Descartar este adiantamento?')).toBeTruthy())
     expect(screen.getByText('Nada foi registado.')).toBeTruthy()
+  })
+})
+
+describe('useRecordAdvance grant handling', () => {
+  it('re-verifies the same confirmer when the server refuses the kept grant, never using another grant', async () => {
+    const { renderHook, act, waitFor } = await import('@testing-library/react')
+    const { useRecordAdvance } = await import('../../modules/team/useRecordAdvance')
+    vi.mocked(verifyPerson).mockReset().mockResolvedValueOnce('g-first').mockResolvedValueOnce('g-second')
+    vi.mocked(recordAdvance).mockReset()
+      .mockRejectedValueOnce(new AppError('network', 'Failed to fetch'))
+      .mockRejectedValueOnce(new AppError('domain', 'VERIFICATION_REQUIRED', 'VERIFICATION_REQUIRED'))
+      .mockResolvedValueOnce({ advance_id: 'a2', occurred_at: new Date().toISOString(), confirmed_by_person_id: 'c1' })
+    const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    const { result } = renderHook(() => useRecordAdvance(), { wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider> })
+    const args = { input: { personId: 'p1', amountMinor: 1000, paymentMethodId: 'm1', note: null }, confirmerId: 'c1', secret: '1' }
+    act(() => result.current.confirm(args))
+    await waitFor(() => expect(result.current.status).toBe('error'))
+    act(() => result.current.confirm(args))
+    await waitFor(() => expect(result.current.status).toBe('success'))
+    const grants = vi.mocked(recordAdvance).mock.calls.map((c) => c[1])
+    expect(grants).toEqual(['g-first', 'g-first', 'g-second'])        // kept grant, refused, then the same confirmer's new grant
+    expect(vi.mocked(verifyPerson).mock.calls.every((c) => c[0] === 'c1')).toBe(true)
   })
 })

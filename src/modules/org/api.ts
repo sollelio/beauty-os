@@ -41,10 +41,14 @@ export async function listConfirmers(): Promise<Confirmer[]> {
   return data as Confirmer[]
 }
 
-/** Server-side verification of a person's secret (ADR-0009). Creates a one-shot grant for this device session. */
-export async function verifyPerson(personId: string, secret: string): Promise<void> {
+/**
+ * Server-side verification of a person's secret (ADR-0009). Returns the id of the one-shot grant created for
+ * this device session; the sensitive command must present exactly this id.
+ */
+export async function verifyPerson(personId: string, secret: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('verify_person', { p_person_id: personId, p_secret: secret })
   if (error) throw toAppError(error)
-  const r = data as { ok: boolean; error?: string }
-  if (!r.ok) throw toAppError({ message: r.error ?? 'NOT_AUTHORIZED' })
+  const r = data as { ok: boolean; error?: string; grant_id?: string }
+  if (!r.ok || !r.grant_id) throw toAppError({ message: r.error ?? 'NOT_AUTHORIZED' })
+  return r.grant_id
 }

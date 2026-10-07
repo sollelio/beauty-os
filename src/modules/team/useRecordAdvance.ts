@@ -1,5 +1,8 @@
 // Sensitive command: verify the confirming person (one-shot grant), then record with one command_id per intent.
-// A network failure keeps the grant and the command_id, so "Tentar novamente" replays safely (ADR-0006, ADR-0009).
+// The grant id is kept together with the confirmer and presented on retry; the server consumes only that exact
+// grant. If it is no longer valid (expired, used, or superseded by anyone's later verification) the command
+// returns VERIFICATION_REQUIRED and the same confirmer is verified again — another person's verification can never
+// authorize this retry. An already-committed command replays without a grant (ADR-0006, ADR-0009).
 import { useCallback, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { newCommandId } from '../../shared/commandId'
@@ -11,7 +14,7 @@ export type ConfirmArgs = { input: RecordAdvanceInput; confirmerId: string; secr
 
 export function useRecordAdvance() {
   const intent = useRef<{ id: string; key: string } | null>(null)
-  const verifiedFor = useRef<string | null>(null)   // confirmer whose one-shot grant is (believed) still unused
+  const grant = useRef<{ confirmerId: string; grantId: string } | null>(null)
 
   const commandIdFor = useCallback((input: RecordAdvanceInput) => {
     const key = JSON.stringify(input)
@@ -22,27 +25,26 @@ export function useRecordAdvance() {
   const mutation = useMutation({
     mutationFn: async ({ input, confirmerId, secret }: ConfirmArgs) => {
       const id = commandIdFor(input)
-      if (verifiedFor.current !== confirmerId) {
-        await verifyPerson(confirmerId, secret)
-        verifiedFor.current = confirmerId
+      const verify = async () => {
+        grant.current = null
+        grant.current = { confirmerId, grantId: await verifyPerson(confirmerId, secret) }
+        return grant.current.grantId
       }
+      const grantId = grant.current?.confirmerId === confirmerId ? grant.current.grantId : await verify()
       try {
-        return await recordAdvance(id, input)
+        return await recordAdvance(id, grantId, input)
       } catch (e) {
         const err = toAppError(e)
         if (err.code !== 'VERIFICATION_REQUIRED') throw err
-        verifiedFor.current = null                    // grant expired or used: verify once more, same command_id
-        await verifyPerson(confirmerId, secret)
-        verifiedFor.current = confirmerId
-        return await recordAdvance(id, input)
+        return await recordAdvance(id, await verify(), input)
       }
     },
-    onSuccess: () => { verifiedFor.current = null },
+    onSuccess: () => { grant.current = null },
   })
 
   const reset = useCallback(() => {
     intent.current = null
-    verifiedFor.current = null
+    grant.current = null
     mutation.reset()
   }, [mutation])
 
