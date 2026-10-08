@@ -6,7 +6,7 @@
 --      e201 professional, standing 40%             e202 manager: team.finance.read + business.health.read + Fecho, PIN 515151
 --      e203 business.health.read only, PIN 525252  e204 no permissions, PIN 535353
 --      e205 contextual rule from E7 (pending)      e206 standing 30% (only in E2; a later 90% rule changes E2's live
---                                                   figures but not its close statement)
+--                                                   figures but not its close statement); business.health.read, PIN 545454
 --    Per period (Kz): production · team · expenses X/Y/Z · salon purchases → operating result
 --      E1      0 ·      0 · X 1.000                  →  −1.000
 --      E2 100.000 · 39.000 · X 5.000 Z 1.000         →  55.000
@@ -39,13 +39,15 @@ on conflict (id) do nothing;
 insert into private.person_secrets (person_id, organization_id, secret_hash) values
   ('00000000-0000-4000-8000-00000000e202', '00000000-0000-4000-8000-0000000000e1', extensions.crypt('515151', extensions.gen_salt('bf', 8))),
   ('00000000-0000-4000-8000-00000000e203', '00000000-0000-4000-8000-0000000000e1', extensions.crypt('525252', extensions.gen_salt('bf', 8))),
-  ('00000000-0000-4000-8000-00000000e204', '00000000-0000-4000-8000-0000000000e1', extensions.crypt('535353', extensions.gen_salt('bf', 8)))
+  ('00000000-0000-4000-8000-00000000e204', '00000000-0000-4000-8000-0000000000e1', extensions.crypt('535353', extensions.gen_salt('bf', 8))),
+  ('00000000-0000-4000-8000-00000000e206', '00000000-0000-4000-8000-0000000000e1', extensions.crypt('545454', extensions.gen_salt('bf', 8)))
 on conflict (person_id) do nothing;
 insert into private.person_permissions (organization_id, person_id, permission)
 select '00000000-0000-4000-8000-0000000000e1'::uuid, '00000000-0000-4000-8000-00000000e202'::uuid, perm
   from (values ('team.finance.read'), ('business.health.read'), ('movement.confirm'), ('period.decide'), ('payment.confirm'),
                ('period.close'), ('records.correct')) x(perm)
 union all select '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000e203', 'business.health.read'
+union all select '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-00000000e206', 'business.health.read'
 on conflict do nothing;
 insert into public.services (id, organization_id, name, default_price_minor, sort_order) values
   ('00000000-0000-4000-8000-00000000e301', '00000000-0000-4000-8000-0000000000e1', 'Serviço Teste E', 1000000, 1) on conflict (id) do nothing;

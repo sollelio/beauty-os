@@ -33,8 +33,8 @@ const base: BusinessHealth = {
   meta: { period_state: 'fechado', is_complete: true, history_count: 4, baseline: 'previous_and_average_3', calculation_version: 'v',
           comparison: { previous: { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' } }, average_3: { available: true, reason: null, window: 3 } } },
   open_periods: [{ id: 'e6', label: 'Semana 6', state: 'pronto_para_pagamento', is_complete: true, unpaid_team_minor: K(30000), unpaid_private: false, pending_rules_count: 0 }],
-  trend: [{ id: 'e4', label: 'Semana 4', is_complete: true, production_minor: K(100000), operating_result_minor: K(52000) },
-          { id: 'e5', label: 'Semana 5', is_complete: true, production_minor: K(120000), operating_result_minor: K(38500) }],
+  trend: [{ id: 'e4', label: 'Semana 4', is_complete: true, production_minor: K(100000), operating_result_minor: K(52000), result_private: false },
+          { id: 'e5', label: 'Semana 5', is_complete: true, production_minor: K(120000), operating_result_minor: K(38500), result_private: false }],
 }
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
@@ -103,17 +103,31 @@ describe('Negócio · Visão geral', () => {
     expect(screen.getByText('Nada a assinalar neste período.')).toBeTruthy()
   })
 
-  it('single-person team (B11): the hidden unpaid amount is said to be hidden, never "not approved"; no team-earnings driver', async () => {
-    serve({ ...base, current: { ...cur, team_earnings_minor: null, unpaid_team_minor: null, private_fields: ['team_earnings_minor', 'unpaid_team_minor'] },
-      changes: { ...base.changes, previous: { ...base.changes.previous!, team_earnings_minor: { delta_minor: null, percent: null } } },
-      open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }] }, status({ view: 'self' }))
+  it('single-person team (B11): every figure that would reveal it is "Não mostrado", with the reason; nothing compared or built from it', async () => {
+    const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'] as const
+    const none = { delta_minor: null, percent: null }
+    serve({ ...base,
+      current: { ...cur, team_earnings_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null,
+                 unpaid_team_minor: null, private_fields: [...H] },
+      previous: { ...prev, team_earnings_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null, private_fields: [...H.slice(0, 5)] },
+      average_3: { ...base.average_3!, operating_result_minor: null, team_earnings_minor: null, operating_costs_minor: null, free_minor: null,
+                   private_fields: ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'free_minor'] },
+      changes: { previous: { ...base.changes.previous!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none },
+                 average_3: { ...base.changes.average_3!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none } },
+      open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }],
+      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }))
     renderAt()
     const o = await screen.findByTestId('overview')
-    expect(within(o).getAllByRole('definition').map((d) => d.textContent)[3]).toBe('Não mostrado')
-    expect(screen.getByTestId('team-private').textContent).toContain('uma só pessoa')
-    expect(within(o).getAllByRole('definition').map((d) => d.textContent)[1]).toContain('38.500')   // result stays
-    expect(screen.queryByText(/Ganhos da equipa/)).toBeNull()
-    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).not.toContain('payments_pending')
+    expect(within(o).getAllByRole('definition').map((d) => d.textContent).slice(1)).toEqual(['Não mostrado', 'Não mostrado', 'Não mostrado'])
+    expect(within(o).getAllByRole('definition')[0]!.textContent).toContain('120.000')               // production stays
+    expect(screen.getByTestId('team-private').textContent).toContain('revelaria')
+    expect(screen.getByTestId('retention').textContent).toContain('Não mostrado')
+    const c = screen.getByTestId('changes').textContent!
+    expect(c).toContain('produção +20%')
+    expect(c).toContain('resultado não mostrado')
+    expect(c).not.toContain('Ganhos da equipa')
+    expect(screen.getByTestId('trend').textContent).toContain('resultado não mostrado')
+    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).toEqual(['expense_category_high'])
   })
 
   it('pending rule: "—" for result, Livre and retention', async () => {

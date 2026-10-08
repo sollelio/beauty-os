@@ -1,13 +1,13 @@
 // Negócio → Visão geral (Business Health Slice 01), private area, business.health.read. Every figure comes from the
 // business_health read model (the Fecho calculation, ADR-0004); insights come from the business domain layer. This
 // screen only arranges, words and links them. No person's figures appear here; a team figure that is one person's
-// arrives hidden (private_fields) and is said to be hidden, never shown as zero or as not approved.
+// arrives hidden (private_fields, 07 D9 · B11): it is said to be hidden, never shown as zero, "—" or not approved.
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, exitPrivateContext, usePrivateContext } from '../../modules/org/privateContext'
-import { businessKeys, getBusinessHealth, listBusinessPeriods, type BusinessHealth, type Change } from '../../modules/business/api'
+import { businessKeys, getBusinessHealth, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
 import { buildInsights, costDrivers, COMPARISON_UNAVAILABLE, type Insight } from '../../modules/business/insights'
 import { STATE_LABEL } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
@@ -15,6 +15,8 @@ import { formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
 
 const pctText = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${String(Math.abs(n)).replace('.', ',')}%`
+const HIDDEN = 'Não mostrado'
+const HIDDEN_WHY = 'Não mostrado: com uma só pessoa na equipa, este valor revelaria quanto ela ganha ou tem a receber.'
 const SEVERITY_LABEL = { ACTION_REQUIRED: 'Ação necessária', ATTENTION: 'Atenção', INFORMATION: 'Informação' } as const
 
 export function OverviewPage() {
@@ -55,7 +57,7 @@ export function OverviewPage() {
   const c = h.current
   const { insights } = buildInsights(h, m)
   const pending = c.pending_rules_count > 0
-  const unpaidPrivate = c.private_fields.includes('unpaid_team_minor')   // one person's amount (07 D9 · B11)
+  const hidden = (k: PrivateField) => c.private_fields.includes(k)
 
   return (
     <main className="app-main">
@@ -80,21 +82,21 @@ export function OverviewPage() {
         <h3 id="como-estamos" className="label">Como estamos?</h3>
         <dl className="kv-card" data-testid="overview">
           <div><dt>Produção</dt><dd className="num">{m(c.production_minor)}<span className="muted"> · {c.services_count} serviços</span></dd></div>
-          <div><dt>Resultado operacional</dt><dd className="num">{c.operating_result_minor === null ? '—' : m(c.operating_result_minor)}
+          <div><dt>Resultado operacional</dt><dd className="num">{hidden('operating_result_minor') ? HIDDEN : c.operating_result_minor === null ? '—' : m(c.operating_result_minor)}
             {c.operating_costs_minor !== null && <span className="muted"> · custos {m(c.operating_costs_minor)}</span>}</dd></div>
-          <div><dt>Livre</dt><dd className="num">{c.free_minor === null ? '—' : m(c.free_minor)}</dd></div>
-          <div><dt>A pagar à equipa</dt><dd className="num">{unpaidPrivate ? 'Não mostrado' : c.unpaid_team_minor === null ? 'Ainda não aprovado' : m(c.unpaid_team_minor)}</dd></div>
+          <div><dt>Livre</dt><dd className="num">{hidden('free_minor') ? HIDDEN : c.free_minor === null ? '—' : m(c.free_minor)}</dd></div>
+          <div><dt>A pagar à equipa</dt><dd className="num">{hidden('unpaid_team_minor') ? HIDDEN : c.unpaid_team_minor === null ? 'Ainda não aprovado' : m(c.unpaid_team_minor)}</dd></div>
         </dl>
-        {unpaidPrivate && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="team-private">Corresponde a uma só pessoa: só quem acompanha as finanças da equipa o vê.</span>}
+        {c.private_fields.length > 0 && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="team-private">{HIDDEN_WHY}</span>}
         {pending && <div className="notice notice-neutral">Há {c.pending_rules_count === 1 ? '1 regra' : `${c.pending_rules_count} regras`} de remuneração por definir: os custos, o resultado e o livre ficam por calcular até lá.</div>}
         {c.source === 'close_statement' && <span className="muted" style={{ fontSize: '0.875rem' }}>Valores do fecho deste período.</span>}
       </section>
 
       <section className="stack" style={{ gap: '0.25rem' }} data-testid="retention">
         <h3 className="label">Retenção operacional</h3>
-        <strong className="num" style={{ fontSize: '1.5rem' }}>{c.retention_pct === null ? '—' : pctText(c.retention_pct).replace('+', '')}</strong>
+        <strong className="num" style={{ fontSize: '1.5rem' }}>{hidden('retention_pct') ? HIDDEN : c.retention_pct === null ? '—' : pctText(c.retention_pct).replace('+', '')}</strong>
         <span className="muted" style={{ fontSize: '0.875rem' }}>
-          {c.retention_pct === null ? (c.production_minor === 0 ? 'Sem produção neste período.' : 'Por calcular enquanto houver regras por definir.')
+          {hidden('retention_pct') ? HIDDEN_WHY : c.retention_pct === null ? (c.production_minor === 0 ? 'Sem produção neste período.' : 'Por calcular enquanto houver regras por definir.')
             : 'da produção ficou como resultado operacional.'}
         </span>
       </section>
@@ -113,7 +115,7 @@ export function OverviewPage() {
           <dl className="kv-card" data-testid="trend">
             {h.trend.map((t) => (
               <div key={t.id}><dt>{t.label}{t.is_complete ? '' : ' (a decorrer)'}</dt>
-                <dd className="num">{m(t.production_minor)}<span className="muted"> · resultado {t.operating_result_minor === null ? '—' : m(t.operating_result_minor)}</span></dd></div>
+                <dd className="num">{m(t.production_minor)}<span className="muted"> · resultado {t.result_private ? HIDDEN.toLowerCase() : t.operating_result_minor === null ? '—' : m(t.operating_result_minor)}</span></dd></div>
             ))}
           </dl>
         </section>
@@ -125,7 +127,8 @@ export function OverviewPage() {
   )
 }
 
-function changeLine(label: string, ch: Change, m: (n: number) => string) {
+function changeLine(label: string, ch: Change, m: (n: number) => string, hide = false) {
+  if (hide) return `${label} não mostrado`
   if (ch.delta_minor === null) return `${label} por calcular`
   const delta = `${ch.delta_minor > 0 ? '+' : ''}${m(ch.delta_minor)}`
   return ch.percent === null ? `${label} ${delta}` : `${label} ${pctText(ch.percent)} (${delta})`
@@ -134,14 +137,16 @@ function changeLine(label: string, ch: Change, m: (n: number) => string) {
 function Changes({ h, m }: { h: BusinessHealth; m: (n: number) => string }) {
   const prev = h.meta.comparison.previous, avg = h.meta.comparison.average_3
   const drivers = costDrivers(h, m)
+  const hid = (x: { private_fields: PrivateField[] } | null) => !!x?.private_fields.includes('operating_result_minor')
+  const resPrev = hid(h.current) || hid(h.previous), resAvg = hid(h.current) || hid(h.average_3)
   return (
     <section className="stack" aria-labelledby="mudou" data-testid="changes">
       <h3 id="mudou" className="label">O que mudou?</h3>
       {h.changes.previous ? (
-        <p style={{ margin: 0 }}>Face a {prev.period?.label}: {changeLine('produção', h.changes.previous.production_minor, m)} · {changeLine('resultado', h.changes.previous.operating_result_minor, m)}.</p>
+        <p style={{ margin: 0 }}>Face a {prev.period?.label}: {changeLine('produção', h.changes.previous.production_minor, m)} · {changeLine('resultado', h.changes.previous.operating_result_minor, m, resPrev)}.</p>
       ) : <p className="muted" style={{ margin: 0 }}>{COMPARISON_UNAVAILABLE[prev.reason ?? 'no_previous_period']}</p>}
       {h.changes.average_3 ? (
-        <p style={{ margin: 0 }}>Face à média dos últimos {avg.window} períodos fechados: {changeLine('produção', h.changes.average_3.production_minor, m)} · {changeLine('resultado', h.changes.average_3.operating_result_minor, m)}.</p>
+        <p style={{ margin: 0 }}>Face à média dos últimos {avg.window} períodos fechados: {changeLine('produção', h.changes.average_3.production_minor, m)} · {changeLine('resultado', h.changes.average_3.operating_result_minor, m, resAvg)}.</p>
       ) : avg.reason !== prev.reason && <p className="muted" style={{ margin: 0 }}>{COMPARISON_UNAVAILABLE[avg.reason ?? 'insufficient_history']}</p>}
       {drivers.length > 0 && (
         <div className="stack" style={{ gap: '0.25rem' }}>

@@ -22,7 +22,7 @@ export type Insight = {
     confidence: string
   }
 }
-export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' }
+export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' }
 
 const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
 const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high']
@@ -81,6 +81,9 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
     skipped.push({ kind: 'production_up_result_down', reason }, { kind: 'production_decline', reason })
   } else {
     const prod = ch.production_minor, res = ch.operating_result_minor
+    // a figure hidden for privacy (07 D9 · B11) arrives as null: nothing is built from it
+    if (cur.private_fields.includes('operating_result_minor') || h.previous.private_fields.includes('operating_result_minor'))
+      skipped.push({ kind: 'production_up_result_down', reason: 'figure_hidden' })
     if (prod.percent !== null && res.percent !== null && prod.percent >= t.productionUpPct && res.percent <= -t.resultDropPct) {
       const drivers = costDrivers(h, money).slice(0, t.maxDrivers)
       out.push({

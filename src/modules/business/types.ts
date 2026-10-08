@@ -9,9 +9,9 @@ export type PeriodMetrics = {
   team_earnings_minor: number | null; expenses_minor: number; purchases_salon_minor: number
   operating_costs_minor: number | null; operating_result_minor: number | null; retention_pct: number | null
   free_minor: number | null; unpaid_team_minor: number | null; approved: boolean; pending_rules_count: number
-  private_fields: PrivateField[]   // team figures hidden because they are one person's (07 D9 · B11); null above
+  private_fields: PrivateField[]   // hidden: they would reveal one person's finance (07 D9 · B11); null above
 }
-export type PrivateField = 'team_earnings_minor' | 'unpaid_team_minor'
+export type PrivateField = 'team_earnings_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'retention_pct' | 'free_minor' | 'unpaid_team_minor'
 export type MetricKey = 'production_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
   | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor' | 'services_count'
 export type Change = { delta_minor: number | null; percent: number | null }
@@ -32,5 +32,5 @@ export type BusinessHealth = {
   }
   open_periods: { id: string; label: string; state: PeriodState; is_complete: boolean; unpaid_team_minor: number | null; unpaid_private: boolean
                   pending_rules_count: number }[]
-  trend: { id: string; label: string; is_complete: boolean; production_minor: number; operating_result_minor: number | null }[]
+  trend: { id: string; label: string; is_complete: boolean; production_minor: number; operating_result_minor: number | null; result_private: boolean }[]
 }

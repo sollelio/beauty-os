@@ -196,35 +196,77 @@ describe('insights from the read model', () => {
   })
 })
 
-describe('single-person team figures (07 D9 · B11)', () => {
-  it('business-only viewer: a team figure made of one person is hidden; business figures stay', async () => {
-    await as(MANAGER)
-    const m6 = await health(P['Semana E6']!)                        // only e201 earned; only e201 is owed
-    expect(m6.current).toMatchObject({ team_earnings_minor: K(36000), unpaid_team_minor: K(30000), private_fields: [] })
-    await as(BUSINESS_ONLY)
-    const b6 = await health(P['Semana E6']!)
-    expect(b6.current).toMatchObject({ team_earnings_minor: null, unpaid_team_minor: null, approved: true,
-      private_fields: ['team_earnings_minor', 'unpaid_team_minor'] })
-    for (const k of ['production_minor', 'services_count', 'expenses_minor', 'purchases_salon_minor', 'operating_costs_minor',
-                     'operating_result_minor', 'retention_pct', 'free_minor'] as const)
+describe('individual finance is not inferable (07 D9 · B11)', () => {
+  const HIDDEN = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor'] as const
+  const numbers = (v: unknown): number[] => typeof v === 'number' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(numbers) : []
+  let m6: BusinessHealth, b6: BusinessHealth
+
+  beforeAll(async () => {
+    await as(MANAGER); m6 = await health(P['Semana E6']!)          // only e201 earned; only e201 is owed
+    await as(BUSINESS_ONLY); b6 = await health(P['Semana E6']!)
+  })
+
+  it('1–4 · the remuneration is hidden, and so is every figure that gives it back exactly', async () => {
+    expect(m6.current).toMatchObject({ team_earnings_minor: K(36000), operating_costs_minor: K(41000), operating_result_minor: K(49000),
+      unpaid_team_minor: K(30000), private_fields: [] })
+    expect(m6.current.retention_pct).not.toBeNull()
+    expect(m6.current.free_minor).not.toBeNull()
+    expect(b6.current.private_fields).toEqual([...HIDDEN, 'unpaid_team_minor'])
+    for (const k of [...HIDDEN, 'unpaid_team_minor'] as const) expect(b6.current[k], k).toBeNull()
+    for (const k of ['production_minor', 'services_count', 'expenses_minor', 'purchases_salon_minor', 'pending_rules_count', 'approved'] as const)
       expect(b6.current[k], k).toBe(m6.current[k])
+    // no value in the whole response is a protected figure, nor gives one back through production − expenses − purchases
+    const team = m6.current.team_earnings_minor!, c = m6.current
+    const protectedValues = [team, c.operating_costs_minor, c.operating_result_minor, c.free_minor, c.unpaid_team_minor]
+    const seen = numbers(b6)
+    for (const v of protectedValues) expect(seen, String(v)).not.toContain(v)
+    for (const v of seen) expect(c.production_minor - c.expenses_minor - c.purchases_salon_minor - v, String(v)).not.toBe(team)
+    expect(JSON.stringify(b6)).not.toMatch(/_earners|_owed/)
     expect(b6.open_periods.find((p) => p.label === 'Semana E6')).toMatchObject({ unpaid_team_minor: null, unpaid_private: true })
-    expect(JSON.stringify(b6)).not.toContain('_earners')
   })
 
-  it('and so are its change and any average it enters; a two-person team stays visible', async () => {
-    const b5 = await health(P['Semana E5']!)
-    expect(b5.changes.previous!.team_earnings_minor).toEqual({ delta_minor: null, percent: null })
-    expect(b5.changes.previous!.operating_result_minor).toEqual({ delta_minor: -K(13500), percent: -26 })
-    expect(b5.average_3).toMatchObject({ team_earnings_minor: null, private_fields: ['team_earnings_minor'], production_minor: 9333333 })
-    expect(b5.changes.average_3!.team_earnings_minor).toEqual({ delta_minor: null, percent: null })
-    const b2 = await health(P['Semana E2']!)                        // e201 and e206 both earned
-    expect(b2.current).toMatchObject({ team_earnings_minor: K(39000), private_fields: [] })
+  it('5 · comparisons, average-3 and trend carry nothing computed from a hidden figure', async () => {
+    const b5 = await health(P['Semana E5']!)                        // E5 and its whole window (E4, E3, E2-as-reference) checked
+    for (const k of ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'free_minor'] as const) {
+      expect(b5.changes.previous![k], k).toEqual({ delta_minor: null, percent: null })
+      expect(b5.changes.average_3![k], k).toEqual({ delta_minor: null, percent: null })
+      expect(b5.average_3![k], k).toBeNull()
+    }
+    expect(b5.average_3!.private_fields).toEqual(expect.arrayContaining(['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'free_minor']))
+    expect(b5.changes.previous!.production_minor).toEqual({ delta_minor: K(20000), percent: 20 })
+    expect(b5.average_3!.production_minor).toBe(9333333)
+    expect(b5.average_3!.expenses_minor).not.toBeNull()
+    expect(b5.trend.find((t) => t.label === 'Semana E5')).toMatchObject({ operating_result_minor: null, result_private: true })
+    expect(b5.trend.find((t) => t.label === 'Semana E2')!.operating_result_minor).toBe(K(55000))   // two earners
   })
 
-  it('insights: no unpaid amount and no team-earnings driver for the business-only viewer', async () => {
-    expect(await kinds('Semana E6')).toEqual(['production_decline'])
-    const up = buildInsights(await health(P['Semana E5']!), money).insights[0]!
-    expect(up.detail.drivers.map((d) => d.label)).toEqual(['Despesas', 'Compras (parte do salão)'])
+  it('6 · insights: none built on a hidden figure, and no explanation contains one', async () => {
+    const r6 = buildInsights(b6, money)
+    expect(r6.insights.map((i) => i.kind)).toEqual(['production_decline'])
+    const r5 = buildInsights(await health(P['Semana E5']!), money)
+    expect(r5.insights.map((i) => i.kind)).toEqual(['expense_category_high'])   // no "result down" without the result
+    expect(r5.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'figure_hidden' })
+    const c = m6.current
+    const text = JSON.stringify([r6, r5])
+    for (const v of [c.team_earnings_minor!, c.operating_costs_minor!, c.operating_result_minor!]) expect(text).not.toContain(money(v))
+  })
+
+  it('7 · two other earners: unchanged; but when the viewer is one of two earners, the other one is protected', async () => {
+    const b2 = await health(P['Semana E2']!)                        // e201 and e206 earned; the viewer is neither
+    expect(b2.current).toMatchObject({ team_earnings_minor: K(39000), operating_result_minor: K(55000), private_fields: [] })
+    expect(b2.changes.previous!.operating_result_minor.delta_minor).not.toBeNull()
+    const r = await dev.rpc('verify_person', { p_person_id: id('e206'), p_secret: '545454', p_scope: 'private_session' })
+    expect(r.data?.ok, JSON.stringify(r.data)).toBe(true)
+    const own = await health(P['Semana E2']!)                       // e206 knows its own share: the rest would be e201's
+    expect(own.current.private_fields).toEqual(HIDDEN)
+    expect(own.current.operating_result_minor).toBeNull()
+  })
+
+  it('8 · team.finance.read receives the complete values', async () => {
+    await as(MANAGER)
+    const m5 = await health(P['Semana E5']!)
+    expect(m5.current).toMatchObject({ team_earnings_minor: K(48000), operating_result_minor: K(38500), private_fields: [] })
+    expect(m5.average_3).toMatchObject({ operating_result_minor: 4966667, private_fields: [] })
+    expect(m5.changes.previous!.operating_result_minor).toEqual({ delta_minor: -K(13500), percent: -26 })
   })
 })
