@@ -17,12 +17,12 @@ const ch = (o: Partial<Record<MetricKey, Change>>) => Object.fromEntries(KEYS.ma
 const period = (id: string, label: string, state: PeriodMetrics['period']['state'] = 'fechado') => ({ id, label, state, starts_on: '2025-02-03', ends_on: '2025-02-09', days: 7, is_complete: true })
 const cur: PeriodMetrics = { period: period('e5', 'Semana 5'), source: 'close_statement', production_minor: K(120000), services_count: 12,
   team_earnings_minor: K(48000), expenses_minor: K(23500), purchases_salon_minor: K(10000), operating_costs_minor: K(81500), operating_result_minor: K(38500),
-  retention_pct: 32.1, free_minor: K(38500), unpaid_team_minor: 0, approved: true, pending_rules_count: 0 }
+  retention_pct: 32.1, free_minor: K(38500), unpaid_team_minor: 0, approved: true, pending_rules_count: 0, private_fields: [] }
 const prev: PeriodMetrics = { ...cur, period: period('e4', 'Semana 4'), production_minor: K(100000), operating_result_minor: K(52000), expenses_minor: K(8000), purchases_salon_minor: 0, team_earnings_minor: K(40000) }
 const base: BusinessHealth = {
   current: cur, previous: prev,
   average_3: { ...Object.fromEntries(KEYS.map((k) => [k, 0])) as Record<MetricKey, number>, production_minor: 9333333, operating_result_minor: 4966667,
-               periods: [period('e4', 'Semana 4'), period('e3', 'Semana 3'), period('e2', 'Semana 2')] },
+               periods: [period('e4', 'Semana 4'), period('e3', 'Semana 3'), period('e2', 'Semana 2')], private_fields: [] },
   changes: {
     previous: ch({ production_minor: { delta_minor: K(20000), percent: 20 }, operating_result_minor: { delta_minor: -K(13500), percent: -26 },
                    expenses_minor: { delta_minor: K(15500), percent: 193.8 }, purchases_salon_minor: { delta_minor: K(10000), percent: null },
@@ -32,7 +32,7 @@ const base: BusinessHealth = {
   expense_categories: [{ category_id: 'x', label: 'Luz', current_minor: K(20000), previous_minor: K(6000), average_3_minor: 533333, reference_presence: 3 }],
   meta: { period_state: 'fechado', is_complete: true, history_count: 4, baseline: 'previous_and_average_3', calculation_version: 'v',
           comparison: { previous: { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' } }, average_3: { available: true, reason: null, window: 3 } } },
-  open_periods: [{ id: 'e6', label: 'Semana 6', state: 'pronto_para_pagamento', is_complete: true, unpaid_team_minor: K(30000), pending_rules_count: 0 }],
+  open_periods: [{ id: 'e6', label: 'Semana 6', state: 'pronto_para_pagamento', is_complete: true, unpaid_team_minor: K(30000), unpaid_private: false, pending_rules_count: 0 }],
   trend: [{ id: 'e4', label: 'Semana 4', is_complete: true, production_minor: K(100000), operating_result_minor: K(52000) },
           { id: 'e5', label: 'Semana 5', is_complete: true, production_minor: K(120000), operating_result_minor: K(38500) }],
 }
@@ -101,6 +101,19 @@ describe('Negócio · Visão geral', () => {
     expect((await screen.findByTestId('changes')).textContent).toBe('O que mudou?O período ainda está a decorrer: a comparação fica disponível quando terminar.')
     expect(screen.getByText('Ainda não aprovado')).toBeTruthy()
     expect(screen.getByText('Nada a assinalar neste período.')).toBeTruthy()
+  })
+
+  it('single-person team (B11): the hidden unpaid amount is said to be hidden, never "not approved"; no team-earnings driver', async () => {
+    serve({ ...base, current: { ...cur, team_earnings_minor: null, unpaid_team_minor: null, private_fields: ['team_earnings_minor', 'unpaid_team_minor'] },
+      changes: { ...base.changes, previous: { ...base.changes.previous!, team_earnings_minor: { delta_minor: null, percent: null } } },
+      open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }] }, status({ view: 'self' }))
+    renderAt()
+    const o = await screen.findByTestId('overview')
+    expect(within(o).getAllByRole('definition').map((d) => d.textContent)[3]).toBe('Não mostrado')
+    expect(screen.getByTestId('team-private').textContent).toContain('uma só pessoa')
+    expect(within(o).getAllByRole('definition').map((d) => d.textContent)[1]).toContain('38.500')   // result stays
+    expect(screen.queryByText(/Ganhos da equipa/)).toBeNull()
+    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).not.toContain('payments_pending')
   })
 
   it('pending rule: "—" for result, Livre and retention', async () => {

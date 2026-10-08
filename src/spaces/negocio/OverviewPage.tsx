@@ -1,6 +1,7 @@
 // Negócio → Visão geral (Business Health Slice 01), private area, business.health.read. Every figure comes from the
 // business_health read model (the Fecho calculation, ADR-0004); insights come from the business domain layer. This
-// screen only arranges, words and links them. No person's figures appear here.
+// screen only arranges, words and links them. No person's figures appear here; a team figure that is one person's
+// arrives hidden (private_fields) and is said to be hidden, never shown as zero or as not approved.
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -54,6 +55,7 @@ export function OverviewPage() {
   const c = h.current
   const { insights } = buildInsights(h, m)
   const pending = c.pending_rules_count > 0
+  const unpaidPrivate = c.private_fields.includes('unpaid_team_minor')   // one person's amount (07 D9 · B11)
 
   return (
     <main className="app-main">
@@ -81,8 +83,9 @@ export function OverviewPage() {
           <div><dt>Resultado operacional</dt><dd className="num">{c.operating_result_minor === null ? '—' : m(c.operating_result_minor)}
             {c.operating_costs_minor !== null && <span className="muted"> · custos {m(c.operating_costs_minor)}</span>}</dd></div>
           <div><dt>Livre</dt><dd className="num">{c.free_minor === null ? '—' : m(c.free_minor)}</dd></div>
-          <div><dt>A pagar à equipa</dt><dd className="num">{c.unpaid_team_minor === null ? 'Ainda não aprovado' : m(c.unpaid_team_minor)}</dd></div>
+          <div><dt>A pagar à equipa</dt><dd className="num">{unpaidPrivate ? 'Não mostrado' : c.unpaid_team_minor === null ? 'Ainda não aprovado' : m(c.unpaid_team_minor)}</dd></div>
         </dl>
+        {unpaidPrivate && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="team-private">Corresponde a uma só pessoa: só quem acompanha as finanças da equipa o vê.</span>}
         {pending && <div className="notice notice-neutral">Há {c.pending_rules_count === 1 ? '1 regra' : `${c.pending_rules_count} regras`} de remuneração por definir: os custos, o resultado e o livre ficam por calcular até lá.</div>}
         {c.source === 'close_statement' && <span className="muted" style={{ fontSize: '0.875rem' }}>Valores do fecho deste período.</span>}
       </section>

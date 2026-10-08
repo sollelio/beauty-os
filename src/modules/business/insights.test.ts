@@ -8,7 +8,7 @@ const ref = (id: string, state: PeriodMetrics['period']['state'] = 'fechado') =>
 const metrics = (o: Partial<PeriodMetrics> = {}): PeriodMetrics => ({
   period: { ...ref('cur', 'aberto'), days: 7, is_complete: true }, source: 'live', production_minor: 100_000_00, services_count: 20,
   team_earnings_minor: 40_000_00, expenses_minor: 10_000_00, purchases_salon_minor: 0, operating_costs_minor: 50_000_00,
-  operating_result_minor: 50_000_00, retention_pct: 50, free_minor: 50_000_00, unpaid_team_minor: null, approved: false, pending_rules_count: 0, ...o })
+  operating_result_minor: 50_000_00, retention_pct: 50, free_minor: 50_000_00, unpaid_team_minor: null, approved: false, pending_rules_count: 0, private_fields: [], ...o })
 const KEYS: MetricKey[] = ['production_minor', 'operating_costs_minor', 'operating_result_minor', 'free_minor', 'team_earnings_minor', 'expenses_minor', 'purchases_salon_minor', 'services_count']
 const changes = (o: Partial<Record<MetricKey, Change>>) => Object.fromEntries(KEYS.map((k) => [k, o[k] ?? { delta_minor: 0, percent: 0 }])) as Record<MetricKey, Change>
 
@@ -17,7 +17,7 @@ function health(o: { prod?: number | null; result?: number | null; services?: nu
   return {
     current: metrics({ services_count: o.services ?? 20 }),
     previous: prev ? null : metrics({ period: { ...ref('prev'), days: 7, is_complete: true } }),
-    average_3: o.avg ? { ...Object.fromEntries(KEYS.map((k) => [k, 0])) as Record<MetricKey, number>, periods: [ref('p1'), ref('p2'), ref('p3')] } : null,
+    average_3: o.avg ? { ...Object.fromEntries(KEYS.map((k) => [k, 0])) as Record<MetricKey, number>, periods: [ref('p1'), ref('p2'), ref('p3')], private_fields: [] } : null,
     changes: {
       previous: prev ? null : changes({ production_minor: { delta_minor: 1, percent: o.prod ?? null }, operating_result_minor: { delta_minor: -1, percent: o.result ?? null },
                                         expenses_minor: { delta_minor: 5_000_00, percent: 50 } }),
@@ -67,10 +67,10 @@ describe('buildInsights thresholds', () => {
   })
 
   it('payments pending and blocked periods: grouped, and gone once resolved', () => {
-    const open = [{ id: 'a', label: 'A', state: 'em_pagamento' as const, is_complete: true, unpaid_team_minor: 120_000_00, pending_rules_count: 0 },
-                  { id: 'b', label: 'B', state: 'pronto_para_pagamento' as const, is_complete: true, unpaid_team_minor: 5_000_00, pending_rules_count: 0 },
-                  { id: 'c', label: 'C', state: 'aberto' as const, is_complete: true, unpaid_team_minor: null, pending_rules_count: 2 },
-                  { id: 'd', label: 'D', state: 'aberto' as const, is_complete: false, unpaid_team_minor: null, pending_rules_count: 1 }]
+    const open = [{ id: 'a', label: 'A', state: 'em_pagamento' as const, is_complete: true, unpaid_team_minor: 120_000_00, unpaid_private: false, pending_rules_count: 0 },
+                  { id: 'b', label: 'B', state: 'pronto_para_pagamento' as const, is_complete: true, unpaid_team_minor: 5_000_00, unpaid_private: false, pending_rules_count: 0 },
+                  { id: 'c', label: 'C', state: 'aberto' as const, is_complete: true, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 2 },
+                  { id: 'd', label: 'D', state: 'aberto' as const, is_complete: false, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 1 }]
     const r = buildInsights(health({ open }), money).insights
     expect(r.map((i) => i.kind)).toEqual(['payments_pending', 'period_blocked'])
     expect(r[0]!.title).toBe('Ainda faltam 125000 Kz por pagar à equipa.')
@@ -80,7 +80,7 @@ describe('buildInsights thresholds', () => {
 
   it('priority: action first, then attention; never more than 5', () => {
     const h = health({ prod: 20, result: -10, avg: true, cats: [cat(10_000_00, 5_000_00, 3)],
-      open: [{ id: 'a', label: 'A', state: 'aberto', is_complete: true, unpaid_team_minor: 1, pending_rules_count: 1 }] })
+      open: [{ id: 'a', label: 'A', state: 'aberto', is_complete: true, unpaid_team_minor: 1, unpaid_private: false, pending_rules_count: 1 }] })
     expect(kinds(h)).toEqual(['payments_pending', 'period_blocked', 'production_up_result_down', 'expense_category_high'])
     expect(buildInsights(h, money, { ...INSIGHT_THRESHOLDS, maxShown: 2 }).insights).toHaveLength(2)
     expect(INSIGHT_THRESHOLDS.maxShown).toBe(5)

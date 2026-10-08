@@ -160,6 +160,7 @@ excess advanced / paid     = max(advances + confirmed payments − earned, 0)
 `Decided` (Sollelio, 2026-10-08, Business Health Slice 01 brief). Extends 03 §2 #12 (basic operational financial overview); not financial statements, not forecasting, not AI (03 §4).
 
 - **Access (B11).** A private area: a verified private session of a person holding **`business.health.read`**. It shows business-level figures only — production, costs, result, Livre, the team's total approved-and-unpaid amount, trends and insights — never a person's remuneration, advances, payments or remaining amount, which stay behind `team.finance.read` (B4). Holding one does not grant the other. Pilot: Fernando, Mercy and Duart ([operations](operations/pilot-permissions.sql)).
+- **Single-person team figures (B11, Decided — Sollelio, 2026-10-09).** `business.health.read` never reveals one person's private finance indirectly. A team figure that is made of one person — the team's earnings when exactly one person earned in the period, the approved-and-unpaid amount when exactly one person still has an amount outstanding — is hidden from a viewer who does not also hold `team.finance.read`, together with its change and any average it enters; the screen says it is hidden, never shows it as zero or as not approved. A `team.finance.read` holder sees it as normal. Business-level figures (production, costs, result, retention, Livre, expenses, purchases) stay visible. The permission model is unchanged; the database applies this, not the screen.
 - **Metrics per period**, all from the Fecho calculation (ADR-0004; close statement for a closed period, ADR-0007; cancelled records never count): *Produção* = active services; *Custos operacionais* = team earnings + expenses + salon share of purchases; *Resultado operacional* = produção − custos; *Retenção operacional* = resultado ÷ produção × 100 (only when produção > 0); *Livre* = Fecho's own figure; *A pagar à equipa* = approved and still unpaid (none until approved). While a rule is pending, costs, result, retention and Livre are undefined ("—"), never 0.
 - **Comparison.** Only against **closed** periods of comparable length (±25%): the immediately previous period (only if it is closed), and the average of the 3 most recent closed periods. A period still running is not compared. A zero reference gives a change in value, never a percentage. When a comparison is unavailable the screen says why.
 - **Core insights (V1, deterministic, on demand, no stored insights)**, at most 5, action before attention:
@@ -169,7 +170,7 @@ excess advanced / paid     = max(advances + confirmed payments − earned, 0)
   4. *Descida de produção* — production ≤ −15% with at least 10 active services in the period (Atenção).
   5. *Categoria de despesa acima do habitual* — 3 previous closed periods; category present in ≥ 2 of them; ≥ 25% above their average; excess ≥ 3% of the period's production (Atenção; categories grouped).
 - **Thresholds** are V1 product defaults, kept in one place (`src/modules/business/thresholds.ts`; comparison rules in `private.business_health_config`).
-- Open: whether team totals must be hidden when a period's team is a single person (an aggregate then equals one person's earnings); the later Business Health areas (Finanças, Equipa, Serviços, Custos & Stock, Insights).
+- Open: with costs and the result visible, the team's earnings of a single-person period can still be worked out by subtraction (costs − expenses − purchases); whether any business-level figure should also be withheld is `Open / requires validation`. The later Business Health areas (Finanças, Equipa, Serviços, Custos & Stock, Insights).
 
 ## 3. Gaps intentionally left open
 
@@ -350,7 +351,7 @@ Minimum requirements the architecture must support. This is not RBAC, an auth fl
 | **B7 Close period** | Close | Individually attributed; blocked while approved amounts are unpaid (`Decided`). |
 | **B8 Reopen** | Reopen a closed period | A stronger boundary than B7: mandatory reason; traced (04 J5 `Decided`; Slice 06 E4). |
 | **B9 Corrections** | Correct a recorded event; anything in a closed period requires B8 first | History preserved; nothing silently overwritten (04 J1 `Decided`). Who and until when: I1. |
-| **B11 Business health view** | Negócio → Visão geral: business-level figures, comparisons, insights (D9) | A verified private context of a `business.health.read` holder; no individual remuneration (that is B4). |
+| **B11 Business health view** | Negócio → Visão geral: business-level figures, comparisons, insights (D9) | A verified private context of a `business.health.read` holder; no individual remuneration (that is B4), including a team figure made of one person (D9). |
 | **B10 Organization configuration** | People, ownership, capabilities, standing rules, service catalogue and prices, categories, payment methods, currency, name/logo | Changes to standing rules and prices are attributed and kept in history (03 §2 #14). |
 
 Cross-cutting requirements:

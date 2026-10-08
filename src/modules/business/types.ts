@@ -9,7 +9,9 @@ export type PeriodMetrics = {
   team_earnings_minor: number | null; expenses_minor: number; purchases_salon_minor: number
   operating_costs_minor: number | null; operating_result_minor: number | null; retention_pct: number | null
   free_minor: number | null; unpaid_team_minor: number | null; approved: boolean; pending_rules_count: number
+  private_fields: PrivateField[]   // team figures hidden because they are one person's (07 D9 · B11); null above
 }
+export type PrivateField = 'team_earnings_minor' | 'unpaid_team_minor'
 export type MetricKey = 'production_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
   | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor' | 'services_count'
 export type Change = { delta_minor: number | null; percent: number | null }
@@ -17,7 +19,7 @@ export type ComparisonReason = 'current_incomplete' | 'no_previous_period' | 'pr
 export type BusinessHealth = {
   current: PeriodMetrics
   previous: PeriodMetrics | null
-  average_3: (Record<MetricKey, number | null> & { periods: PeriodRef[] }) | null
+  average_3: (Record<MetricKey, number | null> & { periods: PeriodRef[]; private_fields: PrivateField[] }) | null
   changes: { previous: Record<MetricKey, Change> | null; average_3: Record<MetricKey, Change> | null }
   expense_categories: { category_id: string; label: string; current_minor: number; previous_minor: number | null
                         average_3_minor: number | null; reference_presence: number | null }[]
@@ -28,6 +30,7 @@ export type BusinessHealth = {
     baseline: 'previous_and_average_3' | 'previous' | 'average_3' | 'none'
     calculation_version: string
   }
-  open_periods: { id: string; label: string; state: PeriodState; is_complete: boolean; unpaid_team_minor: number | null; pending_rules_count: number }[]
+  open_periods: { id: string; label: string; state: PeriodState; is_complete: boolean; unpaid_team_minor: number | null; unpaid_private: boolean
+                  pending_rules_count: number }[]
   trend: { id: string; label: string; is_complete: boolean; production_minor: number; operating_result_minor: number | null }[]
 }
