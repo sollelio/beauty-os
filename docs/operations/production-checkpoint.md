@@ -29,12 +29,40 @@ Netlify step.
   The CLI cannot read `cron.job`; confirm once in Dashboard → Integrations → Cron.
 - No Dev seed data, synthetic salons, development enrollment codes or real salon data.
 
-## Deferred to the production frontend step
-- **Netlify environment:** `VITE_SUPABASE_URL=https://kzirzmtarnskwirufyjw.supabase.co`,
-  `VITE_SUPABASE_PUBLISHABLE_KEY=<Prod publishable key>`, and `VITE_TURNSTILE_SITE_KEY` once Turnstile exists. Public values
-  only; never commit them; never use a secret or service-role key in the frontend.
-- **Supabase Auth:** `site_url` → `https://beauty.sollelio.com`; CAPTCHA (Turnstile) enabled with its secret after the
-  Turnstile widget is created for `beauty.sollelio.com`.
-- **Runtime smoke on the deployed app:** anonymous device sign-in; an unbound device sees nothing and is refused by every
-  trusted function and protected table; operator procedures unreachable.
-- Then the real salon data and device enrollment per `pilot-runbook.md` and `pilot-permissions.sql`.
+## Production frontend (2026-10-08)
+
+- **Netlify site:** `beauty-os` (`beauty-os.netlify.app`), repository `sollelio/beauty-os`, **production branch `main`**
+  (merging `dev` into `main` deploys production). Build from `netlify.toml`: `npm run build`, publish `dist`, Node 22, SPA
+  fallback `/* → /index.html 200`.
+- **Deployed:** `main` at `d593b4f` (fast-forward from `6e691f3`), clear-cache production deploy.
+- **Environment (Netlify, Production / Builds; public values only):** `VITE_SUPABASE_URL` (Beauty OS Prod),
+  `VITE_SUPABASE_PUBLISHABLE_KEY` (Prod publishable key), `VITE_TURNSTILE_SITE_KEY`. Values are not stored in Git.
+- **Domain:** `https://beauty.sollelio.com` — Cloudflare DNS `CNAME beauty → beauty-os.netlify.app`; Let's Encrypt certificate;
+  `http → https` 301.
+- **Supabase Prod Auth:** `site_url = https://beauty.sollelio.com`; no additional redirect URLs (no email/OAuth flows);
+  anonymous sign-ins on; **CAPTCHA enabled, provider Cloudflare Turnstile** (secret only in Supabase); rate limits unchanged.
+- **Cron:** `beauty-os-cleanup-unbound-anonymous-users` confirmed in the dashboard (daily 03:17).
+
+### Production smoke (automated, no CAPTCHA solved, nothing created)
+| Check | Result |
+|---|---|
+| HTTPS at the canonical domain; app renders (configuration present) | PASS |
+| Turnstile widget rendered; enrollment blocked until it is solved | PASS |
+| Bundle: Beauty OS Prod URL, exactly one publishable key, no secret / service-role key, no Dev reference | PASS |
+| Supabase Prod refuses anonymous sign-in without a Turnstile token (`captcha_failed`) | PASS |
+| Without a device session: no table readable (`42501`), no app function executable, operator procedures not exposed | PASS |
+| SPA deep link / refresh (`/privado/fecho` → enrollment screen) | PASS |
+| No Dev salon, seed or business content; browser talks only to the app, Beauty OS Prod and Turnstile | PASS |
+| No material console/runtime errors | PASS |
+
+Afterwards Prod still had no rows in any `public`, `private` or Auth table and no Auth users.
+
+**Manual step (a human must solve Turnstile):** on any browser (not the salon phone), open `https://beauty.sollelio.com`,
+tick *Verify you are human*, enter `AAAA-BBBB-CCCC`, press *Ligar dispositivo* → expected *Código inválido ou expirado.*
+This proves the CAPTCHA-protected anonymous sign-in succeeds while the device stays unbound; the unbound user is removed by
+the cleanup after 24 h. What an unbound device session can reach is covered by the schema-level checks above and by the
+identical Dev schema's test suite.
+
+## Next: real salon setup (needs explicit approval)
+
+Load the real salon data and enroll the salon's Android phone per `pilot-runbook.md` and `pilot-permissions.sql` (check the spelling of every name, including "Duart"). Nothing of this has been done.
