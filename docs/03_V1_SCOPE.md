@@ -29,7 +29,7 @@ Journeys: [04](04_CORE_USER_JOURNEYS.md) · Experience: [05](05_PRODUCT_EXPERIEN
 | 9 | Purchases and purchase contributions | Multiple contributors; contribution at total-purchase level. | J3, J6 |
 | 10 | Monthly close | States as decided below; exception-driven review, approval, payment confirmation, closure. | J5 |
 | 11 | Amount payable per professional | Explainable from its components. | J4, J5 |
-| 12 | Basic operational financial overview | Not financial statements; informal "profit" ≠ accounting profit. | J5 |
+| 12 | Basic operational financial overview | Not financial statements; informal "profit" ≠ accounting profit. Business Health V1 (*Negócio → Visão geral*, metrics, comparison, 5 deterministic insights): `Decided` ([07 D9](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d9--business-health-v1-negócio--visão-geral-metrics-comparison-core-insights-access)). | J5 |
 | 13 | Stock Lite / replenishment visibility | Approximate levels, reserve status, attention list, purchase list, emergency replenishment. No forecasting. | J6 |
 | 14 | History / audit trail | Corrections, reopening of closed periods, sensitive actions. | All |
 

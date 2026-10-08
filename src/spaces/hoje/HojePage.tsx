@@ -32,6 +32,7 @@ export function HojePage() {
         <Link to="/stock">Stock</Link>
         <Link to="/privado/entrar">Área privada</Link>
         <Link to="/privado/fecho">Fecho</Link>
+        <Link to="/privado/negocio">Negócio</Link>
       </nav>
 
       {(toBuy.data ?? 0) > 0 && (

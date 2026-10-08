@@ -1,0 +1,22 @@
+// Business Health V1 insight thresholds (product defaults, Business Health Slice 01). The only place they live:
+// screens never hard-code them. Comparison rules (which periods are comparable) live with the read model
+// (private.business_health_config).
+export const INSIGHT_THRESHOLDS = {
+  maxShown: 5,
+  /** 3 · production up at least this much while the operating result fell at least `resultDropPct`. */
+  productionUpPct: 10,
+  resultDropPct: 5,
+  /** 4 · production down at least this much, with at least `minServices` active services in the period. */
+  productionDropPct: 15,
+  minServices: 10,
+  /** 5 · an expense category this much above its average over `averageWindow` completed periods… */
+  categoryAbovePct: 25,
+  averageWindow: 3,
+  /** …present in at least this many of them… */
+  categoryMinPresence: 2,
+  /** …and the excess over the average at least this share of the period's production. */
+  categoryMinImpactPctOfProduction: 3,
+  /** Drivers listed in an explanation. */
+  maxDrivers: 3,
+} as const
+export type InsightThresholds = { readonly [K in keyof typeof INSIGHT_THRESHOLDS]: number }

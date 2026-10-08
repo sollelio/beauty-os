@@ -4,14 +4,16 @@
 -- permissions; capture and the own situation (PIN only) stay as in the existing model.
 --   Fernando: movement.confirm · team.finance.read · period.decide · period.close · period.reopen · records.correct
 --   Mercy:    movement.confirm · team.finance.read · period.decide · payment.confirm · records.correct
---   Duart / other professionals: none
+--   Business Health (07 D9, Sollelio 2026-10-08): business.health.read for Fernando, Mercy and Duart
+--   Duart: business.health.read only · other professionals: none
 -- Fernando does NOT hold payment.confirm unless explicitly added later.
 select private.admin_set_permission(p.id, x.permission, true)
   from public.people p
   join (values ('Fernando', 'movement.confirm'), ('Fernando', 'team.finance.read'), ('Fernando', 'period.decide'),
                ('Fernando', 'period.close'), ('Fernando', 'period.reopen'), ('Fernando', 'records.correct'),
                ('Mercy', 'movement.confirm'), ('Mercy', 'team.finance.read'), ('Mercy', 'period.decide'),
-               ('Mercy', 'payment.confirm'), ('Mercy', 'records.correct')) x(display_name, permission)
+               ('Mercy', 'payment.confirm'), ('Mercy', 'records.correct'),
+               ('Fernando', 'business.health.read'), ('Mercy', 'business.health.read'), ('Duart', 'business.health.read')) x(display_name, permission)
     on p.display_name = x.display_name
  where p.organization_id = :'org';
 

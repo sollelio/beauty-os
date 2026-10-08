@@ -24,6 +24,7 @@ import { PaymentsPage } from '../spaces/fecho/PaymentsPage'
 import { ClosePage, HistoryPage } from '../spaces/fecho/ClosePage'
 import { ReopenPage } from '../spaces/fecho/ReopenPage'
 import { CancelRecordFlow } from '../spaces/registos/CancelRecordFlow'
+import { OverviewPage } from '../spaces/negocio/OverviewPage'
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
               { path: 'fecho/fechar', element: <ClosePage /> },
               { path: 'fecho/historico', element: <HistoryPage /> },
               { path: 'fecho/reabrir', element: <ReopenPage /> },
+              { path: 'negocio', element: <OverviewPage /> },
             ],
           },
         ],

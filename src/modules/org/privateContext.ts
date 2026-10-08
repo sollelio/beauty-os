@@ -3,6 +3,7 @@
 // query re-checks the grant. The client only mirrors it: all sensitive queries live under PRIVATE_ROOT and are
 // removed (not hidden) on exit, expiry, revocation, or when the private area is left.
 import { useEffect } from 'react'
+import { useOutletContext } from 'react-router'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { getSupabase } from '../../shared/supabase/client'
 import { toAppError } from '../../shared/errors'
@@ -13,7 +14,7 @@ export const privateKeys = { status: ['org', 'private-status'] as const,   // ou
 
 export type PrivateStatus =
   | { active: false }
-  | { active: true; person_id: string; display_name: string; view: 'manager' | 'self'; expires_at: string }
+  | { active: true; person_id: string; display_name: string; view: 'manager' | 'self'; business_health: boolean; expires_at: string }
 
 export async function getPrivateStatus(): Promise<PrivateStatus> {
   const { data, error } = await getSupabase().rpc('private_context_status')
@@ -59,3 +60,6 @@ export function usePrivateStatus() {
   }, [expiresAt, qc])
   return status
 }
+
+/** The active private context, inside PrivateGate's routes. */
+export const usePrivateContext = () => useOutletContext<Extract<PrivateStatus, { active: true }>>()

@@ -3,11 +3,12 @@
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTeamPeople, situationKeys } from '../../modules/team/situation'
-import { exitPrivateContext } from '../../modules/org/privateContext'
+import { exitPrivateContext, usePrivateContext } from '../../modules/org/privateContext'
 
 export function EquipaPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const ctx = usePrivateContext()
   const team = useQuery({ queryKey: situationKeys.team, queryFn: listTeamPeople })
   return (
     <main className="app-main">
@@ -25,6 +26,7 @@ export function EquipaPage() {
         ))}
       </div>
       <button className="pick" onClick={() => navigate('/privado/fecho')}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>
+      {ctx.business_health && <button className="pick" onClick={() => navigate('/privado/negocio')}><strong>Negócio · Visão geral</strong><span aria-hidden className="muted">›</span></button>}
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>
   )
