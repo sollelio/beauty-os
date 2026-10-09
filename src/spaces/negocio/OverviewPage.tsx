@@ -1,8 +1,8 @@
 // Negócio → Visão geral (Business Health Slice 01), private area, business.health.read. Every figure comes from the
 // business_health read model (the Fecho calculation, ADR-0004); insights come from the business domain layer. This
 // screen only arranges, words and links them. No person's figures appear here; for a viewer without team.finance.read
-// every team-derived figure arrives hidden (private_fields, 07 D9 · B11): it is said to be hidden, never shown as
-// zero, "—" or not approved.
+// a team-derived figure that would resolve to one other person arrives hidden (private_fields, 07 D9 · B11): it is
+// said to be hidden, never shown as zero, "—" or not approved.
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

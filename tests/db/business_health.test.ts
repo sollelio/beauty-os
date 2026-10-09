@@ -196,7 +196,7 @@ describe('insights from the read model', () => {
   })
 })
 
-describe('individual finance is not inferable (07 D9 · B11): business-only viewers get no team-derived figure', () => {
+describe('individual finance is not inferable (07 D9 · B11): hidden only where a figure resolves to one other person', () => {
   const HIDDEN = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor'] as const
   const numbers = (v: unknown): number[] => typeof v === 'number' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(numbers) : []
   let m6: BusinessHealth, b6: BusinessHealth
@@ -237,7 +237,7 @@ describe('individual finance is not inferable (07 D9 · B11): business-only view
     expect(b5.average_3!.production_minor).toBe(9333333)
     expect(b5.average_3!.expenses_minor).not.toBeNull()
     expect(b5.trend.find((t) => t.label === 'Semana E5')).toMatchObject({ operating_result_minor: null, result_private: true })
-    expect(b5.trend.find((t) => t.label === 'Semana E2')).toMatchObject({ operating_result_minor: null, result_private: true })   // two earners too
+    expect(b5.trend.find((t) => t.label === 'Semana E2')).toMatchObject({ operating_result_minor: K(55000), result_private: false })   // two earners
   })
 
   it('6 · insights: none built on a hidden figure, and no explanation contains one', async () => {
@@ -251,15 +251,18 @@ describe('individual finance is not inferable (07 D9 · B11): business-only view
     for (const v of [c.team_earnings_minor!, c.operating_costs_minor!, c.operating_result_minor!]) expect(text).not.toContain(money(v))
   })
 
-  it('7 · two or more earners: withheld as well (with production per person, team earnings over several periods give the percentages)', async () => {
+  it('7 · two other earners: the safe aggregates stay; a viewer who is one of the two earners cannot get the other\'s pay', async () => {
     const b2 = await health(P['Semana E2']!)                        // e201 and e206 earned; the viewer is neither
-    expect(b2.current).toMatchObject({ team_earnings_minor: null, operating_result_minor: null, private_fields: [...HIDDEN, 'unpaid_team_minor'] })
-    expect(b2.current.production_minor).toBe(K(100000))
-    expect(b2.changes.previous!.operating_result_minor).toEqual({ delta_minor: null, percent: null })
-    expect(b2.changes.previous!.production_minor.delta_minor).toBe(K(100000))
+    expect(b2.current).toMatchObject({ team_earnings_minor: K(39000), operating_costs_minor: K(45000), operating_result_minor: K(55000),
+      unpaid_team_minor: 0, private_fields: [] })
+    expect(b2.current.retention_pct).not.toBeNull()
+    expect(b2.current.free_minor).not.toBeNull()
+    expect(b2.changes.previous!.operating_result_minor.delta_minor).not.toBeNull()
     const r = await dev.rpc('verify_person', { p_person_id: id('e206'), p_secret: '545454', p_scope: 'private_session' })
     expect(r.data?.ok, JSON.stringify(r.data)).toBe(true)
-    expect((await health(P['Semana E2']!)).current.private_fields).toEqual([...HIDDEN, 'unpaid_team_minor'])   // a viewer who also earns: the same
+    const own = await health(P['Semana E2']!)                       // e206 knows its own share: the rest would be e201's
+    expect(own.current.private_fields).toEqual([...HIDDEN])
+    expect(own.current.unpaid_team_minor).toBe(0)                   // nobody is owed: nothing to protect
   })
 
   it('8 · team.finance.read receives the complete values', async () => {

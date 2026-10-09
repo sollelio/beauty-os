@@ -117,7 +117,7 @@ describe('Negócio · Visão geral', () => {
     expect(screen.getByText('Nada a assinalar neste período.')).toBeTruthy()
   })
 
-  it('business-only viewer (B11): every team-derived figure is "Não mostrado", with the reason; nothing compared or built from it', async () => {
+  it('B11: a figure that would resolve to one person is "Não mostrado", with the reason; nothing compared or built from it', async () => {
     const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'] as const
     const none = { delta_minor: null, percent: null }
     serve({ ...base,

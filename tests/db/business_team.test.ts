@@ -88,7 +88,7 @@ describe('team figures (business-only viewer)', () => {
     expect(t5.people.every((p) => p.change === null)).toBe(true)
   })
 
-  it('no private financial field for anyone; the overview withholds every team-derived figure', async () => {
+  it('no private financial field for anyone; the overview keeps the safe aggregates of a four-person team', async () => {
     for (const label of ['Semana D1', 'Semana D2', 'Semana D5']) {
       const t = await team(label)
       expect(Object.keys(t).sort(), label).toEqual(['comparison', 'people', 'period', 'summary'])
@@ -96,8 +96,11 @@ describe('team figures (business-only viewer)', () => {
       expect(JSON.stringify(t)).not.toMatch(/earned|advance|payment|remaining|excess|rule|outstanding/)
     }
     const h = (await dev.rpc('business_health', { p_period_id: P['Semana D2'] })).data as BusinessHealth
-    expect(h.current.private_fields).toEqual(['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'])
-    expect(h.current.production_minor).toBe(K(200000))
+    expect(h.current).toMatchObject({ production_minor: K(200000), team_earnings_minor: K(73600), operating_result_minor: K(126400), private_fields: [] })
+    expect(h.current.retention_pct).not.toBeNull()
+    expect(h.current.free_minor).not.toBeNull()
+    const h5 = (await dev.rpc('business_health', { p_period_id: P['Semana D5'] })).data as BusinessHealth   // approved, four people owed
+    expect(h5.current).toMatchObject({ approved: true, unpaid_team_minor: K(30000 * 0.4 * 2 + 30000 * 0.3 + 10000 * 0.3), private_fields: [] })
     expect(await err('team_situation', { p_person_id: D1 })).toBe('NOT_AUTHORIZED')      // no finance drill-down
   })
 })
