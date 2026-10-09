@@ -36,6 +36,25 @@ export type BusinessServices = {
   services: ServiceRow[]
   other: { services: number; count: number; revenue_minor: number } | null   // services not shown on their own (B11)
 }
+/** Negócio → Custos & Stock (business_costs): no person, no contribution, no gross purchase total (07 D9 · Slice 04). */
+export type CostCategory = {
+  category_id: string; label: string; current_minor: number; share_of_expenses_pct: number | null; share_of_production_pct: number | null
+  previous_minor: number | null; average_3_minor: number | null; reference_presence: number | null
+  change_previous: Change | null; change_average_3: Change | null
+}
+export type ProductPurchases = { product_id: string; name: string; unit_word: string; purchases_count: number; quantity: number; salon_minor: number; last_purchased_at: string }
+export type ProductActivity = { product_id: string; name: string; purchases: number; marks: number; last_purchased_at: string | null }
+export type BusinessCosts = {
+  period: PeriodRef & { is_complete: boolean }
+  comparison: BusinessHealth['meta']['comparison']
+  summary: { production_minor: number; expenses_minor: number; purchases_salon_minor: number; expenses_pct_of_production: number | null
+             purchases_pct_of_production: number | null; products_attention: number }
+  expenses: CostCategory[]
+  purchases: { salon_minor: number; previous_salon_minor: number | null; change: Change | null; products: ProductPurchases[] }
+  stock: { baixo: number; comprar: number; on_list: number; urgent: number
+           attention: { product_id: string; name: string; state: 'ok' | 'baixo' | 'comprar'; on_list: boolean; urgent: boolean }[]
+           window: { days: number; from: string; to: string }; activity: ProductActivity[] }
+}
 export type BusinessTeam = {
   period: PeriodRef & { is_complete: boolean }
   summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; active_count: number

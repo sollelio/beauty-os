@@ -2,12 +2,12 @@
 // Nothing here computes a financial figure: it compares figures the database already produced against the V1
 // thresholds, picks, groups and orders the insights, and says how each was reached. Wording states what changed
 // together, never why (correlation, not causality).
-import type { BusinessHealth, BusinessServices, BusinessTeam, ComparisonReason, ServiceRow } from './types'
+import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, ComparisonReason, ServiceRow } from './types'
 import { INSIGHT_THRESHOLDS, type InsightThresholds } from './thresholds'
 
 export type Severity = 'ACTION_REQUIRED' | 'ATTENTION' | 'INFORMATION'
 export type InsightKind = 'payments_pending' | 'period_blocked' | 'production_up_result_down' | 'production_decline' | 'expense_category_high'
-  | 'team_concentration' | 'service_decline' | 'service_growth' | 'service_concentration'
+  | 'team_concentration' | 'service_decline' | 'service_growth' | 'service_concentration' | 'purchases_up' | 'product_attention'
 export type Driver = { label: string; delta_minor: number; text: string }
 export type Insight = {
   id: string
@@ -26,11 +26,11 @@ export type Insight = {
 export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' | 'not_enough_professionals' | 'not_enough_services_performed' }
 
 const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
-const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth']
+const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'purchases_up', 'product_attention', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth']
 const pct = (n: number) => `${Math.round(Math.abs(n))}%`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam, services?: BusinessServices):
+export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam, services?: BusinessServices, costs?: BusinessCosts):
   { insights: Insight[]; skipped: SkippedInsight[] } {
   const out: Insight[] = []
   const skipped: SkippedInsight[] = []
@@ -136,10 +136,10 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
         id: `expense_category_high:${cur.period.id}`, kind: 'expense_category_high', severity: 'ATTENTION',
         periods: [{ id: cur.period.id, label: cur.period.label }],
         title: high.length === 1
-          ? `${high[0]!.label}: ${money(high[0]!.current_minor)}, ${pct(above(high[0]!))} acima da média dos últimos ${t.averageWindow} períodos.`
+          ? `${high[0]!.label}: ${pct(above(high[0]!))} acima da média dos últimos ${t.averageWindow} períodos.`
           : `${high.length} categorias de despesa acima da média dos últimos ${t.averageWindow} períodos.`,
         detail: {
-          current: high.map((c) => `${c.label} ${money(c.current_minor)}`).join(' · '),
+          current: high.map((c) => `${c.label} ${money(c.current_minor)}${cur.production_minor > 0 ? ` (${Math.round((c.current_minor * 1000) / cur.production_minor) / 10}% da produção)` : ''}`).join(' · '),
           reference: high.map((c) => `${c.label} média ${money(c.average_3_minor!)}`).join(' · '),
           change: high.map((c) => `${c.label} +${money(c.current_minor - c.average_3_minor!)} (+${pct(above(c))})`).join(' · '),
           basis: `Média de ${used} (fechados).`,
@@ -159,6 +159,13 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
   if (services && services.period.id === cur.period.id) {
     const r = serviceInsights(services, money, t)
     out.push(...r.insights); skipped.push(...r.skipped)
+  }
+  // 10–11 · Costs & stock (Slice 04). "Result down" already lists the costs that rose: when purchases lead it, a
+  // separate "purchases up" card would tell the same story.
+  if (costs && costs.period.id === cur.period.id) {
+    const r = costInsights(costs, money, t)
+    const told = out.find((i) => i.kind === 'production_up_result_down')?.detail.drivers[0]?.label === 'Compras (parte do salão)'
+    out.push(...r.insights.filter((i) => !(told && i.kind === 'purchases_up'))); skipped.push(...r.skipped)
   }
 
   return { insights: sortInsights(out).slice(0, t.maxShown), skipped }
@@ -283,5 +290,54 @@ export function serviceInsights(sv: BusinessServices, money: (minor: number) => 
     trend(moves(1), 'service_growth')
     trend(moves(-1), 'service_decline')
   }
+  return { insights: sortInsights(out), skipped }
+}
+
+/** Insights 10–11 · purchases and products. The expense-category insight (5) comes from the overview figures; these
+ *  add what business_costs knows: salon-funded purchases per product and Stock Lite marks. No consumption is claimed. */
+export function costInsights(c: BusinessCosts, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS):
+  { insights: Insight[]; skipped: SkippedInsight[] } {
+  const out: Insight[] = [], skipped: SkippedInsight[] = []
+  const p = c.period, at = [{ id: p.id, label: p.label }]
+  const prevLabel = c.comparison.previous.period?.label ?? 'o período anterior'
+
+  // 10 · salon-funded purchases up
+  const ch = c.purchases.change
+  if (!c.comparison.previous.available || !ch) skipped.push({ kind: 'purchases_up', reason: c.comparison.previous.reason ?? 'no_previous_period' })
+  else if (ch.percent !== null && ch.percent >= t.purchasesUpPct && c.summary.purchases_pct_of_production !== null
+           && c.summary.purchases_pct_of_production >= t.purchasesMinPctOfProduction) {
+    const top = c.purchases.products.slice(0, t.maxDrivers)
+    out.push({ id: `purchases_up:${p.id}`, kind: 'purchases_up', severity: 'ATTENTION', periods: at,
+      title: `As compras suportadas pelo salão aumentaram ${pct(ch.percent)}.`,
+      detail: {
+        current: `${money(c.purchases.salon_minor)} (${String(c.summary.purchases_pct_of_production).replace('.', ',')}% da produção)`,
+        reference: `${money(c.purchases.previous_salon_minor ?? 0)} em ${prevLabel}`,
+        change: `+${money(ch.delta_minor ?? 0)} (+${pct(ch.percent)})`,
+        basis: `${p.label} comparado com ${prevLabel} (fechado). Só a parte paga pelo salão.`,
+        drivers: top.map((x) => ({ label: x.name, delta_minor: x.salon_minor, text: `${money(x.salon_minor)} · ${plural(x.purchases_count, 'compra', 'compras')}` })),
+        confidence: 'Produtos com mais valor comprado neste período; não indica que tenham sido a causa.',
+      } })
+  }
+
+  // 11 · products that keep coming back (bought, or marked baixo/comprar, repeatedly), one card
+  const rep = c.stock.activity.filter((x) => x.purchases >= t.productRepeatCount || x.marks >= t.productRepeatCount)
+  if (rep.length > 0) {
+    const days = c.stock.window.days
+    // both signals in one sentence when both reach the threshold; wording without gender (product names vary)
+    const what = (x: (typeof rep)[number]) => [
+      x.purchases >= t.productRepeatCount ? plural(x.purchases, 'compra', 'compras') : '',
+      x.marks >= t.productRepeatCount ? `${plural(x.marks, 'marcação', 'marcações')} como baixo ou para comprar` : ''].filter(Boolean).join(' e ')
+    out.push({ id: `product_attention:${p.id}`, kind: 'product_attention', severity: 'ATTENTION', periods: at,
+      title: rep.length === 1 ? `${rep[0]!.name} merece atenção: ${what(rep[0]!)} nos últimos ${days} dias.`
+                              : `${rep.length} produtos merecem atenção nos últimos ${days} dias.`,
+      detail: {
+        current: rep.map((x) => `${x.name}: ${plural(x.purchases, 'compra', 'compras')} · ${plural(x.marks, 'marcação', 'marcações')}`).join(' · '),
+        basis: `Compras registadas e marcações «baixo»/«comprar» de ${c.stock.window.from} a ${c.stock.window.to}.`,
+        drivers: [],
+        action: { label: 'Ver stock', to: '/stock', finance: false },
+        confidence: `Pelo menos ${t.productRepeatCount} compras ou ${t.productRepeatCount} marcações. Vale rever a quantidade habitual de compra ou o padrão de utilização; o sistema não mede o consumo.`,
+      } })
+  }
+
   return { insights: sortInsights(out), skipped }
 }

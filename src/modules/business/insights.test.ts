@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { serviceInsights, teamConcentration, buildInsights } from './insights'
+import { costInsights, serviceInsights, teamConcentration, buildInsights } from './insights'
 import { INSIGHT_THRESHOLDS } from './thresholds'
-import type { BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
+import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
 
 const money = (m: number) => `${m / 100} Kz`
 const ref = (id: string, state: PeriodMetrics['period']['state'] = 'fechado') => ({ id, label: id.toUpperCase(), state, starts_on: '2025-01-01', ends_on: '2025-01-07' })
@@ -136,5 +136,39 @@ describe('service insights (7–9)', () => {
     expect(kinds(sv({ counts: [[4, 3, 1]] }))).toEqual([])                  // base below 5
     expect(kinds(sv({ counts: [[10, 9, 8], [5, 4, 3]] }))).toEqual(['service_decline'])
     expect(serviceInsights(sv({ counts: [[10, 9, 8], [5, 4, 3]] }), money).insights[0]!.title).toBe('2 serviços caíram pelo segundo período consecutivo.')
+  })
+})
+
+describe('cost and stock insights (10–11)', () => {
+  const cmp = { available: true, reason: null, period: { id: 'prev', label: 'PREV', state: 'fechado' as const } }
+  const costs = (o: { up?: number | null; pctProd?: number; activity?: [number, number][] } = {}): BusinessCosts => ({
+    period: { id: 'cur', label: 'CUR', state: 'fechado', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    comparison: { previous: cmp, average_3: { available: false, reason: 'insufficient_history', window: 3 } },
+    summary: { production_minor: 100_000_00, expenses_minor: 0, purchases_salon_minor: 10_000_00, expenses_pct_of_production: 0,
+               purchases_pct_of_production: o.pctProd ?? 10, products_attention: 0 },
+    expenses: [],
+    purchases: { salon_minor: 10_000_00, previous_salon_minor: 8_000_00, change: { delta_minor: 2_000_00, percent: o.up === undefined ? 25 : o.up }, products: [] },
+    stock: { baixo: 0, comprar: 0, on_list: 0, urgent: 0, attention: [], window: { days: 30, from: '2024-12-09', to: '2025-01-07' },
+             activity: (o.activity ?? []).map(([p, m], i) => ({ product_id: `p${i}`, name: `P${i}`, purchases: p, marks: m, last_purchased_at: null })) },
+  })
+  const k = (c: BusinessCosts) => costInsights(c, money).insights.map((i) => i.kind)
+  it('purchases up at exactly 25% and 5% of production; not from a zero reference', () => {
+    expect(k(costs())).toEqual(['purchases_up'])
+    expect(k(costs({ up: 24.9 }))).toEqual([])
+    expect(k(costs({ pctProd: 4.9 }))).toEqual([])
+    expect(k(costs({ up: null }))).toEqual([])
+  })
+  it('product attention at 3 purchases or 3 marks; both in one sentence; below, nothing', () => {
+    expect(k(costs({ up: 0, activity: [[2, 2]] }))).toEqual([])
+    expect(costInsights(costs({ up: 0, activity: [[3, 0]] }), money).insights[0]!.title).toBe('P0 merece atenção: 3 compras nos últimos 30 dias.')
+    expect(costInsights(costs({ up: 0, activity: [[4, 3]] }), money).insights[0]!.title)
+      .toBe('P0 merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.')
+  })
+  it('on the overview, "purchases up" is dropped when "result down" already leads with purchases', () => {
+    const h = health({ prod: 20, result: -10 })
+    h.changes.previous!.purchases_salon_minor = { delta_minor: 9_000_00, percent: 900 }
+    const ks = buildInsights(h, money, INSIGHT_THRESHOLDS, undefined, undefined, { ...costs(), period: { ...costs().period, id: 'cur' } }).insights.map((i) => i.kind)
+    expect(ks).toContain('production_up_result_down')
+    expect(ks).not.toContain('purchases_up')
   })
 })

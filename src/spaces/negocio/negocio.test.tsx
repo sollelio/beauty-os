@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
-import type { BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
+import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
 
 const rpc = vi.fn()
 vi.mock('../../shared/supabase/client', () => ({ getSupabase: () => ({ rpc }) }))
@@ -11,6 +11,7 @@ import { PrivateGate, PrivateHome } from '../../app/PrivateGate'
 import { OverviewPage } from './OverviewPage'
 import { TeamPage } from './TeamPage'
 import { ServicesPage } from './ServicesPage'
+import { CostsPage } from './CostsPage'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const K = (kz: number) => kz * 100
@@ -67,16 +68,37 @@ const sv: BusinessServices = {
 }
 const quietSv: BusinessServices = { ...sv, summary: { ...sv.summary, top_share_pct: 20, top_two_share_pct: 40 },
   services: sv.services.map((x) => ({ ...x, before_previous: null })), comparison: { ...sv.comparison, before_previous: { available: false, reason: 'no_previous_period', period: null } } }
+const okCmp = { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' as const } }
+const cs: BusinessCosts = {
+  period: { id: 'e5', label: 'Semana 5', state: 'fechado', starts_on: '2025-02-03', ends_on: '2025-02-09', is_complete: true },
+  comparison: { previous: okCmp, average_3: { available: true, reason: null, window: 3 } },
+  summary: { production_minor: K(200000), expenses_minor: K(55000), purchases_salon_minor: K(23000), expenses_pct_of_production: 27.5,
+             purchases_pct_of_production: 11.5, products_attention: 2 },
+  expenses: [
+    { category_id: 'c2', label: 'Renda', current_minor: K(30000), share_of_expenses_pct: 54.5, share_of_production_pct: 15, previous_minor: K(30000),
+      average_3_minor: K(30000), reference_presence: 3, change_previous: { delta_minor: 0, percent: 0 }, change_average_3: { delta_minor: 0, percent: 0 } },
+    { category_id: 'c1', label: 'Materiais', current_minor: K(18000), share_of_expenses_pct: 32.7, share_of_production_pct: 9, previous_minor: K(11000),
+      average_3_minor: K(11000), reference_presence: 3, change_previous: { delta_minor: K(7000), percent: 63.6 }, change_average_3: { delta_minor: K(7000), percent: 63.6 } }],
+  purchases: { salon_minor: K(23000), previous_salon_minor: K(10000), change: { delta_minor: K(13000), percent: 130 },
+               products: [{ product_id: 'p1', name: 'Acetona', unit_word: 'unid.', purchases_count: 3, quantity: 3, salon_minor: K(18000), last_purchased_at: '2025-02-07T11:00:00+00:00' },
+                          { product_id: 'p3', name: 'Luvas', unit_word: 'unid.', purchases_count: 1, quantity: 2, salon_minor: K(5000), last_purchased_at: '2025-02-08T11:00:00+00:00' }] },
+  stock: { baixo: 1, comprar: 1, on_list: 1, urgent: 1,
+           attention: [{ product_id: 'p1', name: 'Acetona', state: 'comprar', on_list: true, urgent: true }, { product_id: 'p2', name: 'Algodão', state: 'baixo', on_list: false, urgent: false }],
+           window: { days: 30, from: '2025-01-11', to: '2025-02-09' },
+           activity: [{ product_id: 'p1', name: 'Acetona', purchases: 4, marks: 3, last_purchased_at: null }, { product_id: 'p3', name: 'Luvas', purchases: 1, marks: 1, last_purchased_at: null }] },
+}
+const quietCs: BusinessCosts = { ...cs, purchases: { ...cs.purchases, change: { delta_minor: 0, percent: 0 } }, stock: { ...cs.stock, activity: [] } }
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
 
-function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even, svs: BusinessServices = quietSv) {
+function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even, svs: BusinessServices = quietSv, cst: BusinessCosts = quietCs) {
   rpc.mockImplementation(async (fn: string) => {
     if (fn === 'private_context_status') return { data: st, error: null }
     if (fn === 'end_private_context') return { data: { ok: true }, error: null }
     if (fn === 'business_health') return 'error' in health ? { data: null, error: { message: health.error, code: 'P0001' } } : { data: health, error: null }
     if (fn === 'business_team') return 'error' in tm ? { data: null, error: { message: tm.error, code: 'P0001' } } : { data: tm, error: null }
     if (fn === 'business_services') return { data: svs, error: null }
+    if (fn === 'business_costs') return { data: cst, error: null }
     if (fn === 'business_periods') return { data: [period('e5', 'Semana 5'), period('e4', 'Semana 4')], error: null }
     return { data: [], error: null }
   })
@@ -92,6 +114,7 @@ function renderAt(path = '/privado/negocio') {
               <Route path="negocio" element={<OverviewPage />} />
               <Route path="negocio/equipa" element={<TeamPage />} />
               <Route path="negocio/servicos" element={<ServicesPage />} />
+              <Route path="negocio/custos" element={<CostsPage />} />
               <Route path="equipa" element={<p>Equipa</p>} />
               <Route path="situacao/:personId" element={<p>Situação</p>} />
             </Route>
@@ -335,5 +358,61 @@ describe('Negócio → Serviços', () => {
       before_previous: { available: false, reason: 'no_previous_period', period: null } }, services: quietSv.services.map((x) => ({ ...x, previous: null, change: null })) })
     renderAt('/privado/negocio/servicos?p=x')
     expect((await screen.findAllByTestId('services-comparison-unavailable'))[0]!.textContent).toBe('Ainda não há um período anterior para comparar.')
+  })
+})
+
+describe('Negócio → Custos & Stock', () => {
+  beforeEach(() => rpc.mockReset())
+  const cur5 = { ...cur, expenses_minor: K(55000), production_minor: K(200000) }
+  const withMaterials = { ...base, current: cur5,
+    expense_categories: [{ category_id: 'c1', label: 'Materiais', current_minor: K(18000), previous_minor: K(11000), average_3_minor: K(11000), reference_presence: 3 }] }
+
+  it('needs the private area; the overview leads to it', async () => {
+    serve(base, { active: false })
+    renderAt('/privado/negocio/custos')
+    expect(await screen.findByText('Entrada privada')).toBeTruthy()
+    serve(base, status({ view: 'self' }))
+    renderAt()
+    fireEvent.click(await screen.findByRole('button', { name: /Custos & Stock/ }))
+    expect(await screen.findByTestId('costs-summary')).toBeTruthy()
+  })
+
+  it('summary, categories with comparison, salon-funded purchases, stock as marked; no person or contribution', async () => {
+    serve(withMaterials, status({ view: 'self' }), even, quietSv, cs)
+    renderAt('/privado/negocio/custos')
+    const sum = (await screen.findByTestId('costs-summary')).textContent!
+    for (const x of ['55.000', '27,5% da produção', '23.000', '11,5% da produção', 'Produtos a precisar de atenção2']) expect(sum).toContain(x)
+    const cats = screen.getAllByTestId('category')
+    expect(cats.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Renda', 'Materiais'])
+    expect(cats[1]!.textContent).toContain('32,7%')
+    expect(screen.getAllByTestId('category-change')[1]!.textContent).toBe('Face a Semana 4: +63,6% · face à média de 3: +63,6%')
+    const pur = screen.getByTestId('purchases').textContent!
+    expect(pur).toContain('23.000 Kz suportados pelo salão · +130% face a Semana 4')
+    expect(pur).toContain('Acetona18.000 Kz · 3 compras')
+    expect(pur).toContain('Só conta a parte paga pelo salão.')
+    const st = screen.getByTestId('stock').textContent!
+    expect(st).toContain('Agora: 1 comprar · 1 baixo · 1 urgente · 1 na lista')
+    expect(st).toContain('Acetona · Comprar · urgente')
+    expect(screen.getByTestId('stock-activity').textContent).toContain('Acetona4 compras · 3 marcações')
+    expect(document.body.textContent).not.toMatch(/Profissional|contribui|unidades restantes|consumo de/i)
+  })
+
+  it('each insight: expense category high, purchases up, product attention, each explainable', async () => {
+    serve(withMaterials, status({ view: 'self' }), even, quietSv, cs)
+    renderAt('/privado/negocio/custos')
+    const cards = await screen.findAllByTestId('insight')
+    expect(cards.map((c) => c.dataset.kind)).toEqual(['expense_category_high', 'purchases_up', 'product_attention'])
+    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Materiais: 64% acima da média dos últimos 3 períodos.',
+      'As compras suportadas pelo salão aumentaram 130%.', 'Acetona merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.'])
+    fireEvent.click(within(cards[2]!).getByRole('button'))
+    expect(within(cards[2]!).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
+  })
+
+  it('insufficient history says so, without comparing', async () => {
+    serve(base, status({ view: 'self' }), even, quietSv, { ...quietCs, comparison: { previous: okCmp, average_3: { available: false, reason: 'insufficient_history', window: 3 } },
+      expenses: quietCs.expenses.map((x) => ({ ...x, average_3_minor: null, change_average_3: null })) })
+    renderAt('/privado/negocio/custos')
+    expect((await screen.findByTestId('costs-average-unavailable')).textContent).toBe('Ainda não há períodos fechados suficientes para uma média.')
+    expect(screen.getAllByTestId('category-change').map((c) => c.textContent).join()).not.toContain('média de 3')
   })
 })

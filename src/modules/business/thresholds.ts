@@ -1,4 +1,4 @@
-// Business Health V1 insight thresholds (product defaults, Business Health Slices 01–03). The only place they live:
+// Business Health V1 insight thresholds (product defaults, Business Health Slices 01–04). The only place they live:
 // screens never hard-code them. Comparison rules (which periods are comparable) live with the read model
 // (private.business_health_config).
 export const INSIGHT_THRESHOLDS = {
@@ -30,6 +30,12 @@ export const INSIGHT_THRESHOLDS = {
    *  least `serviceTrendPct` in all, from at least `serviceTrendMinBaseline` records in the first period. */
   serviceTrendPct: 20,
   serviceTrendMinBaseline: 5,
+  /** 10 · salon-funded purchases at least this much above the previous comparable period, and at least
+   *  `purchasesMinPctOfProduction` of the period's production. */
+  purchasesUpPct: 25,
+  purchasesMinPctOfProduction: 5,
+  /** 11 · a product bought, or marked baixo/comprar, at least this many times in the read model's window (30 days). */
+  productRepeatCount: 3,
   /** Drivers listed in an explanation. */
   maxDrivers: 3,
 } as const

@@ -27,6 +27,7 @@ import { CancelRecordFlow } from '../spaces/registos/CancelRecordFlow'
 import { OverviewPage } from '../spaces/negocio/OverviewPage'
 import { TeamPage } from '../spaces/negocio/TeamPage'
 import { ServicesPage } from '../spaces/negocio/ServicesPage'
+import { CostsPage } from '../spaces/negocio/CostsPage'
 
 export const router = createBrowserRouter([
   {
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
               { path: 'negocio', element: <OverviewPage /> },
               { path: 'negocio/equipa', element: <TeamPage /> },
               { path: 'negocio/servicos', element: <ServicesPage /> },
+              { path: 'negocio/custos', element: <CostsPage /> },
             ],
           },
         ],
