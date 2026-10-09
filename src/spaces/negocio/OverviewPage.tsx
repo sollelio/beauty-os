@@ -11,7 +11,8 @@ import { clearPrivateData, exitPrivateContext, usePrivateContext } from '../../m
 import { businessKeys, getBusinessHealth, getBusinessCosts, getBusinessServices, getBusinessTeam, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
 import { buildInsights, costDrivers, COMPARISON_UNAVAILABLE } from '../../modules/business/insights'
 import { INSIGHT_THRESHOLDS } from '../../modules/business/thresholds'
-import { HIDDEN, HIDDEN_WHY, InsightCard } from './InsightCard'
+import { InsightCard } from './InsightCard'
+import { HIDDEN, hiddenWhy } from './hidden'
 import { STATE_LABEL } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
 import { formatMoney } from '../../shared/money'
@@ -90,7 +91,7 @@ export function OverviewPage() {
           <div><dt>Livre</dt><dd className="num">{hidden('free_minor') ? HIDDEN : c.free_minor === null ? '—' : m(c.free_minor)}</dd></div>
           <div><dt>A pagar à equipa</dt><dd className="num">{hidden('unpaid_team_minor') ? HIDDEN : c.unpaid_team_minor === null ? 'Ainda não aprovado' : m(c.unpaid_team_minor)}</dd></div>
         </dl>
-        {c.private_fields.length > 0 && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="team-private">{HIDDEN_WHY}</span>}
+        {c.private_fields.length > 0 && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="team-private">{hiddenWhy(c.private_fields)}</span>}
         {pending && <div className="notice notice-neutral">Há {c.pending_rules_count === 1 ? '1 regra' : `${c.pending_rules_count} regras`} de remuneração por definir: os custos, o resultado e o livre ficam por calcular até lá.</div>}
         {c.source === 'close_statement' && <span className="muted" style={{ fontSize: '0.875rem' }}>Valores do fecho deste período.</span>}
       </section>
@@ -99,7 +100,7 @@ export function OverviewPage() {
         <h3 className="label">Retenção operacional</h3>
         <strong className="num" style={{ fontSize: '1.5rem' }}>{hidden('retention_pct') ? HIDDEN : c.retention_pct === null ? '—' : pctText(c.retention_pct).replace('+', '')}</strong>
         <span className="muted" style={{ fontSize: '0.875rem' }}>
-          {hidden('retention_pct') ? HIDDEN_WHY : c.retention_pct === null ? (c.production_minor === 0 ? 'Sem produção neste período.' : 'Por calcular enquanto houver regras por definir.')
+          {hidden('retention_pct') ? hiddenWhy(c.private_fields) : c.retention_pct === null ? (c.production_minor === 0 ? 'Sem produção neste período.' : 'Por calcular enquanto houver regras por definir.')
             : 'da produção ficou como resultado operacional.'}
         </span>
       </section>

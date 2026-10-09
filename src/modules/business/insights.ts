@@ -303,18 +303,19 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
 
   // 10 · salon-funded purchases up
   const ch = c.purchases.change
-  if (!c.comparison.previous.available || !ch) skipped.push({ kind: 'purchases_up', reason: c.comparison.previous.reason ?? 'no_previous_period' })
+  if (c.purchases.private || c.purchases.previous_private) skipped.push({ kind: 'purchases_up', reason: 'figure_hidden' })   // 07 D9 · B11
+  else if (!c.comparison.previous.available || !ch) skipped.push({ kind: 'purchases_up', reason: c.comparison.previous.reason ?? 'no_previous_period' })
   else if (ch.percent !== null && ch.percent >= t.purchasesUpPct && c.summary.purchases_pct_of_production !== null
            && c.summary.purchases_pct_of_production >= t.purchasesMinPctOfProduction) {
     const top = c.purchases.products.slice(0, t.maxDrivers)
     out.push({ id: `purchases_up:${p.id}`, kind: 'purchases_up', severity: 'ATTENTION', periods: at,
       title: `As compras suportadas pelo salão aumentaram ${pct(ch.percent)}.`,
       detail: {
-        current: `${money(c.purchases.salon_minor)} (${String(c.summary.purchases_pct_of_production).replace('.', ',')}% da produção)`,
+        current: `${money(c.purchases.salon_minor!)} (${String(c.summary.purchases_pct_of_production).replace('.', ',')}% da produção)`,
         reference: `${money(c.purchases.previous_salon_minor ?? 0)} em ${prevLabel}`,
         change: `+${money(ch.delta_minor ?? 0)} (+${pct(ch.percent)})`,
         basis: `${p.label} comparado com ${prevLabel} (fechado). Só a parte paga pelo salão.`,
-        drivers: top.map((x) => ({ label: x.name, delta_minor: x.salon_minor, text: `${money(x.salon_minor)} · ${plural(x.purchases_count, 'compra', 'compras')}` })),
+        drivers: top.map((x) => ({ label: x.name, delta_minor: x.salon_minor ?? 0, text: `${money(x.salon_minor ?? 0)} · ${plural(x.purchases_count, 'compra', 'compras')}` })),
         confidence: 'Produtos com mais valor comprado neste período; não indica que tenham sido a causa.',
       } })
   }

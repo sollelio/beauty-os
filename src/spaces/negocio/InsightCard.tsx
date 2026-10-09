@@ -3,8 +3,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { Insight } from '../../modules/business/insights'
 
-export const HIDDEN = 'Não mostrado'
-export const HIDDEN_WHY = 'Não mostrado: neste período, este valor permitiria calcular quanto uma pessoa da equipa ganha ou tem a receber.'
 const SEVERITY_LABEL = { ACTION_REQUIRED: 'Ação necessária', ATTENTION: 'Atenção', INFORMATION: 'Informação' } as const
 
 export function InsightCard({ insight: i, finance }: { insight: Insight; finance: boolean }) {

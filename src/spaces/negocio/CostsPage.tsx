@@ -14,6 +14,7 @@ import { toAppError } from '../../shared/errors'
 import { formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
 import { InsightCard } from './InsightCard'
+import { HIDDEN, HIDDEN_WHY_CONTRIBUTION } from './hidden'
 
 const pctText = (n: number) => `${String(n).replace('.', ',')}%`
 const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${String(Math.abs(n)).replace('.', ',')}%`
@@ -85,7 +86,7 @@ export function CostsPage() {
         <h3 id="custos-resumo" className="label">Neste período</h3>
         <dl className="kv-card" data-testid="costs-summary">
           <div><dt>Despesas</dt><dd className="num">{m(s.expenses_minor)}{s.expenses_pct_of_production !== null && <span className="muted"> · {pctText(s.expenses_pct_of_production)} da produção</span>}</dd></div>
-          <div><dt>Compras (parte do salão)</dt><dd className="num">{m(s.purchases_salon_minor)}{s.purchases_pct_of_production !== null && <span className="muted"> · {pctText(s.purchases_pct_of_production)} da produção</span>}</dd></div>
+          <div><dt>Compras (parte do salão)</dt><dd className="num">{s.purchases_salon_minor === null ? HIDDEN : m(s.purchases_salon_minor)}{s.purchases_pct_of_production !== null && <span className="muted"> · {pctText(s.purchases_pct_of_production)} da produção</span>}</dd></div>
           <div><dt>Produtos a precisar de atenção</dt><dd className="num">{s.products_attention}</dd></div>
         </dl>
       </section>
@@ -109,12 +110,15 @@ export function CostsPage() {
 
       <section className="stack" aria-labelledby="compras" data-testid="purchases">
         <h3 id="compras" className="label">Compras</h3>
-        <span className="num">{m(c.purchases.salon_minor)} suportados pelo salão{c.purchases.change && <span className="muted"> · {changeText(c.purchases.change, m)} face a {prev.period?.label}</span>}</span>
+        {c.purchases.salon_minor === null
+          ? <span className="num" data-testid="purchases-private">Suportado pelo salão: {HIDDEN}<span className="muted" style={{ display: 'block', fontSize: '0.875rem' }}>{HIDDEN_WHY_CONTRIBUTION}</span></span>
+          : <span className="num">{m(c.purchases.salon_minor)} suportados pelo salão{c.purchases.change && c.purchases.change.delta_minor !== null && <span className="muted"> · {changeText(c.purchases.change, m)} face a {prev.period?.label}</span>}
+              {c.purchases.previous_private && <span className="muted"> · sem comparação: o período anterior não é mostrado</span>}</span>}
         {c.purchases.products.length === 0 ? <p className="muted" style={{ margin: 0 }}>Sem compras registadas neste período.</p> : (
           <dl className="kv-card">
             {c.purchases.products.slice(0, 5).map((x) => (
               <div key={x.product_id}><dt>{x.name}</dt>
-                <dd className="num">{m(x.salon_minor)}<span className="muted"> · {x.purchases_count} {x.purchases_count === 1 ? 'compra' : 'compras'} · última {day(x.last_purchased_at)}</span></dd></div>
+                <dd className="num">{x.salon_minor === null ? HIDDEN : m(x.salon_minor)}<span className="muted"> · {x.purchases_count} {x.purchases_count === 1 ? 'compra' : 'compras'} · última {day(x.last_purchased_at)}</span></dd></div>
             ))}
           </dl>
         )}

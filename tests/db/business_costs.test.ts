@@ -50,8 +50,8 @@ describe('access', () => {
 describe('costs (business-only viewer)', () => {
   it('summary and expense categories: totals, shares of expenses and of production; the cancelled expense excluded', async () => {
     const c = await costs('Semana K4')
-    expect(c.summary).toEqual({ production_minor: K(200000), expenses_minor: K(55000), purchases_salon_minor: K(23000),
-      expenses_pct_of_production: 27.5, purchases_pct_of_production: 11.5, products_attention: 2 })
+    expect(c.summary).toEqual({ production_minor: K(200000), expenses_minor: K(55000), purchases_salon_minor: null,   // one contributor: hidden
+      expenses_pct_of_production: 27.5, purchases_pct_of_production: null, purchases_private: true, products_attention: 2 })
     expect(c.expenses.map((x) => x.label)).toEqual(['Renda', 'Materiais', 'Luz'])
     expect(cat(c, 'Materiais')).toMatchObject({ current_minor: K(18000), share_of_expenses_pct: 32.7, share_of_production_pct: 9 })   // not 68.000
     expect(cat(c, 'Renda')).toMatchObject({ share_of_expenses_pct: 54.5, share_of_production_pct: 15 })
@@ -75,17 +75,35 @@ describe('costs (business-only viewer)', () => {
 
   it('zero production and zero expenses: no shares, no percentages', async () => {
     const c = await costs('Semana K5')
-    expect(c.summary).toMatchObject({ production_minor: 0, expenses_minor: 0, purchases_salon_minor: 0, expenses_pct_of_production: null, purchases_pct_of_production: null })
+    expect(c.summary).toMatchObject({ production_minor: 0, expenses_minor: 0, purchases_salon_minor: 0, expenses_pct_of_production: null, purchases_pct_of_production: null,
+      purchases_private: false })
     expect(c.expenses.every((x) => x.current_minor === 0 && x.share_of_expenses_pct === null && x.share_of_production_pct === null)).toBe(true)
     expect(c.purchases.products).toEqual([])
   })
 
-  it('purchases: only the salon-funded part, per product; the cancelled purchase excluded', async () => {
-    const c = await costs('Semana K4')
-    expect(c.purchases).toMatchObject({ salon_minor: K(23000), previous_salon_minor: K(10000), change: { delta_minor: K(13000), percent: 130 } })
-    expect(c.purchases.products.map((x) => [x.name, x.purchases_count, x.quantity, x.salon_minor])).toEqual([
-      ['Acetona', 3, 3, K(18000)], ['Luvas', 1, 2, K(5000)]])                        // Luvas 8.000, of which 3.000 paid by a person
-    expect(c.purchases.products[0]!.last_purchased_at.slice(0, 10)).toBe('2025-07-30')
+  it('purchase contributions (B11): one other contributor hides the salon-funded figures; two keep the aggregate', async () => {
+    const k4 = await costs('Semana K4')                                   // A alone contributed
+    expect(k4.purchases).toMatchObject({ salon_minor: null, private: true, change: { delta_minor: null, percent: null } })
+    expect(k4.purchases.products.map((x) => [x.name, x.purchases_count, x.quantity, x.salon_minor])).toEqual([['Acetona', 3, 3, null], ['Luvas', 1, 2, null]])
+    const h4 = await health('Semana K4')
+    expect(h4.current).toMatchObject({ purchases_salon_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null })
+    expect(h4.current.private_fields).toEqual(['purchases_salon_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor'])
+    expect(h4.current.team_earnings_minor).toBe(K(80000))                  // two earners: still shown
+    const k6 = await costs('Semana K6')                                   // A and B contributed
+    expect(k6.purchases).toMatchObject({ salon_minor: K(9000), private: false })
+    expect(k6.summary.purchases_pct_of_production).toBe(9)
+    expect((await health('Semana K6')).current.private_fields).toEqual([])
+    const k7 = await costs('Semana K7')                                   // the viewer and A: A's part would be known
+    expect(k7.purchases).toMatchObject({ salon_minor: null, private: true })
+    expect(k7.purchases.products[0]!.salon_minor).toBeNull()
+  })
+
+  it('a hidden figure enters no comparison, average or trend', async () => {
+    const k5 = await costs('Semana K5')
+    expect(k5.purchases).toMatchObject({ salon_minor: 0, private: false, previous_private: true, previous_salon_minor: null, change: { delta_minor: null, percent: null } })
+    const h5 = await health('Semana K5')
+    expect(h5.changes.previous!.purchases_salon_minor).toEqual({ delta_minor: null, percent: null })
+    expect(h5.trend.find((t) => t.label === 'Semana K4')).toMatchObject({ operating_result_minor: null, result_private: true })
   })
 
   it('stock: the human-set state now, and purchases and marks in the 30 days up to the period\'s end', async () => {
@@ -100,7 +118,7 @@ describe('costs (business-only viewer)', () => {
     for (const label of ['Semana K1', 'Semana K2', 'Semana K3', 'Semana K4', 'Semana K5']) {
       const c = await costs(label)
       expect(Object.keys(c).sort(), label).toEqual(['comparison', 'expenses', 'period', 'purchases', 'stock', 'summary'])
-      expect(Object.keys(c.purchases).sort(), label).toEqual(['change', 'previous_salon_minor', 'products', 'salon_minor'])
+      expect(Object.keys(c.purchases).sort(), label).toEqual(['change', 'previous_private', 'previous_salon_minor', 'private', 'products', 'salon_minor'])
       expect(JSON.stringify(c).match(/.{20}(Profissional|66a[1-7]|person|contribut|display_name|total_minor|gross|earned|advance).{10}/)?.[0], label).toBeUndefined()
     }
     const seen = numbers(await costs('Semana K4'))
@@ -119,12 +137,9 @@ describe('insights', () => {
     expect(buildInsights(await health('Semana K3'), money).skipped).toContainEqual({ kind: 'expense_category_high', reason: 'insufficient_history' })
   })
 
-  it('salon purchases up ≥ 25% and ≥ 5% of production, with the products that weigh most', async () => {
-    const r = costInsights(await costs('Semana K4'), money)
-    const up = r.insights.find((i) => i.kind === 'purchases_up')!
-    expect(up).toMatchObject({ severity: 'ATTENTION', title: 'As compras suportadas pelo salão aumentaram 130%.' })
-    expect(up.detail.drivers.map((d) => d.label)).toEqual(['Acetona', 'Luvas'])
-    expect(up.detail.confidence).toContain('não indica que tenham sido a causa')
+  it('salon purchases up: not built from a hidden figure', async () => {
+    expect(costInsights(await costs('Semana K4'), money).skipped).toContainEqual({ kind: 'purchases_up', reason: 'figure_hidden' })
+    expect(costInsights(await costs('Semana K5'), money).skipped).toContainEqual({ kind: 'purchases_up', reason: 'figure_hidden' })   // previous hidden
     expect(costInsights(await costs('Semana K1'), money).skipped).toContainEqual({ kind: 'purchases_up', reason: 'no_previous_period' })
     expect(costInsights(await costs('Semana K3'), money).insights.map((i) => i.kind)).not.toContain('purchases_up')   // from 0: no percentage
   })
@@ -137,18 +152,42 @@ describe('insights', () => {
     expect(costInsights(await costs('Semana K3'), money).insights.map((i) => i.kind)).not.toContain('product_attention')
   })
 
-  it('they join the overview insights, at most 5', async () => {
-    const k = buildInsights(await health('Semana K4'), money, undefined, undefined, undefined, await costs('Semana K4')).insights.map((i) => i.kind)
-    expect(k).toEqual(expect.arrayContaining(['expense_category_high', 'purchases_up', 'product_attention']))
+  it('they join the overview insights, at most 5; nothing names a hidden amount', async () => {
+    const r = buildInsights(await health('Semana K4'), money, undefined, undefined, undefined, await costs('Semana K4'))
+    const k = r.insights.map((i) => i.kind)
+    expect(k).toEqual(expect.arrayContaining(['expense_category_high', 'product_attention']))
+    expect(k).not.toContain('purchases_up')
+    expect(JSON.stringify(r.insights)).not.toMatch(/23000 Kz|Acetona 18000|Luvas 5000/)
     expect(k.length).toBeLessThanOrEqual(5)
   })
 })
 
 describe('team.finance.read viewer', () => {
-  it('gets the same business-level response: no contributor detail here either', async () => {
-    await as(MANAGER)
+  beforeAll(async () => { await as(MANAGER) })
+
+  it('sees the salon-funded figures, per product, and the purchases-up insight; still no contributor detail', async () => {
     const c = await costs('Semana K4')
-    expect(c.purchases.salon_minor).toBe(K(23000))
+    expect(c.purchases).toMatchObject({ salon_minor: K(23000), private: false, previous_salon_minor: K(10000), change: { delta_minor: K(13000), percent: 130 } })
+    expect(c.purchases.products.map((x) => [x.name, x.purchases_count, x.quantity, x.salon_minor])).toEqual([
+      ['Acetona', 3, 3, K(18000)], ['Luvas', 1, 2, K(5000)]])                        // Luvas 8.000, of which 3.000 paid by a person; the cancelled Acetona excluded
+    expect(c.purchases.products[0]!.last_purchased_at.slice(0, 10)).toBe('2025-07-30')
+    expect(c.summary.purchases_pct_of_production).toBe(11.5)
+    const up = costInsights(c, money).insights.find((i) => i.kind === 'purchases_up')!
+    expect(up).toMatchObject({ severity: 'ATTENTION', title: 'As compras suportadas pelo salão aumentaram 130%.' })
+    expect(up.detail.drivers.map((d) => d.label)).toEqual(['Acetona', 'Luvas'])
+    expect(up.detail.confidence).toContain('não indica que tenham sido a causa')
+    expect((await costs('Semana K7')).purchases.salon_minor).toBe(K(5000))
     expect(JSON.stringify(c)).not.toMatch(/person|contribut|Profissional/)
+  })
+})
+
+describe('Stock Lite: a cancelled purchase is not a purchase', () => {
+  it('last purchase is the latest active one; history leaves the cancelled out; line costs stay on the shared screen', async () => {
+    const acet = ((await dev.rpc('stock_overview')).data as { name: string; last_purchase: { occurred_at: string; line_cost_minor: number } }[]).find((p) => p.name === 'Acetona')!
+    expect(acet.last_purchase.occurred_at.slice(0, 10)).toBe('2025-07-30')        // the cancelled one was 2025-07-31
+    expect(acet.last_purchase.line_cost_minor).toBe(K(6000))
+    const hist = (await dev.rpc('product_purchase_history', { p_product_id: id('e1'), p_limit: 10 })).data as { purchases: { occurred_at: string; line_cost_minor: number }[] }
+    expect(hist.purchases.map((x) => x.occurred_at.slice(0, 10))).toEqual(['2025-07-30', '2025-07-29', '2025-07-28', '2025-07-23'])
+    expect(hist.purchases.every((x) => x.line_cost_minor === K(6000))).toBe(true)
   })
 })

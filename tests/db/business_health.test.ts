@@ -220,7 +220,7 @@ describe('individual finance is not inferable (07 D9 · B11): hidden only where 
     const protectedValues = [team, c.operating_costs_minor, c.operating_result_minor, c.free_minor, c.unpaid_team_minor]
     const seen = numbers(b6)
     for (const v of protectedValues) expect(seen, String(v)).not.toContain(v)
-    for (const v of seen) expect(c.production_minor - c.expenses_minor - c.purchases_salon_minor - v, String(v)).not.toBe(team)
+    for (const v of seen) expect(c.production_minor - c.expenses_minor - c.purchases_salon_minor! - v, String(v)).not.toBe(team)
     expect(JSON.stringify(b6)).not.toMatch(/_earners|_owed/)
     expect(b6.open_periods.find((p) => p.label === 'Semana E6')).toMatchObject({ unpaid_team_minor: null, unpaid_private: true })
   })

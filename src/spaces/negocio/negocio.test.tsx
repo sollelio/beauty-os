@@ -73,13 +73,13 @@ const cs: BusinessCosts = {
   period: { id: 'e5', label: 'Semana 5', state: 'fechado', starts_on: '2025-02-03', ends_on: '2025-02-09', is_complete: true },
   comparison: { previous: okCmp, average_3: { available: true, reason: null, window: 3 } },
   summary: { production_minor: K(200000), expenses_minor: K(55000), purchases_salon_minor: K(23000), expenses_pct_of_production: 27.5,
-             purchases_pct_of_production: 11.5, products_attention: 2 },
+             purchases_pct_of_production: 11.5, purchases_private: false, products_attention: 2 },
   expenses: [
     { category_id: 'c2', label: 'Renda', current_minor: K(30000), share_of_expenses_pct: 54.5, share_of_production_pct: 15, previous_minor: K(30000),
       average_3_minor: K(30000), reference_presence: 3, change_previous: { delta_minor: 0, percent: 0 }, change_average_3: { delta_minor: 0, percent: 0 } },
     { category_id: 'c1', label: 'Materiais', current_minor: K(18000), share_of_expenses_pct: 32.7, share_of_production_pct: 9, previous_minor: K(11000),
       average_3_minor: K(11000), reference_presence: 3, change_previous: { delta_minor: K(7000), percent: 63.6 }, change_average_3: { delta_minor: K(7000), percent: 63.6 } }],
-  purchases: { salon_minor: K(23000), previous_salon_minor: K(10000), change: { delta_minor: K(13000), percent: 130 },
+  purchases: { salon_minor: K(23000), private: false, previous_private: false, previous_salon_minor: K(10000), change: { delta_minor: K(13000), percent: 130 },
                products: [{ product_id: 'p1', name: 'Acetona', unit_word: 'unid.', purchases_count: 3, quantity: 3, salon_minor: K(18000), last_purchased_at: '2025-02-07T11:00:00+00:00' },
                           { product_id: 'p3', name: 'Luvas', unit_word: 'unid.', purchases_count: 1, quantity: 2, salon_minor: K(5000), last_purchased_at: '2025-02-08T11:00:00+00:00' }] },
   stock: { baixo: 1, comprar: 1, on_list: 1, urgent: 1,
@@ -406,6 +406,22 @@ describe('Negócio → Custos & Stock', () => {
       'As compras suportadas pelo salão aumentaram 130%.', 'Acetona merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.'])
     fireEvent.click(within(cards[2]!).getByRole('button'))
     expect(within(cards[2]!).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
+  })
+
+  it('a salon-funded figure that would give one person\'s contribution is "Não mostrado", with the reason; no purchases-up insight', async () => {
+    const hiddenCs: BusinessCosts = { ...cs, summary: { ...cs.summary, purchases_salon_minor: null, purchases_pct_of_production: null, purchases_private: true },
+      purchases: { ...cs.purchases, salon_minor: null, private: true, change: { delta_minor: null, percent: null }, products: cs.purchases.products.map((x) => ({ ...x, salon_minor: null })) } }
+    serve(base, status({ view: 'self' }), even, quietSv, hiddenCs)
+    renderAt('/privado/negocio/custos')
+    expect((await screen.findByTestId('costs-summary')).textContent).toContain('Compras (parte do salão)Não mostrado')
+    expect(screen.getByTestId('purchases-private').textContent).toContain('quanto uma pessoa contribuiu do seu dinheiro para as compras')
+    expect(screen.getByTestId('purchases').textContent).toContain('AcetonaNão mostrado · 3 compras')
+    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).not.toContain('purchases_up')
+    rpc.mockReset()
+    serve({ ...base, current: { ...cur, purchases_salon_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null,
+      private_fields: ['purchases_salon_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor'] } }, status({ view: 'self' }))
+    renderAt('/privado/negocio?p=x')
+    expect((await screen.findByTestId('team-private')).textContent).toBe('Não mostrado: neste período, este valor permitiria calcular quanto uma pessoa contribuiu do seu dinheiro para as compras.')
   })
 
   it('insufficient history says so, without comparing', async () => {

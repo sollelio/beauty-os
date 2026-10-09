@@ -137,5 +137,43 @@ begin
   end if;
 end $$;
 
--- K5: ended, open, nothing recorded (zero production and zero expenses).
+-- K5: ended, open, nothing recorded (zero production and zero expenses). Its previous period is K4.
 insert into public.periods (organization_id, label, starts_on, ends_on) values ('00000000-0000-4000-8000-0000000000f3', 'Semana K5', '2025-08-04', '2025-08-10') on conflict do nothing;
+
+-- Contributions (open periods, production 100.000 each):
+--   K6  Luvas 8.000 (A 2.000 + B 1.000) + Algodão 4.000 → two contributors: the salon-funded 9.000 can be shown
+--   K7  Luvas 8.000 (the business-only viewer 2.000 + A 1.000)  → for that viewer only A remains: hidden
+do $$
+declare
+  v_org uuid := '00000000-0000-4000-8000-0000000000f3'; v_mgr uuid := '00000000-0000-4000-8000-0000000066a5';
+  v_dev uuid := '00000000-0000-4000-8000-00000006aede'; v_cash uuid := '00000000-0000-4000-8000-0000000066a0';
+  v_a uuid := '00000000-0000-4000-8000-0000000066a1'; v_b uuid := '00000000-0000-4000-8000-0000000066a2'; v_viewer uuid := '00000000-0000-4000-8000-0000000066a6';
+  v_n int; i int; v_start date; v_pid uuid; v_at timestamptz; v_rec uuid; v_pur uuid;
+begin
+  for v_n in 6..7 loop
+    v_start := date '2025-07-07' + (v_n - 1) * 7;
+    insert into public.periods (organization_id, label, starts_on, ends_on) values (v_org, 'Semana K' || v_n, v_start, v_start + 6)
+    on conflict do nothing returning id into v_pid;
+    if v_pid is null then continue; end if;
+    v_at := (v_start::text || ' 12:00+01')::timestamptz;
+    for i in 1..10 loop
+      insert into public.service_records (organization_id, person_id, service_id, value_minor, payment_kind, occurred_at, recorded_at, device_id, command_id)
+      values (v_org, case when i <= 5 then v_a else v_b end, '00000000-0000-4000-8000-0000000066b1', 1000000, 'single', v_at, v_at, v_dev, gen_random_uuid()) returning id into v_rec;
+      insert into public.service_record_payments values (v_rec, v_org, v_cash, 1000000);
+    end loop;
+    insert into public.purchases (organization_id, total_minor, origin_id, occurred_at, recorded_at, device_id, confirmed_by_person_id, command_id)
+    values (v_org, 800000, '00000000-0000-4000-8000-0000000066d1', v_at, v_at, v_dev, v_mgr, gen_random_uuid()) returning id into v_pur;
+    insert into public.purchase_lines (purchase_id, organization_id, product_id, quantity, unit_word, line_cost_minor, position)
+    values (v_pur, v_org, '00000000-0000-4000-8000-0000000066e3', 2, 'unid.', 800000, 1);
+    insert into public.purchase_contributions (purchase_id, organization_id, contributor_kind, person_id, amount_minor)
+    values (v_pur, v_org, 'salon', null, 500000), (v_pur, v_org, 'person', case when v_n = 6 then v_a else v_viewer end, 200000),
+           (v_pur, v_org, 'person', case when v_n = 6 then v_b else v_a end, 100000);
+    if v_n = 6 then
+      insert into public.purchases (organization_id, total_minor, origin_id, occurred_at, recorded_at, device_id, confirmed_by_person_id, command_id)
+      values (v_org, 400000, '00000000-0000-4000-8000-0000000066d1', v_at + interval '1 day', v_at + interval '1 day', v_dev, v_mgr, gen_random_uuid()) returning id into v_pur;
+      insert into public.purchase_lines (purchase_id, organization_id, product_id, quantity, unit_word, line_cost_minor, position)
+      values (v_pur, v_org, '00000000-0000-4000-8000-0000000066e2', 1, 'unid.', 400000, 1);
+      insert into public.purchase_contributions (purchase_id, organization_id, contributor_kind, person_id, amount_minor) values (v_pur, v_org, 'salon', null, 400000);
+    end if;
+  end loop;
+end $$;

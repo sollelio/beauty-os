@@ -145,9 +145,9 @@ describe('cost and stock insights (10–11)', () => {
     period: { id: 'cur', label: 'CUR', state: 'fechado', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
     comparison: { previous: cmp, average_3: { available: false, reason: 'insufficient_history', window: 3 } },
     summary: { production_minor: 100_000_00, expenses_minor: 0, purchases_salon_minor: 10_000_00, expenses_pct_of_production: 0,
-               purchases_pct_of_production: o.pctProd ?? 10, products_attention: 0 },
+               purchases_pct_of_production: o.pctProd ?? 10, purchases_private: false, products_attention: 0 },
     expenses: [],
-    purchases: { salon_minor: 10_000_00, previous_salon_minor: 8_000_00, change: { delta_minor: 2_000_00, percent: o.up === undefined ? 25 : o.up }, products: [] },
+    purchases: { salon_minor: 10_000_00, private: false, previous_private: false, previous_salon_minor: 8_000_00, change: { delta_minor: 2_000_00, percent: o.up === undefined ? 25 : o.up }, products: [] },
     stock: { baixo: 0, comprar: 0, on_list: 0, urgent: 0, attention: [], window: { days: 30, from: '2024-12-09', to: '2025-01-07' },
              activity: (o.activity ?? []).map(([p, m], i) => ({ product_id: `p${i}`, name: `P${i}`, purchases: p, marks: m, last_purchased_at: null })) },
   })
@@ -157,6 +157,9 @@ describe('cost and stock insights (10–11)', () => {
     expect(k(costs({ up: 24.9 }))).toEqual([])
     expect(k(costs({ pctProd: 4.9 }))).toEqual([])
     expect(k(costs({ up: null }))).toEqual([])
+    const hidden = costs({ up: 900 })
+    hidden.purchases = { ...hidden.purchases, salon_minor: null, private: true }
+    expect(costInsights(hidden, money)).toMatchObject({ insights: [], skipped: [{ kind: 'purchases_up', reason: 'figure_hidden' }] })
   })
   it('product attention at 3 purchases or 3 marks; both in one sentence; below, nothing', () => {
     expect(k(costs({ up: 0, activity: [[2, 2]] }))).toEqual([])

@@ -6,12 +6,13 @@ export type PeriodMetrics = {
   period: PeriodRef & { days: number; is_complete: boolean }
   source: 'live' | 'close_statement'
   production_minor: number; services_count: number
-  team_earnings_minor: number | null; expenses_minor: number; purchases_salon_minor: number
+  team_earnings_minor: number | null; expenses_minor: number; purchases_salon_minor: number | null
   operating_costs_minor: number | null; operating_result_minor: number | null; retention_pct: number | null
   free_minor: number | null; unpaid_team_minor: number | null; approved: boolean; pending_rules_count: number
   private_fields: PrivateField[]   // hidden: they would reveal one person's finance (07 D9 · B11); null above
 }
 export type PrivateField = 'team_earnings_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'retention_pct' | 'free_minor' | 'unpaid_team_minor'
+  | 'purchases_salon_minor'
 export type MetricKey = 'production_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
   | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor' | 'services_count'
 export type Change = { delta_minor: number | null; percent: number | null }
@@ -42,15 +43,17 @@ export type CostCategory = {
   previous_minor: number | null; average_3_minor: number | null; reference_presence: number | null
   change_previous: Change | null; change_average_3: Change | null
 }
-export type ProductPurchases = { product_id: string; name: string; unit_word: string; purchases_count: number; quantity: number; salon_minor: number; last_purchased_at: string }
+export type ProductPurchases = { product_id: string; name: string; unit_word: string; purchases_count: number; quantity: number
+  salon_minor: number | null; last_purchased_at: string }   // salon_minor null when hidden (B11)
 export type ProductActivity = { product_id: string; name: string; purchases: number; marks: number; last_purchased_at: string | null }
 export type BusinessCosts = {
   period: PeriodRef & { is_complete: boolean }
   comparison: BusinessHealth['meta']['comparison']
-  summary: { production_minor: number; expenses_minor: number; purchases_salon_minor: number; expenses_pct_of_production: number | null
-             purchases_pct_of_production: number | null; products_attention: number }
+  summary: { production_minor: number; expenses_minor: number; purchases_salon_minor: number | null; expenses_pct_of_production: number | null
+             purchases_pct_of_production: number | null; purchases_private: boolean; products_attention: number }
   expenses: CostCategory[]
-  purchases: { salon_minor: number; previous_salon_minor: number | null; change: Change | null; products: ProductPurchases[] }
+  // private / previous_private: the salon-funded figure of this / the previous period is hidden (it would give one person's contribution, B11)
+  purchases: { salon_minor: number | null; private: boolean; previous_private: boolean; previous_salon_minor: number | null; change: Change | null; products: ProductPurchases[] }
   stock: { baixo: number; comprar: number; on_list: number; urgent: number
            attention: { product_id: string; name: string; state: 'ok' | 'baixo' | 'comprar'; on_list: boolean; urgent: boolean }[]
            window: { days: number; from: string; to: string }; activity: ProductActivity[] }
