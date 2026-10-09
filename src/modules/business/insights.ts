@@ -187,12 +187,11 @@ export const COMPARISON_UNAVAILABLE: Record<ComparisonReason, string> = {
   insufficient_history: 'Ainda não há períodos fechados suficientes para uma média.',
 }
 
-/** Shares of the period's production taken by the largest and the two largest contributions (null without production). */
+/** Shares of the period's production taken by the largest and the two largest contributions, in whole percent, as the
+ *  read model gives them (unnamed, for every viewer); null without production. */
 export function concentration(team: BusinessTeam): { top: number; topTwo: number } | null {
-  const total = team.summary.production_minor
-  if (total <= 0) return null
-  const p = team.people.map((x) => x.production_minor).sort((a, b) => b - a)
-  return { top: ((p[0] ?? 0) * 100) / total, topTwo: (((p[0] ?? 0) + (p[1] ?? 0)) * 100) / total }
+  const { top_share_pct: top, top_two_share_pct: topTwo } = team.summary
+  return top === null || topTwo === null ? null : { top, topTwo }
 }
 
 /** Insight 6 · how much of the production rests on one or two professionals. A business-structure observation, not an

@@ -42,12 +42,14 @@ const member = (n: number, prod: number, svc: number, share: number, prev: numbe
      share_pct: share, previous_production_minor: prev === null ? null : K(prev), change })
 const team: BusinessTeam = {
   period: { id: 'e5', label: 'Semana 5', state: 'fechado', starts_on: '2025-02-03', ends_on: '2025-02-09', is_complete: true },
-  summary: { production_minor: K(200000), services_count: 21, average_ticket_minor: 952381, active_count: 4 },
+  summary: { production_minor: K(200000), services_count: 21, average_ticket_minor: 952381, active_count: 4, top_share_pct: 35, top_two_share_pct: 68 },
   comparison: { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' } },
   people: [member(1, 70000, 7, 35, 100000, { delta_minor: -K(30000), percent: -30 }), member(2, 66000, 6, 33, 50000, { delta_minor: K(16000), percent: 32 }),
            member(3, 32000, 4, 16, 50000, { delta_minor: -K(18000), percent: -36 }), member(4, 32000, 4, 16, 0, { delta_minor: K(32000), percent: null })],
 }
-const even: BusinessTeam = { ...team, people: team.people.map((x) => ({ ...x, production_minor: K(50000), share_pct: 25 })) }   // no concentration
+const even: BusinessTeam = { ...team, summary: { ...team.summary, top_share_pct: 25, top_two_share_pct: 50 },
+  people: team.people!.map((x) => ({ ...x, production_minor: K(50000), share_pct: 25 })) }   // no concentration
+const aggregate: BusinessTeam = { ...team, people: null }   // what a business-only viewer receives
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
 
@@ -129,7 +131,7 @@ describe('Negócio · Visão geral', () => {
       changes: { previous: { ...base.changes.previous!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none },
                  average_3: { ...base.changes.average_3!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none } },
       open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }],
-      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }), team)
+      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }), aggregate)
     renderAt()
     const o = await screen.findByTestId('overview')
     expect(within(o).getAllByRole('definition').map((d) => d.textContent).slice(1)).toEqual(['Não mostrado', 'Não mostrado', 'Não mostrado'])
@@ -208,8 +210,20 @@ describe('Negócio → Equipa', () => {
     expect(await screen.findByTestId('team-summary')).toBeTruthy()
   })
 
-  it('summary, professionals with their change, neutral concentration; no ranking treatment', async () => {
-    serve(base, status({ view: 'self' }), team)
+  it('business-only viewer: the team as a whole and the unnamed concentration; no names, no per-person figures, no finance action', async () => {
+    serve(base, status({ view: 'self' }), aggregate)
+    renderAt('/privado/negocio/equipa')
+    const sum = (await screen.findByTestId('team-summary')).textContent!
+    for (const x of ['200.000', '21', '9.523,81', 'Profissionais com serviços4', 'Maior contributo 35% · dois maiores 68%']) expect(sum).toContain(x)
+    expect(screen.getByTestId('insight').textContent).toContain('68% da produção está concentrada em dois profissionais.')
+    expect(screen.getByTestId('team-aggregate-only').textContent).toContain('só para quem acompanha as finanças da equipa')
+    expect(screen.queryAllByTestId('member')).toEqual([])
+    expect(document.body.textContent).not.toMatch(/Profissional \d|66\.000|33%/)
+    expect(screen.queryByRole('button', { name: 'Ver situação completa' })).toBeNull()
+  })
+
+  it('finance reader: summary, professionals with their change, neutral concentration; no ranking treatment', async () => {
+    serve(base, status(), team)
     renderAt('/privado/negocio/equipa')
     const sum = (await screen.findByTestId('team-summary')).textContent!
     for (const x of ['200.000', '21', '9.523,81', 'Profissionais com serviços4', 'Maior contributo 35% · dois maiores 68%']) expect(sum).toContain(x)
@@ -220,14 +234,13 @@ describe('Negócio → Equipa', () => {
     expect(screen.getAllByTestId('member-change').map((c) => c.textContent)).toEqual(
       ['Face a Semana 4: −30% (−30.000 Kz)', 'Face a Semana 4: +32% (+16.000 Kz)', 'Face a Semana 4: −36% (−18.000 Kz)', 'Sem produção em Semana 4'])
     expect(screen.getByTestId('insight').textContent).toContain('68% da produção está concentrada em dois profissionais.')
-    const page = document.body.textContent!
+    const page = document.body.textContent!.replaceAll('Ver situação completa', '')
     expect(page).not.toMatch(/\b[1-4]\.?º|melhor|pior|ranking|lugar|Ganho|Adiantamento|Pagamento|Falta pagar/i)
-    expect(screen.queryByRole('button', { name: 'Ver situação completa' })).toBeNull()      // business-only: no finance action
   })
 
   it('comparison unavailable: the reason, no change line', async () => {
-    serve(base, status({ view: 'self' }), { ...team, comparison: { available: false, reason: 'previous_not_closed', period: { id: 'e4', label: 'Semana 4', state: 'aberto' } },
-      people: team.people.map((x) => ({ ...x, change: null, previous_production_minor: null })) })
+    serve(base, status(), { ...team, comparison: { available: false, reason: 'previous_not_closed', period: { id: 'e4', label: 'Semana 4', state: 'aberto' } },
+      people: team.people!.map((x) => ({ ...x, change: null, previous_production_minor: null })) })
     renderAt('/privado/negocio/equipa')
     expect((await screen.findByTestId('team-comparison-unavailable')).textContent).toBe('O período anterior ainda não está fechado: os valores dele podem mudar.')
     expect(screen.queryAllByTestId('member-change')).toEqual([])
@@ -243,7 +256,7 @@ describe('Negócio → Equipa', () => {
   })
 
   it('no insight with fewer than three professionals', async () => {
-    serve(base, status({ view: 'self' }), { ...team, summary: { ...team.summary, active_count: 2 }, people: team.people.slice(0, 2) })
+    serve(base, status({ view: 'self' }), { ...aggregate, summary: { ...team.summary, active_count: 2, top_share_pct: 51, top_two_share_pct: 100 } })
     renderAt('/privado/negocio/equipa')
     await screen.findByTestId('team-summary')
     expect(screen.queryByTestId('insight')).toBeNull()

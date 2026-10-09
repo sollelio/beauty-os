@@ -2,7 +2,8 @@
 // period's production: services, production, average ticket and share per professional, and their change against
 // the previous comparable period — all from the business_team read model; the concentration insight comes from the
 // business domain layer. Not a ranking and not payroll: no positions, no "best"/"worst", and no remuneration (that
-// is the person's situation, offered only to team.finance.read holders).
+// is the person's situation, offered only to team.finance.read holders). A viewer without team.finance.read gets the
+// team as a whole only — the read model sends no named rows (07 D9 · B11).
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -93,7 +94,9 @@ export function TeamPage() {
 
       <section className="stack" aria-labelledby="profissionais">
         <h3 id="profissionais" className="label">Profissionais</h3>
-        {t.people.length === 0 ? <p className="muted" style={{ margin: 0 }}>Sem serviços registados neste período.</p> : (
+        {t.people === null ? <p className="muted" style={{ margin: 0 }} data-testid="team-aggregate-only">
+            O detalhe por profissional é só para quem acompanha as finanças da equipa: com a produção de cada pessoa, os valores da equipa permitiriam calcular quanto cada uma ganha.</p>
+        : t.people.length === 0 ? <p className="muted" style={{ margin: 0 }}>Sem serviços registados neste período.</p> : (
           <>
             {!t.comparison.available && <p className="muted" style={{ margin: 0 }} data-testid="team-comparison-unavailable">
               {COMPARISON_UNAVAILABLE[t.comparison.reason ?? 'no_previous_period']}</p>}
@@ -102,7 +105,7 @@ export function TeamPage() {
             </ul>
           </>
         )}
-        <span className="muted" style={{ fontSize: '0.875rem' }}>Ordenado pela produção do período. Mostra como a produção se distribui; não avalia ninguém.</span>
+        {t.people !== null && t.people.length > 0 && <span className="muted" style={{ fontSize: '0.875rem' }}>Ordenado pela produção do período. Mostra como a produção se distribui; não avalia ninguém.</span>}
       </section>
     </main>
   )

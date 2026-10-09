@@ -88,17 +88,20 @@ describe('buildInsights thresholds', () => {
 })
 
 describe('team concentration (insight 6)', () => {
+  // as the read model gives them: unnamed, whole percent
+  const share = (p: number[], n: number) => Math.round(([...p].sort((a, b) => b - a).slice(0, n).reduce((a, b) => a + b, 0) * 100) / p.reduce((a, b) => a + b, 0))
   const team = (prods: number[]): BusinessTeam => ({
     period: { id: 'p', label: 'P', state: 'fechado', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
-    summary: { production_minor: prods.reduce((a, b) => a + b, 0), services_count: prods.length, average_ticket_minor: null, active_count: prods.length },
+    summary: { production_minor: prods.reduce((a, b) => a + b, 0), services_count: prods.length, average_ticket_minor: null, active_count: prods.length,
+               top_share_pct: share(prods, 1), top_two_share_pct: share(prods, 2) },
     comparison: { available: false, reason: 'no_previous_period', period: null },
     people: prods.map((v, i) => ({ person_id: `x${i}`, display_name: `X${i}`, services_count: 1, production_minor: v, average_ticket_minor: v,
                                    share_pct: null, previous_production_minor: null, change: null })),
   })
-  it('fires at exactly 40% for one, or exactly 65% for two, with at least 3 professionals', () => {
+  it('fires at 40% for one, or 65% for two (whole percent), with at least 3 professionals', () => {
     expect(teamConcentration(team([40, 30, 30])).insight?.title).toBe('40% da produção está concentrada num profissional.')
     expect(teamConcentration(team([39, 26, 20, 15])).insight?.title).toBe('65% da produção está concentrada em dois profissionais.')
-    expect(teamConcentration(team([39, 25.9, 20.1, 15]))).toEqual({})
+    expect(teamConcentration(team([39, 25.4, 20.6, 15]))).toEqual({})                   // 39% · 64%
     expect(teamConcentration(team([80, 20])).skipped?.reason).toBe('not_enough_professionals')
   })
   it('the title names no one and is the same whoever holds the share', () => {

@@ -22,9 +22,10 @@ export type TeamMember = {
 }
 export type BusinessTeam = {
   period: PeriodRef & { is_complete: boolean }
-  summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; active_count: number }
+  summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; active_count: number
+             top_share_pct: number | null; top_two_share_pct: number | null }   // unnamed, whole percent
   comparison: { available: boolean; reason: ComparisonReason | null; period: { id: string; label: string; state: PeriodState } | null }
-  people: TeamMember[]
+  people: TeamMember[] | null   // named rows only for team.finance.read (07 D9 · B11)
 }
 export type ComparisonReason = 'current_incomplete' | 'no_previous_period' | 'previous_not_closed' | 'previous_not_comparable' | 'insufficient_history'
 export type BusinessHealth = {
