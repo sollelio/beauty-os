@@ -20,6 +20,16 @@ async function grant(c = dev, person = CONF, pin = '222222') {
 const cancel = async (kind: string, record: string, reason: string | null = 'Registado por engano', cmd = randomUUID(), g?: string, c = dev) =>
   c.rpc('cancel_record', { p_command_id: cmd, p_grant_id: g ?? await grant(c), p_kind: kind, p_record_id: record, p_reason: reason })
 const fecho = async (p: string | null = OCT) => (await dev.rpc('fecho_period', { p_period_id: p })).data as Row
+// Teste Fecho C's own approved period with one service of c201 (supabase/seeds/14_corrections_fixture.sql): fixed,
+// so these tests do not depend on the day they run nor on slice06 having approved today's period first.
+async function orgC() {
+  const devC = await device('TEST-ORG-C-2026')
+  expect((await devC.rpc('verify_person', { p_person_id: id('c202'), p_secret: '343434', p_scope: 'private_session' })).data.ok).toBe(true)
+  const period = ((await devC.rpc('fecho_periods')).data as Row[]).find((x) => x.label === 'Correções C')!
+  expect(period, 'Correções C (seed 14)').toBeDefined()
+  const row = ((await devC.rpc('team_history', { p_person_id: id('c201'), p_period_id: period.id, p_kind: 'service' })).data as Row).rows[0]
+  return { devC, period, record: row.record_id as string }
+}
 async function newService(value = K(1000)) {
   const r = await dev.rpc('record_service', { p_command_id: randomUUID(), p_person_id: A.person, p_service_id: A.service, p_value_minor: value,
     p_payments: [{ method_id: A.cash, amount_minor: value }] })
@@ -48,10 +58,8 @@ describe('authorization', () => {
   })
   it('rejects other organizations\' records', async () => {
     expect((await cancel('service', randomUUID())).error?.message).toBe('CROSS_TENANT_REFERENCE')
-    const devC = await device('TEST-ORG-C-2026')
-    expect((await devC.rpc('verify_person', { p_person_id: id('c202'), p_secret: '343434', p_scope: 'private_session' })).data.ok).toBe(true)
-    const cRow = ((await devC.rpc('team_history', { p_person_id: id('c201'), p_period_id: null, p_kind: 'service' })).data as Row).rows[0]
-    expect((await cancel('service', cRow.record_id)).error?.message).toBe('CROSS_TENANT_REFERENCE')
+    const { record } = await orgC()
+    expect((await cancel('service', record)).error?.message).toBe('CROSS_TENANT_REFERENCE')
   })
 })
 
@@ -138,12 +146,9 @@ describe('not after approval', () => {
       const svc = ((await dev.rpc('team_history', { p_person_id: A.person, p_period_id: p!.id, p_kind: 'service' })).data as Row).rows[0]
       expect((await cancel('service', svc.record_id)).error?.message).toBe(code)
     }
-    const devC = await device('TEST-ORG-C-2026')
-    expect((await devC.rpc('verify_person', { p_person_id: id('c202'), p_secret: '343434', p_scope: 'private_session' })).data.ok).toBe(true)
-    const today = (await devC.rpc('fecho_period', { p_period_id: null })).data as Row
-    expect(today.period.state).toBe('em_pagamento')                                   // with a confirmed payment (slice06 tests)
-    const cRow = ((await devC.rpc('team_history', { p_person_id: id('c201'), p_period_id: null, p_kind: 'service' })).data as Row).rows[0]
+    const { devC, period, record } = await orgC()
+    expect(period.state).toBe('pronto_para_pagamento')
     const g = (await devC.rpc('verify_person', { p_person_id: id('c202'), p_secret: '343434' })).data.grant_id
-    expect((await cancel('service', cRow.record_id, 'x', randomUUID(), g, devC)).error?.message).toBe('PERIOD_APPROVED')
+    expect((await cancel('service', record, 'x', randomUUID(), g, devC)).error?.message).toBe('PERIOD_APPROVED')
   })
 })
