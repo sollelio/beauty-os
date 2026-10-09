@@ -24,7 +24,7 @@ Settings is secondary.
 | **Dinheiro** | Operational financial timeline and money movements | Expenses, purchases, reserves, movements in time order | Accounting-heavy terminology and structures |
 | **Stock** | Products requiring attention | Attention list; approximate levels/reserve state; purchase preparation; history | Warehouse-style inventory |
 | **Fecho** | Exception-driven monthly review | Exceptions; approval; payment; closure (J5) | Exhaustive line-by-line inspection |
-| **Negócio** (private) | Business health: *"How is the business doing, and what changed?"* ([07 D9](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d9--business-health-v1-negócio--visão-geral-metrics-comparison-core-insights-access)) | Period figures, comparison with closed periods, a few explainable insights; Equipa: the team's contribution (per professional only with team finance access) | A chart dashboard; a ranking; individual remuneration |
+| **Negócio** (private) | Business health: *"How is the business doing, and what changed?"* ([07 D9](07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d9--business-health-v1-negócio--visão-geral-metrics-comparison-core-insights-access)) | Period figures, comparison with closed periods, a few explainable insights; Equipa: the team's contribution (per professional only with team finance access); Serviços: what customers buy and how demand moves | A chart dashboard; a ranking; individual remuneration |
 
 ### Journey → space
 

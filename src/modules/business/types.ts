@@ -20,6 +20,22 @@ export type TeamMember = {
   person_id: string; display_name: string; services_count: number; production_minor: number; average_ticket_minor: number
   share_pct: number | null; previous_production_minor: number | null; change: Change | null
 }
+/** Negócio → Serviços (business_services): per service, never per person (07 D9 · Slice 03). */
+export type ServiceFigures = { count: number; revenue_minor: number }
+export type ServiceRow = ServiceFigures & {
+  service_id: string; name: string; average_ticket_minor: number; share_pct: number | null
+  previous: ServiceFigures | null; before_previous: ServiceFigures | null   // null: no comparison, or not shown on its own then
+  change: { count: Change; revenue: Change } | null
+}
+type ComparisonMeta = { available: boolean; reason: ComparisonReason | null; period: { id: string; label: string; state: PeriodState } | null }
+export type BusinessServices = {
+  period: PeriodRef & { is_complete: boolean }
+  summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; distinct_services: number
+             top_share_pct: number | null; top_two_share_pct: number | null }   // unnamed, whole percent
+  comparison: { previous: ComparisonMeta; before_previous: ComparisonMeta }
+  services: ServiceRow[]
+  other: { services: number; count: number; revenue_minor: number } | null   // services not shown on their own (B11)
+}
 export type BusinessTeam = {
   period: PeriodRef & { is_complete: boolean }
   summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; active_count: number

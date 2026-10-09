@@ -1,4 +1,4 @@
-// Business Health V1 insight thresholds (product defaults, Business Health Slices 01–02). The only place they live:
+// Business Health V1 insight thresholds (product defaults, Business Health Slices 01–03). The only place they live:
 // screens never hard-code them. Comparison rules (which periods are comparable) live with the read model
 // (private.business_health_config).
 export const INSIGHT_THRESHOLDS = {
@@ -21,6 +21,15 @@ export const INSIGHT_THRESHOLDS = {
   concentrationTopPct: 40,
   concentrationTopTwoPct: 65,
   concentrationMinProfessionals: 3,
+  /** 7 · service concentration: one service at least this share of production, or the two largest together at least
+   *  `serviceTopTwoPct`, with at least `serviceMinDistinct` services performed. */
+  serviceTopPct: 35,
+  serviceTopTwoPct: 55,
+  serviceMinDistinct: 5,
+  /** 8 / 9 · a service's count moving the same way in two consecutive comparisons (three comparable periods), by at
+   *  least `serviceTrendPct` in all, from at least `serviceTrendMinBaseline` records in the first period. */
+  serviceTrendPct: 20,
+  serviceTrendMinBaseline: 5,
   /** Drivers listed in an explanation. */
   maxDrivers: 3,
 } as const

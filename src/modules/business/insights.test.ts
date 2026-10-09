@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { teamConcentration, buildInsights } from './insights'
+import { serviceInsights, teamConcentration, buildInsights } from './insights'
 import { INSIGHT_THRESHOLDS } from './thresholds'
-import type { BusinessHealth, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
+import type { BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
 
 const money = (m: number) => `${m / 100} Kz`
 const ref = (id: string, state: PeriodMetrics['period']['state'] = 'fechado') => ({ id, label: id.toUpperCase(), state, starts_on: '2025-01-01', ends_on: '2025-01-07' })
@@ -108,5 +108,33 @@ describe('team concentration (insight 6)', () => {
     const a = teamConcentration(team([50, 25, 25])).insight!, b = teamConcentration(team([25, 50, 25])).insight!
     expect(a.title).toBe(b.title)
     expect(JSON.stringify(a)).not.toMatch(/X0|X1|X2/)
+  })
+})
+
+describe('service insights (7–9)', () => {
+  const money = (m: number) => `${m} Kz`
+  const cmp = { available: true, reason: null, period: { id: 'x', label: 'X', state: 'fechado' as const } }
+  const sv = (o: { top?: number; topTwo?: number; distinct?: number; counts?: [number, number, number][] } = {}): BusinessServices => ({
+    period: { id: 'p', label: 'P', state: 'fechado', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    summary: { production_minor: 100, services_count: 10, average_ticket_minor: 10, distinct_services: o.distinct ?? 6, top_share_pct: o.top ?? 20, top_two_share_pct: o.topTwo ?? 40 },
+    comparison: { previous: cmp, before_previous: cmp },
+    services: (o.counts ?? []).map(([c2, c1, c0], i) => ({ service_id: `s${i}`, name: `S${i}`, count: c0, revenue_minor: c0, average_ticket_minor: 1, share_pct: null,
+      previous: { count: c1, revenue_minor: c1 }, before_previous: { count: c2, revenue_minor: c2 }, change: null })),
+    other: null,
+  })
+  const kinds = (s: BusinessServices) => serviceInsights(s, money).insights.map((i) => i.kind)
+  it('concentration at exactly 35% or 55%, with at least 5 services performed', () => {
+    expect(kinds(sv({ top: 35 }))).toEqual(['service_concentration'])
+    expect(kinds(sv({ top: 34, topTwo: 55 }))).toEqual(['service_concentration'])
+    expect(kinds(sv({ top: 34, topTwo: 54 }))).toEqual([])
+    expect(serviceInsights(sv({ top: 50, distinct: 4 }), money).skipped).toContainEqual({ kind: 'service_concentration', reason: 'not_enough_services_performed' })
+  })
+  it('a trend needs two moves the same way, ≥ 20% in all, from a base of at least 5', () => {
+    expect(kinds(sv({ counts: [[5, 6, 6]] }))).toEqual([])                 // 20% but the second move is flat
+    expect(kinds(sv({ counts: [[10, 11, 12]] }))).toEqual(['service_growth'])
+    expect(kinds(sv({ counts: [[11, 12, 13]] }))).toEqual([])               // +18%
+    expect(kinds(sv({ counts: [[4, 3, 1]] }))).toEqual([])                  // base below 5
+    expect(kinds(sv({ counts: [[10, 9, 8], [5, 4, 3]] }))).toEqual(['service_decline'])
+    expect(serviceInsights(sv({ counts: [[10, 9, 8], [5, 4, 3]] }), money).insights[0]!.title).toBe('2 serviços caíram pelo segundo período consecutivo.')
   })
 })

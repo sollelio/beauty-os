@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, exitPrivateContext, usePrivateContext } from '../../modules/org/privateContext'
-import { businessKeys, getBusinessHealth, getBusinessTeam, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
+import { businessKeys, getBusinessHealth, getBusinessServices, getBusinessTeam, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
 import { buildInsights, costDrivers, COMPARISON_UNAVAILABLE } from '../../modules/business/insights'
 import { INSIGHT_THRESHOLDS } from '../../modules/business/thresholds'
 import { HIDDEN, HIDDEN_WHY, InsightCard } from './InsightCard'
@@ -29,6 +29,7 @@ export function OverviewPage() {
   const health = useQuery({ queryKey: businessKeys.health(p), queryFn: () => getBusinessHealth(p) })
   const periods = useQuery({ queryKey: businessKeys.periods, queryFn: listBusinessPeriods })
   const team = useQuery({ queryKey: businessKeys.team(p), queryFn: () => getBusinessTeam(p) })   // team concentration insight
+  const services = useQuery({ queryKey: businessKeys.services(p), queryFn: () => getBusinessServices(p) })   // service insights
   const lost = [health.error, periods.error].some((e) => e && toAppError(e).code === 'VERIFICATION_REQUIRED')
   useEffect(() => { if (lost) clearPrivateData(qc) }, [lost, qc])
   const back = () => navigate(ctx.view === 'manager' ? '/privado/equipa' : '/')
@@ -56,7 +57,7 @@ export function OverviewPage() {
 
   const h = health.data
   const c = h.current
-  const { insights } = buildInsights(h, m, INSIGHT_THRESHOLDS, team.data)
+  const { insights } = buildInsights(h, m, INSIGHT_THRESHOLDS, team.data, services.data)
   const pending = c.pending_rules_count > 0
   const hidden = (k: PrivateField) => c.private_fields.includes(k)
 
@@ -123,6 +124,7 @@ export function OverviewPage() {
       )}
 
       <button className="pick" onClick={() => navigate(`/privado/negocio/equipa?p=${c.period.id}`)}><strong>Equipa</strong><span aria-hidden className="muted">›</span></button>
+      <button className="pick" onClick={() => navigate(`/privado/negocio/servicos?p=${c.period.id}`)}><strong>Serviços</strong><span aria-hidden className="muted">›</span></button>
       {ctx.view === 'manager' && <button className="pick" onClick={() => navigate(`/privado/fecho?p=${c.period.id}`)}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>}
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>

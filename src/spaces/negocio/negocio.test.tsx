@@ -3,13 +3,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
-import type { BusinessHealth, BusinessTeam, Change, MetricKey, PeriodMetrics } from '../../modules/business/api'
+import type { BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
 
 const rpc = vi.fn()
 vi.mock('../../shared/supabase/client', () => ({ getSupabase: () => ({ rpc }) }))
 import { PrivateGate, PrivateHome } from '../../app/PrivateGate'
 import { OverviewPage } from './OverviewPage'
 import { TeamPage } from './TeamPage'
+import { ServicesPage } from './ServicesPage'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const K = (kz: number) => kz * 100
@@ -50,15 +51,32 @@ const team: BusinessTeam = {
 const even: BusinessTeam = { ...team, summary: { ...team.summary, top_share_pct: 25, top_two_share_pct: 50 },
   people: team.people!.map((x) => ({ ...x, production_minor: K(50000), share_pct: 25 })) }   // no concentration
 const aggregate: BusinessTeam = { ...team, people: null }   // what a business-only viewer receives
+const row = (id: string, name: string, count: number, revKz: number, share: number, prev: [number, number] | null, before: [number, number] | null): ServiceRow => ({
+  service_id: id, name, count, revenue_minor: K(revKz), average_ticket_minor: Math.round(K(revKz) / count), share_pct: share,
+  previous: prev && { count: prev[0], revenue_minor: K(prev[1]) }, before_previous: before && { count: before[0], revenue_minor: K(before[1]) },
+  change: prev && { count: { delta_minor: count - prev[0], percent: prev[0] ? Math.round(((count - prev[0]) * 1000) / prev[0]) / 10 : null },
+                    revenue: { delta_minor: K(revKz - prev[1]), percent: prev[1] ? Math.round(((revKz - prev[1]) * 1000) / prev[1]) / 10 : null } } })
+const sv: BusinessServices = {
+  period: { id: 'e5', label: 'Semana 5', state: 'fechado', starts_on: '2025-02-03', ends_on: '2025-02-09', is_complete: true },
+  summary: { production_minor: K(391000), services_count: 59, average_ticket_minor: 662712, distinct_services: 6, top_share_pct: 38, top_two_share_pct: 59 },
+  comparison: { previous: { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' } },
+                before_previous: { available: true, reason: null, period: { id: 'e3', label: 'Semana 3', state: 'fechado' } } },
+  services: [row('s1', 'Corte', 30, 150000, 38.4, [20, 100000], [20, 100000]), row('s2', 'Cor', 4, 80000, 20.5, [5, 100000], [4, 80000]),
+             row('s5', 'Alongamento', 6, 60000, 15.3, [8, 80000], [10, 100000]), row('s4', 'Pedicure', 9, 45000, 11.5, [7, 35000], [5, 25000])],
+  other: { services: 2, count: 10, revenue_minor: K(56000) },
+}
+const quietSv: BusinessServices = { ...sv, summary: { ...sv.summary, top_share_pct: 20, top_two_share_pct: 40 },
+  services: sv.services.map((x) => ({ ...x, before_previous: null })), comparison: { ...sv.comparison, before_previous: { available: false, reason: 'no_previous_period', period: null } } }
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
 
-function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even) {
+function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even, svs: BusinessServices = quietSv) {
   rpc.mockImplementation(async (fn: string) => {
     if (fn === 'private_context_status') return { data: st, error: null }
     if (fn === 'end_private_context') return { data: { ok: true }, error: null }
     if (fn === 'business_health') return 'error' in health ? { data: null, error: { message: health.error, code: 'P0001' } } : { data: health, error: null }
     if (fn === 'business_team') return 'error' in tm ? { data: null, error: { message: tm.error, code: 'P0001' } } : { data: tm, error: null }
+    if (fn === 'business_services') return { data: svs, error: null }
     if (fn === 'business_periods') return { data: [period('e5', 'Semana 5'), period('e4', 'Semana 4')], error: null }
     return { data: [], error: null }
   })
@@ -73,6 +91,7 @@ function renderAt(path = '/privado/negocio') {
               <Route index element={<PrivateHome />} />
               <Route path="negocio" element={<OverviewPage />} />
               <Route path="negocio/equipa" element={<TeamPage />} />
+              <Route path="negocio/servicos" element={<ServicesPage />} />
               <Route path="equipa" element={<p>Equipa</p>} />
               <Route path="situacao/:personId" element={<p>Situação</p>} />
             </Route>
@@ -260,5 +279,61 @@ describe('Negócio → Equipa', () => {
     renderAt('/privado/negocio/equipa')
     await screen.findByTestId('team-summary')
     expect(screen.queryByTestId('insight')).toBeNull()
+  })
+})
+
+describe('Negócio → Serviços', () => {
+  beforeEach(() => rpc.mockReset())
+
+  it('needs the private area; the overview leads to it and carries its insights', async () => {
+    serve(base, { active: false }, even, sv)
+    renderAt('/privado/negocio/servicos')
+    expect(await screen.findByText('Entrada privada')).toBeTruthy()
+    serve(base, status({ view: 'self' }), even, sv)
+    renderAt()
+    expect((await screen.findAllByTestId('insight')).map((i) => i.dataset.kind)).toContain('service_decline')
+    fireEvent.click(screen.getByRole('button', { name: /Serviços/ }))
+    expect(await screen.findByTestId('services-summary')).toBeTruthy()
+  })
+
+  it('summary, top lists, service cards with comparison, the grouped services; no person, no ranking', async () => {
+    serve(base, status({ view: 'self' }), even, sv)
+    renderAt('/privado/negocio/servicos')
+    const sum = (await screen.findByTestId('services-summary')).textContent!
+    for (const x of ['391.000', 'Serviços realizados59', '6.627,12', 'Serviços diferentes6']) expect(sum).toContain(x)
+    expect(screen.getByTestId('top-revenue').textContent).toBe('Mais receitaCorte · 150.000 KzCor · 80.000 KzAlongamento · 60.000 Kz')
+    expect(screen.getByTestId('top-count').textContent).toBe('Mais realizadosCorte · 30Pedicure · 9Alongamento · 6')
+    const cards = screen.getAllByTestId('service')
+    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Corte', 'Cor', 'Alongamento', 'Pedicure'])
+    expect(cards[0]!.textContent).toContain('38,4%')
+    expect(cards[1]!.textContent).toContain('20.000')                                     // average actual ticket
+    expect(screen.getAllByTestId('service-change')[0]!.textContent).toBe('Face a Semana 4: +50% em quantidade · +50% em receita')
+    expect(screen.getByTestId('services-other').textContent).toContain('Outros serviços (2)')
+    expect(document.body.textContent).not.toMatch(/Profissional|melhor|pior|ranking|campanha|redes sociais/i)
+  })
+
+  it('concentration, growth and decline insights, each explainable', async () => {
+    serve(base, status({ view: 'self' }), even, sv)
+    renderAt('/privado/negocio/servicos')
+    const cards = await screen.findAllByTestId('insight')
+    expect(cards.map((c) => c.dataset.kind)).toEqual(['service_decline', 'service_concentration', 'service_growth'])
+    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Alongamento caiu pelo segundo período consecutivo.',
+      'Um serviço representa 38% da produção.', 'Pedicure cresce pelo segundo período consecutivo.'])
+    fireEvent.click(within(cards[0]!).getByRole('button'))
+    const d = within(cards[0]!).getByTestId('insight-detail').textContent!
+    expect(d).toContain('Alongamento: 10 → 8 → 6')
+    expect(d).toContain('Vale investigar procura, disponibilidade, preço ou promoção')
+  })
+
+  it('insufficient history says so: no trend insight, and no comparison without a previous period', async () => {
+    serve(base, status({ view: 'self' }), even, quietSv)
+    renderAt('/privado/negocio/servicos')
+    expect((await screen.findByTestId('services-trend-unavailable')).textContent).toContain('três períodos comparáveis')
+    expect(screen.queryAllByTestId('insight')).toEqual([])
+    rpc.mockReset()
+    serve(base, status({ view: 'self' }), even, { ...quietSv, comparison: { previous: { available: false, reason: 'no_previous_period', period: null },
+      before_previous: { available: false, reason: 'no_previous_period', period: null } }, services: quietSv.services.map((x) => ({ ...x, previous: null, change: null })) })
+    renderAt('/privado/negocio/servicos?p=x')
+    expect((await screen.findAllByTestId('services-comparison-unavailable'))[0]!.textContent).toBe('Ainda não há um período anterior para comparar.')
   })
 })

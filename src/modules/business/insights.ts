@@ -2,12 +2,12 @@
 // Nothing here computes a financial figure: it compares figures the database already produced against the V1
 // thresholds, picks, groups and orders the insights, and says how each was reached. Wording states what changed
 // together, never why (correlation, not causality).
-import type { BusinessHealth, BusinessTeam, ComparisonReason } from './types'
+import type { BusinessHealth, BusinessServices, BusinessTeam, ComparisonReason, ServiceRow } from './types'
 import { INSIGHT_THRESHOLDS, type InsightThresholds } from './thresholds'
 
 export type Severity = 'ACTION_REQUIRED' | 'ATTENTION' | 'INFORMATION'
 export type InsightKind = 'payments_pending' | 'period_blocked' | 'production_up_result_down' | 'production_decline' | 'expense_category_high'
-  | 'team_concentration'
+  | 'team_concentration' | 'service_decline' | 'service_growth' | 'service_concentration'
 export type Driver = { label: string; delta_minor: number; text: string }
 export type Insight = {
   id: string
@@ -23,14 +23,14 @@ export type Insight = {
     confidence: string
   }
 }
-export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' | 'not_enough_professionals' }
+export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' | 'not_enough_professionals' | 'not_enough_services_performed' }
 
 const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
-const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'team_concentration']
+const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth']
 const pct = (n: number) => `${Math.round(Math.abs(n))}%`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam):
+export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam, services?: BusinessServices):
   { insights: Insight[]; skipped: SkippedInsight[] } {
   const out: Insight[] = []
   const skipped: SkippedInsight[] = []
@@ -155,10 +155,18 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
     const c = teamConcentration(team, t)
     if (c.insight) out.push(c.insight); else if (c.skipped) skipped.push(c.skipped)
   }
+  // 7–9 · Services (Slice 03), when the service figures of the same period are at hand
+  if (services && services.period.id === cur.period.id) {
+    const r = serviceInsights(services, money, t)
+    out.push(...r.insights); skipped.push(...r.skipped)
+  }
 
-  out.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
-  return { insights: out.slice(0, t.maxShown), skipped }
+  return { insights: sortInsights(out).slice(0, t.maxShown), skipped }
 }
+
+/** Action before attention before information; within a severity, a fixed order of kinds. */
+export const sortInsights = (list: Insight[]) =>
+  [...list].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
 
 /** Operating cost components that rose against the previous period, largest first; expense categories inside. */
 export function costDrivers(h: BusinessHealth, money: (minor: number) => string): Driver[] {
@@ -215,4 +223,65 @@ export function teamConcentration(team: BusinessTeam, t: InsightThresholds = INS
       confidence: 'Descreve como a produção se distribui neste período; não avalia ninguém.',
     },
   } }
+}
+
+/** Insights 7–9 · what customers buy and how demand moves, per service. Wording states what moved, never why: no
+ *  marketing attribution, no campaign effect, no cause. */
+export function serviceInsights(sv: BusinessServices, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS):
+  { insights: Insight[]; skipped: SkippedInsight[] } {
+  const out: Insight[] = [], skipped: SkippedInsight[] = []
+  const p = sv.period, at = [{ id: p.id, label: p.label }]
+  const { top_share_pct: top, top_two_share_pct: topTwo, distinct_services: n } = sv.summary
+
+  // 7 · concentration (unnamed, whole percent)
+  if (top !== null && topTwo !== null && (top >= t.serviceTopPct || topTwo >= t.serviceTopTwoPct)) {
+    if (n < t.serviceMinDistinct) skipped.push({ kind: 'service_concentration', reason: 'not_enough_services_performed' })
+    else {
+      const one = top >= t.serviceTopPct
+      out.push({ id: `service_concentration:${p.id}`, kind: 'service_concentration', severity: 'INFORMATION', periods: at,
+        title: one ? `Um serviço representa ${top}% da produção.` : `Dois serviços representam ${topTwo}% da produção.`,
+        detail: {
+          current: `Maior serviço ${top}% · dois maiores ${topTwo}% · ${plural(n, 'serviço realizado', 'serviços diferentes realizados')}`,
+          basis: one ? `Um serviço tem pelo menos ${t.serviceTopPct}% da produção de ${p.label}.` : `Os dois maiores serviços somam pelo menos ${t.serviceTopTwoPct}% da produção de ${p.label}.`,
+          drivers: [],
+          action: { label: 'Ver serviços', to: `/privado/negocio/servicos?p=${p.id}`, finance: false },
+          confidence: `Com pelo menos ${t.serviceMinDistinct} serviços diferentes no período. Descreve a distribuição; não diz se é bom ou mau.`,
+        } })
+    }
+  }
+
+  // 8 / 9 · two consecutive moves the same way
+  const prev = sv.comparison.previous, before = sv.comparison.before_previous
+  if (!prev.available || !before.available) {
+    const reason = (prev.available ? before.reason : prev.reason) ?? 'insufficient_history'
+    skipped.push({ kind: 'service_growth', reason }, { kind: 'service_decline', reason })
+  } else {
+    const moves = (dir: 1 | -1) => sv.services.filter((s) => {
+      if (!s.previous || !s.before_previous) return false
+      const c2 = s.before_previous.count, c1 = s.previous.count, c0 = s.count
+      if (c2 < t.serviceTrendMinBaseline) return false
+      return dir * (c1 - c2) > 0 && dir * (c0 - c1) > 0 && (dir * (c0 - c2) * 100) / c2 >= t.serviceTrendPct
+    })
+    const trend = (rows: ServiceRow[], kind: 'service_growth' | 'service_decline') => {
+      if (rows.length === 0) return
+      const up = kind === 'service_growth'
+      const total = (s: ServiceRow) => Math.round(((s.count - s.before_previous!.count) * 100) / s.before_previous!.count)
+      out.push({ id: `${kind}:${p.id}`, kind, severity: up ? 'INFORMATION' : 'ATTENTION', periods: at,
+        title: rows.length === 1 ? `${rows[0]!.name} ${up ? 'cresce' : 'caiu'} pelo segundo período consecutivo.`
+                                 : `${rows.length} serviços ${up ? 'crescem' : 'caíram'} pelo segundo período consecutivo.`,
+        detail: {
+          current: rows.map((s) => `${s.name}: ${s.count} (${money(s.revenue_minor)})`).join(' · '),
+          reference: rows.map((s) => `${s.name}: ${s.before_previous!.count} → ${s.previous!.count} → ${s.count}`).join(' · '),
+          change: rows.map((s) => `${s.name} ${total(s) > 0 ? '+' : '−'}${Math.abs(total(s))}% em quantidade`).join(' · '),
+          basis: `${before.period!.label}, ${prev.period!.label} e ${p.label} (comparáveis).`,
+          drivers: [],
+          ...(up ? {} : { action: { label: 'Ver serviços', to: `/privado/negocio/servicos?p=${p.id}`, finance: false } }),
+          confidence: `${up ? 'Subida' : 'Descida'} em dois períodos seguidos, de pelo menos ${t.serviceTrendPct}% no total, a partir de pelo menos ${t.serviceTrendMinBaseline} registos.`
+            + (up ? '' : ' Vale investigar procura, disponibilidade, preço ou promoção; os dados não dizem a causa.'),
+        } })
+    }
+    trend(moves(1), 'service_growth')
+    trend(moves(-1), 'service_decline')
+  }
+  return { insights: sortInsights(out), skipped }
 }
