@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildInsights } from './insights'
+import { teamConcentration, buildInsights } from './insights'
 import { INSIGHT_THRESHOLDS } from './thresholds'
-import type { BusinessHealth, Change, MetricKey, PeriodMetrics } from './types'
+import type { BusinessHealth, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
 
 const money = (m: number) => `${m / 100} Kz`
 const ref = (id: string, state: PeriodMetrics['period']['state'] = 'fechado') => ({ id, label: id.toUpperCase(), state, starts_on: '2025-01-01', ends_on: '2025-01-07' })
@@ -84,5 +84,26 @@ describe('buildInsights thresholds', () => {
     expect(kinds(h)).toEqual(['payments_pending', 'period_blocked', 'production_up_result_down', 'expense_category_high'])
     expect(buildInsights(h, money, { ...INSIGHT_THRESHOLDS, maxShown: 2 }).insights).toHaveLength(2)
     expect(INSIGHT_THRESHOLDS.maxShown).toBe(5)
+  })
+})
+
+describe('team concentration (insight 6)', () => {
+  const team = (prods: number[]): BusinessTeam => ({
+    period: { id: 'p', label: 'P', state: 'fechado', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    summary: { production_minor: prods.reduce((a, b) => a + b, 0), services_count: prods.length, average_ticket_minor: null, active_count: prods.length },
+    comparison: { available: false, reason: 'no_previous_period', period: null },
+    people: prods.map((v, i) => ({ person_id: `x${i}`, display_name: `X${i}`, services_count: 1, production_minor: v, average_ticket_minor: v,
+                                   share_pct: null, previous_production_minor: null, change: null })),
+  })
+  it('fires at exactly 40% for one, or exactly 65% for two, with at least 3 professionals', () => {
+    expect(teamConcentration(team([40, 30, 30])).insight?.title).toBe('40% da produção está concentrada num profissional.')
+    expect(teamConcentration(team([39, 26, 20, 15])).insight?.title).toBe('65% da produção está concentrada em dois profissionais.')
+    expect(teamConcentration(team([39, 25.9, 20.1, 15]))).toEqual({})
+    expect(teamConcentration(team([80, 20])).skipped?.reason).toBe('not_enough_professionals')
+  })
+  it('the title names no one and is the same whoever holds the share', () => {
+    const a = teamConcentration(team([50, 25, 25])).insight!, b = teamConcentration(team([25, 50, 25])).insight!
+    expect(a.title).toBe(b.title)
+    expect(JSON.stringify(a)).not.toMatch(/X0|X1|X2/)
   })
 })

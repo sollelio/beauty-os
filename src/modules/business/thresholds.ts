@@ -1,4 +1,4 @@
-// Business Health V1 insight thresholds (product defaults, Business Health Slice 01). The only place they live:
+// Business Health V1 insight thresholds (product defaults, Business Health Slices 01–02). The only place they live:
 // screens never hard-code them. Comparison rules (which periods are comparable) live with the read model
 // (private.business_health_config).
 export const INSIGHT_THRESHOLDS = {
@@ -16,6 +16,11 @@ export const INSIGHT_THRESHOLDS = {
   categoryMinPresence: 2,
   /** …and the excess over the average at least this share of the period's production. */
   categoryMinImpactPctOfProduction: 3,
+  /** 6 · team concentration: one professional at least this share of production, or the two largest together at
+   *  least `concentrationTopTwoPct`, with at least `concentrationMinProfessionals` active professionals. */
+  concentrationTopPct: 40,
+  concentrationTopTwoPct: 65,
+  concentrationMinProfessionals: 3,
   /** Drivers listed in an explanation. */
   maxDrivers: 3,
 } as const

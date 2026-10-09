@@ -15,6 +15,17 @@ export type PrivateField = 'team_earnings_minor' | 'operating_costs_minor' | 'op
 export type MetricKey = 'production_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
   | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor' | 'services_count'
 export type Change = { delta_minor: number | null; percent: number | null }
+/** Negócio → Equipa (business_team): operational figures per professional, never remuneration (07 D9 · Slice 02). */
+export type TeamMember = {
+  person_id: string; display_name: string; services_count: number; production_minor: number; average_ticket_minor: number
+  share_pct: number | null; previous_production_minor: number | null; change: Change | null
+}
+export type BusinessTeam = {
+  period: PeriodRef & { is_complete: boolean }
+  summary: { production_minor: number; services_count: number; average_ticket_minor: number | null; active_count: number }
+  comparison: { available: boolean; reason: ComparisonReason | null; period: { id: string; label: string; state: PeriodState } | null }
+  people: TeamMember[]
+}
 export type ComparisonReason = 'current_incomplete' | 'no_previous_period' | 'previous_not_closed' | 'previous_not_comparable' | 'insufficient_history'
 export type BusinessHealth = {
   current: PeriodMetrics

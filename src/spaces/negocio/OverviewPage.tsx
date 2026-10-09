@@ -1,23 +1,23 @@
 // Negócio → Visão geral (Business Health Slice 01), private area, business.health.read. Every figure comes from the
 // business_health read model (the Fecho calculation, ADR-0004); insights come from the business domain layer. This
-// screen only arranges, words and links them. No person's figures appear here; a team figure that is one person's
-// arrives hidden (private_fields, 07 D9 · B11): it is said to be hidden, never shown as zero, "—" or not approved.
-import { useEffect, useState } from 'react'
+// screen only arranges, words and links them. No person's figures appear here; for a viewer without team.finance.read
+// every team-derived figure arrives hidden (private_fields, 07 D9 · B11): it is said to be hidden, never shown as
+// zero, "—" or not approved.
+import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, exitPrivateContext, usePrivateContext } from '../../modules/org/privateContext'
-import { businessKeys, getBusinessHealth, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
-import { buildInsights, costDrivers, COMPARISON_UNAVAILABLE, type Insight } from '../../modules/business/insights'
+import { businessKeys, getBusinessHealth, getBusinessTeam, listBusinessPeriods, type BusinessHealth, type Change, type PrivateField } from '../../modules/business/api'
+import { buildInsights, costDrivers, COMPARISON_UNAVAILABLE } from '../../modules/business/insights'
+import { INSIGHT_THRESHOLDS } from '../../modules/business/thresholds'
+import { HIDDEN, HIDDEN_WHY, InsightCard } from './InsightCard'
 import { STATE_LABEL } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
 import { formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
 
 const pctText = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${String(Math.abs(n)).replace('.', ',')}%`
-const HIDDEN = 'Não mostrado'
-const HIDDEN_WHY = 'Não mostrado: com uma só pessoa na equipa, este valor revelaria quanto ela ganha ou tem a receber.'
-const SEVERITY_LABEL = { ACTION_REQUIRED: 'Ação necessária', ATTENTION: 'Atenção', INFORMATION: 'Informação' } as const
 
 export function OverviewPage() {
   const org = useOrganization()
@@ -28,6 +28,7 @@ export function OverviewPage() {
   const p = sp.get('p')
   const health = useQuery({ queryKey: businessKeys.health(p), queryFn: () => getBusinessHealth(p) })
   const periods = useQuery({ queryKey: businessKeys.periods, queryFn: listBusinessPeriods })
+  const team = useQuery({ queryKey: businessKeys.team(p), queryFn: () => getBusinessTeam(p) })   // team concentration insight
   const lost = [health.error, periods.error].some((e) => e && toAppError(e).code === 'VERIFICATION_REQUIRED')
   useEffect(() => { if (lost) clearPrivateData(qc) }, [lost, qc])
   const back = () => navigate(ctx.view === 'manager' ? '/privado/equipa' : '/')
@@ -55,7 +56,7 @@ export function OverviewPage() {
 
   const h = health.data
   const c = h.current
-  const { insights } = buildInsights(h, m)
+  const { insights } = buildInsights(h, m, INSIGHT_THRESHOLDS, team.data)
   const pending = c.pending_rules_count > 0
   const hidden = (k: PrivateField) => c.private_fields.includes(k)
 
@@ -121,6 +122,7 @@ export function OverviewPage() {
         </section>
       )}
 
+      <button className="pick" onClick={() => navigate(`/privado/negocio/equipa?p=${c.period.id}`)}><strong>Equipa</strong><span aria-hidden className="muted">›</span></button>
       {ctx.view === 'manager' && <button className="pick" onClick={() => navigate(`/privado/fecho?p=${c.period.id}`)}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>}
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>
@@ -155,29 +157,5 @@ function Changes({ h, m }: { h: BusinessHealth; m: (n: number) => string }) {
         </div>
       )}
     </section>
-  )
-}
-
-function InsightCard({ insight: i, finance }: { insight: Insight; finance: boolean }) {
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
-  const d = i.detail
-  const rows: [string, string | undefined][] = [['Agora', d.current], ['Referência', d.reference], ['Variação', d.change], ['Base', d.basis]]
-  return (
-    <article className="stack" style={{ gap: '0.5rem' }} data-testid="insight" data-kind={i.kind}>
-      <button className="xrow" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden className={`xdot xdot-${i.severity === 'ACTION_REQUIRED' ? 'amber' : 'neutral'}`} />
-        <span className="grow"><strong style={{ display: 'block' }}>{i.title}</strong>
-          <span className="muted" style={{ fontSize: '0.8125rem' }}>{SEVERITY_LABEL[i.severity]} · {open ? 'esconder' : 'porquê?'}</span></span>
-      </button>
-      {open && (
-        <div className="stack" style={{ gap: '0.5rem' }} data-testid="insight-detail">
-          <dl className="kv-card">{rows.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
-          {d.drivers.length > 0 && <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>{d.drivers.map((x) => <li key={x.label} className="num">{x.label} {x.text}</li>)}</ul>}
-          <span className="muted" style={{ fontSize: '0.875rem' }}>{d.confidence}</span>
-          {d.action && (!d.action.finance || finance) && <button className="btn btn-secondary" onClick={() => navigate(d.action!.to)}>{d.action.label}</button>}
-        </div>
-      )}
-    </article>
   )
 }

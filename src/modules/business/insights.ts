@@ -2,11 +2,12 @@
 // Nothing here computes a financial figure: it compares figures the database already produced against the V1
 // thresholds, picks, groups and orders the insights, and says how each was reached. Wording states what changed
 // together, never why (correlation, not causality).
-import type { BusinessHealth, ComparisonReason } from './types'
+import type { BusinessHealth, BusinessTeam, ComparisonReason } from './types'
 import { INSIGHT_THRESHOLDS, type InsightThresholds } from './thresholds'
 
 export type Severity = 'ACTION_REQUIRED' | 'ATTENTION' | 'INFORMATION'
 export type InsightKind = 'payments_pending' | 'period_blocked' | 'production_up_result_down' | 'production_decline' | 'expense_category_high'
+  | 'team_concentration'
 export type Driver = { label: string; delta_minor: number; text: string }
 export type Insight = {
   id: string
@@ -22,14 +23,14 @@ export type Insight = {
     confidence: string
   }
 }
-export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' }
+export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' | 'not_enough_professionals' }
 
 const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
-const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high']
+const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'team_concentration']
 const pct = (n: number) => `${Math.round(Math.abs(n))}%`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS):
+export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam):
   { insights: Insight[]; skipped: SkippedInsight[] } {
   const out: Insight[] = []
   const skipped: SkippedInsight[] = []
@@ -149,6 +150,12 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
     }
   }
 
+  // 6 · Team concentration (Slice 02), when the team figures of the same period are at hand
+  if (team && team.period.id === cur.period.id) {
+    const c = teamConcentration(team, t)
+    if (c.insight) out.push(c.insight); else if (c.skipped) skipped.push(c.skipped)
+  }
+
   out.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
   return { insights: out.slice(0, t.maxShown), skipped }
 }
@@ -178,4 +185,35 @@ export const COMPARISON_UNAVAILABLE: Record<ComparisonReason, string> = {
   previous_not_closed: 'O período anterior ainda não está fechado: os valores dele podem mudar.',
   previous_not_comparable: 'O período anterior tem uma duração diferente e não é comparável.',
   insufficient_history: 'Ainda não há períodos fechados suficientes para uma média.',
+}
+
+/** Shares of the period's production taken by the largest and the two largest contributions (null without production). */
+export function concentration(team: BusinessTeam): { top: number; topTwo: number } | null {
+  const total = team.summary.production_minor
+  if (total <= 0) return null
+  const p = team.people.map((x) => x.production_minor).sort((a, b) => b - a)
+  return { top: ((p[0] ?? 0) * 100) / total, topTwo: (((p[0] ?? 0) + (p[1] ?? 0)) * 100) / total }
+}
+
+/** Insight 6 · how much of the production rests on one or two professionals. A business-structure observation, not an
+ *  evaluation of anyone: no names in the title, no ranking, the same wording whoever it is. */
+export function teamConcentration(team: BusinessTeam, t: InsightThresholds = INSIGHT_THRESHOLDS): { insight?: Insight; skipped?: SkippedInsight } {
+  const c = concentration(team)
+  if (!c) return {}
+  const one = c.top >= t.concentrationTopPct, two = c.topTwo >= t.concentrationTopTwoPct
+  if (!one && !two) return {}
+  if (team.summary.active_count < t.concentrationMinProfessionals) return { skipped: { kind: 'team_concentration', reason: 'not_enough_professionals' } }
+  const p = team.period
+  return { insight: {
+    id: `team_concentration:${p.id}`, kind: 'team_concentration', severity: 'ATTENTION', periods: [{ id: p.id, label: p.label }],
+    title: one ? `${pct(c.top)} da produção está concentrada num profissional.` : `${pct(c.topTwo)} da produção está concentrada em dois profissionais.`,
+    detail: {
+      current: `Maior contributo ${pct(c.top)} · dois maiores ${pct(c.topTwo)} · ${plural(team.summary.active_count, 'profissional ativo', 'profissionais ativos')}`,
+      basis: one ? `Um profissional tem pelo menos ${t.concentrationTopPct}% da produção de ${p.label}.`
+                 : `Os dois maiores contributos somam pelo menos ${t.concentrationTopTwoPct}% da produção de ${p.label}.`,
+      drivers: [],
+      action: { label: 'Ver a equipa', to: `/privado/negocio/equipa?p=${p.id}`, finance: false },
+      confidence: 'Descreve como a produção se distribui neste período; não avalia ninguém.',
+    },
+  } }
 }

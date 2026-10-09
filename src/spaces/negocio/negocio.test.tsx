@@ -3,12 +3,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
-import type { BusinessHealth, Change, MetricKey, PeriodMetrics } from '../../modules/business/api'
+import type { BusinessHealth, BusinessTeam, Change, MetricKey, PeriodMetrics } from '../../modules/business/api'
 
 const rpc = vi.fn()
 vi.mock('../../shared/supabase/client', () => ({ getSupabase: () => ({ rpc }) }))
 import { PrivateGate, PrivateHome } from '../../app/PrivateGate'
 import { OverviewPage } from './OverviewPage'
+import { TeamPage } from './TeamPage'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const K = (kz: number) => kz * 100
@@ -36,14 +37,26 @@ const base: BusinessHealth = {
   trend: [{ id: 'e4', label: 'Semana 4', is_complete: true, production_minor: K(100000), operating_result_minor: K(52000), result_private: false },
           { id: 'e5', label: 'Semana 5', is_complete: true, production_minor: K(120000), operating_result_minor: K(38500), result_private: false }],
 }
+const member = (n: number, prod: number, svc: number, share: number, prev: number | null, change: Change | null) =>
+  ({ person_id: `p${n}`, display_name: `Profissional ${n}`, services_count: svc, production_minor: K(prod), average_ticket_minor: Math.round(K(prod) / svc),
+     share_pct: share, previous_production_minor: prev === null ? null : K(prev), change })
+const team: BusinessTeam = {
+  period: { id: 'e5', label: 'Semana 5', state: 'fechado', starts_on: '2025-02-03', ends_on: '2025-02-09', is_complete: true },
+  summary: { production_minor: K(200000), services_count: 21, average_ticket_minor: 952381, active_count: 4 },
+  comparison: { available: true, reason: null, period: { id: 'e4', label: 'Semana 4', state: 'fechado' } },
+  people: [member(1, 70000, 7, 35, 100000, { delta_minor: -K(30000), percent: -30 }), member(2, 66000, 6, 33, 50000, { delta_minor: K(16000), percent: 32 }),
+           member(3, 32000, 4, 16, 50000, { delta_minor: -K(18000), percent: -36 }), member(4, 32000, 4, 16, 0, { delta_minor: K(32000), percent: null })],
+}
+const even: BusinessTeam = { ...team, people: team.people.map((x) => ({ ...x, production_minor: K(50000), share_pct: 25 })) }   // no concentration
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
 
-function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status()) {
+function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even) {
   rpc.mockImplementation(async (fn: string) => {
     if (fn === 'private_context_status') return { data: st, error: null }
     if (fn === 'end_private_context') return { data: { ok: true }, error: null }
     if (fn === 'business_health') return 'error' in health ? { data: null, error: { message: health.error, code: 'P0001' } } : { data: health, error: null }
+    if (fn === 'business_team') return 'error' in tm ? { data: null, error: { message: tm.error, code: 'P0001' } } : { data: tm, error: null }
     if (fn === 'business_periods') return { data: [period('e5', 'Semana 5'), period('e4', 'Semana 4')], error: null }
     return { data: [], error: null }
   })
@@ -57,6 +70,7 @@ function renderAt(path = '/privado/negocio') {
             <Route path="/privado" element={<PrivateGate />}>
               <Route index element={<PrivateHome />} />
               <Route path="negocio" element={<OverviewPage />} />
+              <Route path="negocio/equipa" element={<TeamPage />} />
               <Route path="equipa" element={<p>Equipa</p>} />
               <Route path="situacao/:personId" element={<p>Situação</p>} />
             </Route>
@@ -103,7 +117,7 @@ describe('Negócio · Visão geral', () => {
     expect(screen.getByText('Nada a assinalar neste período.')).toBeTruthy()
   })
 
-  it('single-person team (B11): every figure that would reveal it is "Não mostrado", with the reason; nothing compared or built from it', async () => {
+  it('business-only viewer (B11): every team-derived figure is "Não mostrado", with the reason; nothing compared or built from it', async () => {
     const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'] as const
     const none = { delta_minor: null, percent: null }
     serve({ ...base,
@@ -115,19 +129,19 @@ describe('Negócio · Visão geral', () => {
       changes: { previous: { ...base.changes.previous!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none },
                  average_3: { ...base.changes.average_3!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none } },
       open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }],
-      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }))
+      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }), team)
     renderAt()
     const o = await screen.findByTestId('overview')
     expect(within(o).getAllByRole('definition').map((d) => d.textContent).slice(1)).toEqual(['Não mostrado', 'Não mostrado', 'Não mostrado'])
     expect(within(o).getAllByRole('definition')[0]!.textContent).toContain('120.000')               // production stays
-    expect(screen.getByTestId('team-private').textContent).toContain('revelaria')
+    expect(screen.getByTestId('team-private').textContent).toContain('permitiria calcular')
     expect(screen.getByTestId('retention').textContent).toContain('Não mostrado')
     const c = screen.getByTestId('changes').textContent!
     expect(c).toContain('produção +20%')
     expect(c).toContain('resultado não mostrado')
     expect(c).not.toContain('Ganhos da equipa')
     expect(screen.getByTestId('trend').textContent).toContain('resultado não mostrado')
-    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).toEqual(['expense_category_high'])
+    expect(screen.queryAllByTestId('insight').map((i) => i.dataset.kind)).toEqual(['expense_category_high', 'team_concentration'])
   })
 
   it('pending rule: "—" for result, Livre and retention', async () => {
@@ -177,5 +191,61 @@ describe('Negócio · Visão geral', () => {
     serve({ error: 'VERIFICATION_REQUIRED' })
     renderAt()
     expect(await screen.findByText('Entrada privada')).toBeTruthy()
+  })
+})
+
+describe('Negócio → Equipa', () => {
+  beforeEach(() => rpc.mockReset())
+
+  it('needs the private area; the overview leads to it and shows the concentration insight', async () => {
+    serve(base, { active: false })
+    renderAt('/privado/negocio/equipa')
+    expect(await screen.findByText('Entrada privada')).toBeTruthy()
+    serve(base, status(), team)
+    renderAt()
+    expect((await screen.findAllByTestId('insight')).map((i) => i.dataset.kind)).toContain('team_concentration')
+    fireEvent.click(screen.getByRole('button', { name: /Equipa/ }))
+    expect(await screen.findByTestId('team-summary')).toBeTruthy()
+  })
+
+  it('summary, professionals with their change, neutral concentration; no ranking treatment', async () => {
+    serve(base, status({ view: 'self' }), team)
+    renderAt('/privado/negocio/equipa')
+    const sum = (await screen.findByTestId('team-summary')).textContent!
+    for (const x of ['200.000', '21', '9.523,81', 'Profissionais com serviços4', 'Maior contributo 35% · dois maiores 68%']) expect(sum).toContain(x)
+    const cards = screen.getAllByTestId('member')
+    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Profissional 1', 'Profissional 2', 'Profissional 3', 'Profissional 4'])
+    expect(cards[1]!.textContent).toContain('11.000')                                     // average ticket
+    expect(cards[1]!.textContent).toContain('33%')
+    expect(screen.getAllByTestId('member-change').map((c) => c.textContent)).toEqual(
+      ['Face a Semana 4: −30% (−30.000 Kz)', 'Face a Semana 4: +32% (+16.000 Kz)', 'Face a Semana 4: −36% (−18.000 Kz)', 'Sem produção em Semana 4'])
+    expect(screen.getByTestId('insight').textContent).toContain('68% da produção está concentrada em dois profissionais.')
+    const page = document.body.textContent!
+    expect(page).not.toMatch(/\b[1-4]\.?º|melhor|pior|ranking|lugar|Ganho|Adiantamento|Pagamento|Falta pagar/i)
+    expect(screen.queryByRole('button', { name: 'Ver situação completa' })).toBeNull()      // business-only: no finance action
+  })
+
+  it('comparison unavailable: the reason, no change line', async () => {
+    serve(base, status({ view: 'self' }), { ...team, comparison: { available: false, reason: 'previous_not_closed', period: { id: 'e4', label: 'Semana 4', state: 'aberto' } },
+      people: team.people.map((x) => ({ ...x, change: null, previous_production_minor: null })) })
+    renderAt('/privado/negocio/equipa')
+    expect((await screen.findByTestId('team-comparison-unavailable')).textContent).toBe('O período anterior ainda não está fechado: os valores dele podem mudar.')
+    expect(screen.queryAllByTestId('member-change')).toEqual([])
+  })
+
+  it('a team-finance reader gets "Ver situação completa" into the existing situation view', async () => {
+    serve(base, status(), team)
+    renderAt('/privado/negocio/equipa')
+    const buttons = await screen.findAllByRole('button', { name: 'Ver situação completa' })
+    expect(buttons).toHaveLength(4)
+    fireEvent.click(buttons[0]!)
+    expect(await screen.findByText('Situação')).toBeTruthy()
+  })
+
+  it('no insight with fewer than three professionals', async () => {
+    serve(base, status({ view: 'self' }), { ...team, summary: { ...team.summary, active_count: 2 }, people: team.people.slice(0, 2) })
+    renderAt('/privado/negocio/equipa')
+    await screen.findByTestId('team-summary')
+    expect(screen.queryByTestId('insight')).toBeNull()
   })
 })
