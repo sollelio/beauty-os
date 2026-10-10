@@ -1,11 +1,11 @@
-// Module `business` access layer: Business Health (Negócio → Visão geral, Equipa, Serviços, Custos & Stock). Reads business_health, business_team, business_services, business_costs,
+// Module `business` access layer: Business Health (Negócio → Visão geral, Equipa, Serviços, Custos & Stock, Finanças). Reads business_health, business_team, business_services, business_costs, business_finance,
 // enforced by the database (private session + business.health.read). It carries business-level figures only; a
 // person's remuneration stays behind team.finance.read. All reads live under PRIVATE_ROOT (removed on exit).
 import { getSupabase } from '../../shared/supabase/client'
 import { toAppError } from '../../shared/errors'
 
 export type * from './types'
-import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, PeriodRef } from './types'
+import type { BusinessCosts, BusinessFinance, BusinessHealth, BusinessServices, BusinessTeam, PeriodRef } from './types'
 
 const k = (p: string | null) => p ?? 'current'
 export const businessKeys = {
@@ -15,6 +15,7 @@ export const businessKeys = {
   team: (p: string | null) => ['private', 'business', 'team', k(p)] as const,
   services: (p: string | null) => ['private', 'business', 'services', k(p)] as const,
   costs: (p: string | null) => ['private', 'business', 'costs', k(p)] as const,
+  finance: (p: string | null) => ['private', 'business', 'finance', k(p)] as const,
 }
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
@@ -27,4 +28,5 @@ export const getBusinessHealth = (period: string | null) => rpc<BusinessHealth>(
 export const getBusinessTeam = (period: string | null) => rpc<BusinessTeam>('business_team', { p_period_id: period })
 export const getBusinessServices = (period: string | null) => rpc<BusinessServices>('business_services', { p_period_id: period })
 export const getBusinessCosts = (period: string | null) => rpc<BusinessCosts>('business_costs', { p_period_id: period })
+export const getBusinessFinance = (period: string | null) => rpc<BusinessFinance>('business_finance', { p_period_id: period })
 export const listBusinessPeriods = () => rpc<PeriodRef[]>('business_periods')

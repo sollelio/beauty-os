@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
-import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
+import type { BusinessCosts, BusinessFinance, BusinessHealth, BusinessServices, FinanceMetric, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
 
 const rpc = vi.fn()
 vi.mock('../../shared/supabase/client', () => ({ getSupabase: () => ({ rpc }) }))
@@ -12,6 +12,7 @@ import { OverviewPage } from './OverviewPage'
 import { TeamPage } from './TeamPage'
 import { ServicesPage } from './ServicesPage'
 import { CostsPage } from './CostsPage'
+import { FinancePage } from './FinancePage'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const K = (kz: number) => kz * 100
@@ -88,10 +89,30 @@ const cs: BusinessCosts = {
            activity: [{ product_id: 'p1', name: 'Acetona', purchases: 4, marks: 3, last_purchased_at: null }, { product_id: 'p3', name: 'Luvas', purchases: 1, marks: 1, last_purchased_at: null }] },
 }
 const quietCs: BusinessCosts = { ...cs, purchases: { ...cs.purchases, change: { delta_minor: 0, percent: 0 } }, stock: { ...cs.stock, activity: [] } }
+const fm = (key: FinanceMetric['key'], current: number | null, previous: number | null, change: Change | null, o: Partial<FinanceMetric> = {}): FinanceMetric =>
+  ({ key, current, hidden: false, previous, previous_hidden: false, average_3: null, average_3_hidden: false, change_previous: change, change_average_3: null, ...o })
+const fin: BusinessFinance = {
+  period: period('e5', 'Semana 5'), source: 'close_statement', comparison: base.meta.comparison, private_fields: [], pending_rules_count: 0,
+  metrics: [fm('production_minor', K(220000), K(200000), { delta_minor: K(20000), percent: 10 }, { average_3: 20333333, change_average_3: { delta_minor: 1666667, percent: 8.2 } }),
+            fm('team_earnings_minor', K(88000), K(80000), { delta_minor: K(8000), percent: 10 }), fm('expenses_minor', K(48000), K(41000), { delta_minor: K(7000), percent: 17.1 }),
+            fm('purchases_salon_minor', K(23000), K(10000), { delta_minor: K(13000), percent: 130 }), fm('operating_costs_minor', K(159000), K(131000), { delta_minor: K(28000), percent: 21.4 }),
+            fm('operating_result_minor', K(61000), K(69000), { delta_minor: -K(8000), percent: -11.6 }), fm('free_minor', K(51000), K(74000), { delta_minor: -K(23000), percent: -31.1 })],
+  indicators: { operating_cost_ratio_pct: 72.3, retention_pct: 27.7, retention_previous_pct: 34.5, retention_average_3_pct: 34.8, retention_change_previous_pp: -6.8, retention_change_average_3_pp: -7.1 },
+  result_change: { delta_minor: -K(8000), percent: -11.6 },
+  drivers: [{ kind: 'purchases_salon', label: null, current_minor: K(23000), previous_minor: K(10000), delta_minor: K(13000), percent: 130 },
+            { kind: 'team_earnings', label: null, current_minor: K(88000), previous_minor: K(80000), delta_minor: K(8000), percent: 10 },
+            { kind: 'expense_category', label: 'Materiais', current_minor: K(18000), previous_minor: K(11000), delta_minor: K(7000), percent: 63.6 }],
+  trend: [{ id: 'e4', label: 'Semana 4', state: 'fechado', is_complete: true, production_minor: K(200000), operating_result_minor: K(69000), retention_pct: 34.5, private_fields: [] },
+          { id: 'e5', label: 'Semana 5', state: 'fechado', is_complete: true, production_minor: K(220000), operating_result_minor: K(61000), retention_pct: 27.7, private_fields: [] }],
+  reserve: { balance_minor: K(35000), allocated_minor: K(10000), used_minor: 0, previous_allocated_minor: 0, previous_used_minor: K(5000) },
+  obligations: { state: 'fechado', approved: true, paid_team_minor: K(88000), unpaid_team_minor: 0, free_minor: K(51000), undistributed_minor: K(21000), owners_decision: 'amount' },
+  open_periods: [],
+}
 const status = (o: Record<string, unknown> = {}) => ({ active: true, person_id: 'f', display_name: 'Fernando', view: 'manager', business_health: true,
   expires_at: new Date(Date.now() + 300_000).toISOString(), ...o })
 
-function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even, svs: BusinessServices = quietSv, cst: BusinessCosts = quietCs) {
+function serve(health: BusinessHealth | { error: string }, st: Record<string, unknown> = status(), tm: BusinessTeam | { error: string } = even, svs: BusinessServices = quietSv, cst: BusinessCosts = quietCs,
+               fi: BusinessFinance | { error: string } = fin) {
   rpc.mockImplementation(async (fn: string) => {
     if (fn === 'private_context_status') return { data: st, error: null }
     if (fn === 'end_private_context') return { data: { ok: true }, error: null }
@@ -99,6 +120,7 @@ function serve(health: BusinessHealth | { error: string }, st: Record<string, un
     if (fn === 'business_team') return 'error' in tm ? { data: null, error: { message: tm.error, code: 'P0001' } } : { data: tm, error: null }
     if (fn === 'business_services') return { data: svs, error: null }
     if (fn === 'business_costs') return { data: cst, error: null }
+    if (fn === 'business_finance') return 'error' in fi ? { data: null, error: { message: fi.error, code: 'P0001' } } : { data: fi, error: null }
     if (fn === 'business_periods') return { data: [period('e5', 'Semana 5'), period('e4', 'Semana 4')], error: null }
     return { data: [], error: null }
   })
@@ -115,6 +137,8 @@ function renderAt(path = '/privado/negocio') {
               <Route path="negocio/equipa" element={<TeamPage />} />
               <Route path="negocio/servicos" element={<ServicesPage />} />
               <Route path="negocio/custos" element={<CostsPage />} />
+              <Route path="negocio/financas" element={<FinancePage />} />
+              <Route path="fecho" element={<p>Fecho</p>} />
               <Route path="equipa" element={<p>Equipa</p>} />
               <Route path="situacao/:personId" element={<p>Situação</p>} />
             </Route>
@@ -430,5 +454,122 @@ describe('Negócio → Custos & Stock', () => {
     renderAt('/privado/negocio/custos')
     expect((await screen.findByTestId('costs-average-unavailable')).textContent).toBe('Ainda não há períodos fechados suficientes para uma média.')
     expect(screen.getAllByTestId('category-change').map((c) => c.textContent).join()).not.toContain('média de 3')
+  })
+})
+
+describe('Negócio · Finanças', () => {
+  beforeEach(() => rpc.mockReset())
+  const f4Health: BusinessHealth = { ...base, current: { ...cur, production_minor: K(220000), operating_result_minor: K(61000), expenses_minor: K(48000), purchases_salon_minor: K(23000),
+    team_earnings_minor: K(88000), operating_costs_minor: K(159000), services_count: 22 },
+    previous: { ...prev, production_minor: K(200000), operating_result_minor: K(69000), purchases_salon_minor: K(10000), expenses_minor: K(41000), team_earnings_minor: K(80000) },
+    changes: { previous: ch({ production_minor: { delta_minor: K(20000), percent: 10 }, operating_result_minor: { delta_minor: -K(8000), percent: -11.6 },
+                              purchases_salon_minor: { delta_minor: K(13000), percent: 130 }, team_earnings_minor: { delta_minor: K(8000), percent: 10 },
+                              expenses_minor: { delta_minor: K(7000), percent: 17.1 } }), average_3: null },
+    meta: { ...base.meta, comparison: { ...base.meta.comparison, average_3: { available: false, reason: 'insufficient_history', window: 3 } } },
+    expense_categories: [{ category_id: 'c1', label: 'Materiais', current_minor: K(18000), previous_minor: K(11000), average_3_minor: null, reference_presence: null }] }
+
+  it('needs the private area; the overview leads to it', async () => {
+    serve(base, { active: false })
+    renderAt('/privado/negocio/financas')
+    expect(await screen.findByText('Entrada privada')).toBeTruthy()
+    expect(rpc.mock.calls.some(([fn]) => fn === 'business_finance')).toBe(false)
+    serve(base, status({ view: 'self' }))
+    renderAt()
+    fireEvent.click(await screen.findByRole('button', { name: /Finanças/ }))
+    expect(await screen.findByTestId('finance-summary')).toBeTruthy()
+  })
+
+  it('not a business.health.read holder: the area says so', async () => {
+    serve(base, status(), even, quietSv, quietCs, { error: 'NOT_AUTHORIZED' })
+    renderAt('/privado/negocio/financas')
+    expect((await screen.findByRole('alert')).textContent).toBe('Esta área é só para quem acompanha o negócio.')
+  })
+
+  it('summary, decomposition, indicators with the plain-language sentence', async () => {
+    serve(f4Health)
+    renderAt('/privado/negocio/financas')
+    const sum = await screen.findByTestId('finance-summary')
+    expect(within(sum).getAllByRole('definition').map((d) => d.textContent)).toEqual(['220.000 Kz', '61.000 Kz', '51.000 Kz', '0 Kz'])
+    expect(within(screen.getByTestId('composition')).getAllByRole('definition').map((d) => d.textContent))
+      .toEqual(['220.000 Kz', '88.000 Kz', '48.000 Kz', '23.000 Kz', '61.000 Kz'])
+    const ind = screen.getByTestId('indicators').textContent!
+    expect(ind).toContain('Custos operacionais: 72,3% da produção.')
+    expect(ind).toContain('Retenção operacional: 27,7% · −6,8 p.p. face a Semana 4 · −7,1 p.p. face à média')
+    expect(screen.getByTestId('retention-sentence').textContent).toBe('De cada 100 Kz produzidos, 27,7 Kz ficaram como resultado operacional, antes das decisões de reserva e distribuição.')
+    expect(document.body.textContent).not.toMatch(/lucro/i)
+  })
+
+  it('comparison, drivers (no causal claim) and trend', async () => {
+    serve(f4Health)
+    renderAt('/privado/negocio/financas')
+    const c = (await screen.findByTestId('finance-changes')).textContent!
+    expect(screen.getByTestId('result-headline').textContent).toBe('Resultado operacional caiu 11,6% face a Semana 4.')
+    expect(within(screen.getByTestId('drivers')).getAllByRole('listitem').map((l) => l.textContent))
+      .toEqual(['Compras (parte do salão) +130% (+13.000 Kz)', 'Ganhos da equipa +10% (+8.000 Kz)', 'Materiais +63,6% (+7.000 Kz)'])
+    expect(c).toContain('não indicam a causa')
+    expect(c).toContain('Produção+10% (+20.000 Kz) · antes 200.000 Kz · média 203.333,33 Kz: +8,2% (+16.666,67 Kz)')
+    const t = screen.getAllByTestId('trend-point').map((x) => x.textContent)
+    expect(t[1]).toBe('Semana 5produção 220.000 Kz · resultado 61.000 Kz · retenção 27,7%')
+  })
+
+  it('reserve and decisions/obligations; Fecho and payments links only for team finance', async () => {
+    serve(f4Health)
+    renderAt('/privado/negocio/financas')
+    expect(within(await screen.findByTestId('reserve')).getAllByRole('definition').map((d) => d.textContent))
+      .toEqual(['35.000 Kz', '10.000 Kz · antes 0 Kz', '0 Kz · antes 5.000 Kz'])
+    expect(within(screen.getByTestId('obligations')).getAllByRole('definition').map((d) => d.textContent))
+      .toEqual(['Fechado', 'Registada', '21.000 Kz', '88.000 Kz', '0 Kz'])
+    expect(screen.getByRole('button', { name: /Pagamentos/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Fecho do período/ }))
+    expect(await screen.findByText('Fecho')).toBeTruthy()
+    rpc.mockReset()
+    serve(f4Health, status({ view: 'self' }))
+    renderAt('/privado/negocio/financas')
+    await screen.findAllByTestId('obligations')
+    expect(screen.queryByRole('button', { name: /Fecho do período/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Pagamentos/ })).toBeNull()
+  })
+
+  it('finance insights only, in context, each explainable', async () => {
+    serve(f4Health, status(), even, quietSv, cs)
+    renderAt('/privado/negocio/financas')
+    const cards = await screen.findAllByTestId('insight')
+    expect(cards.map((x) => x.dataset.kind)).toEqual(['payments_pending', 'production_up_result_down'])   // no product_attention here
+    fireEvent.click(within(cards[1]!).getByRole('button'))
+    expect(within(cards[1]!).getByTestId('insight-detail').textContent).toContain('Compras (parte do salão)')
+  })
+
+  it('B11: hidden figures say so; nothing compared, ratioed, trended or driven from them', async () => {
+    const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor', 'paid_team_minor', 'undistributed_minor'] as const
+    const hide = (x: FinanceMetric) => (H as readonly string[]).includes(x.key) ? { ...x, current: null, hidden: true, change_previous: null, change_average_3: null } : x
+    const hidden: BusinessFinance = { ...fin, private_fields: [...H], metrics: fin.metrics.map(hide),
+      indicators: { ...fin.indicators, operating_cost_ratio_pct: null, retention_pct: null, retention_change_previous_pp: null, retention_change_average_3_pp: null },
+      result_change: null, drivers: fin.drivers.filter((d) => d.kind !== 'team_earnings'),
+      trend: [fin.trend[0]!, { ...fin.trend[1]!, operating_result_minor: null, retention_pct: null, private_fields: ['operating_result_minor', 'retention_pct'] }],
+      obligations: { ...fin.obligations, paid_team_minor: null, unpaid_team_minor: null, free_minor: null, undistributed_minor: null } }
+    serve(f4Health, status({ view: 'self' }), even, quietSv, quietCs, hidden)
+    renderAt('/privado/negocio/financas')
+    expect(within(await screen.findByTestId('finance-summary')).getAllByRole('definition').map((d) => d.textContent))
+      .toEqual(['220.000 Kz', 'Não mostrado', 'Não mostrado', 'Não mostrado'])
+    expect(screen.getByTestId('finance-private').textContent).toBe('Não mostrado: neste período, este valor permitiria calcular quanto uma pessoa da equipa ganha, recebeu ou tem a receber.')
+    expect(screen.getByTestId('indicators').textContent).toBe('Retenção e peso dos custos: não mostrado.')
+    expect(screen.queryByTestId('retention-sentence')).toBeNull()
+    expect(screen.queryByTestId('result-headline')).toBeNull()
+    expect(screen.getByTestId('drivers').textContent).not.toContain('Ganhos da equipa')
+    expect(screen.getAllByTestId('trend-point')[1]!.textContent).toBe('Semana 5produção 220.000 Kz · resultado não mostrado · retenção não mostrado')
+    expect(within(screen.getByTestId('obligations')).getAllByRole('definition').map((d) => d.textContent))
+      .toEqual(['Fechado', 'Registada', 'Não mostrado', 'Não mostrado', 'Não mostrado'])
+    for (const v of ['88.000', '61.000', '51.000', '21.000', '159.000']) expect(document.body.textContent, v).not.toContain(v)
+  })
+
+  it('zero production and an unavailable comparison say so', async () => {
+    const zero: BusinessFinance = { ...fin, metrics: fin.metrics.map((x) => ({ ...x, current: 0, previous: null, change_previous: null, average_3: null, change_average_3: null })),
+      indicators: { ...fin.indicators, operating_cost_ratio_pct: null, retention_pct: null, retention_change_previous_pp: null, retention_change_average_3_pp: null },
+      comparison: { previous: { available: false, reason: 'previous_not_closed', period: null }, average_3: { available: true, reason: null, window: 3 } },
+      result_change: null, drivers: [], trend: [] }
+    serve(base, status(), even, quietSv, quietCs, zero)
+    renderAt('/privado/negocio/financas')
+    expect((await screen.findByTestId('indicators')).textContent).toBe('Sem produção neste período: sem rácios.')
+    expect(screen.getByTestId('finance-changes').textContent).toBe('O que mudou?O período anterior ainda não está fechado: os valores dele podem mudar.')
   })
 })

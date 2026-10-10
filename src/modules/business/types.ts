@@ -9,10 +9,13 @@ export type PeriodMetrics = {
   team_earnings_minor: number | null; expenses_minor: number; purchases_salon_minor: number | null
   operating_costs_minor: number | null; operating_result_minor: number | null; retention_pct: number | null
   free_minor: number | null; unpaid_team_minor: number | null; approved: boolean; pending_rules_count: number
+  // Slice 05 (read by Finanças through business_finance)
+  paid_team_minor?: number | null; reserve_allocated_minor?: number; reserve_used_minor?: number
+  undistributed_minor?: number | null; owners_decision?: OwnersDecision
   private_fields: PrivateField[]   // hidden: they would reveal one person's finance (07 D9 · B11); null above
 }
 export type PrivateField = 'team_earnings_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'retention_pct' | 'free_minor' | 'unpaid_team_minor'
-  | 'purchases_salon_minor'
+  | 'purchases_salon_minor' | 'paid_team_minor' | 'undistributed_minor'
 export type MetricKey = 'production_minor' | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
   | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor' | 'services_count'
 export type Change = { delta_minor: number | null; percent: number | null }
@@ -83,4 +86,35 @@ export type BusinessHealth = {
   open_periods: { id: string; label: string; state: PeriodState; is_complete: boolean; unpaid_team_minor: number | null; unpaid_private: boolean
                   pending_rules_count: number }[]
   trend: { id: string; label: string; is_complete: boolean; production_minor: number; operating_result_minor: number | null; result_private: boolean }[]
+}
+/** Whether the owners' decision of the period is recorded, and its kind ('none': nothing distributed). Never an amount or an owner. */
+export type OwnersDecision = 'none' | 'amount' | null
+/** Negócio → Finanças (business_finance): business-level money, never a person's (07 D9 · Slice 05). */
+export type FinanceMetricKey = 'production_minor' | 'team_earnings_minor' | 'expenses_minor' | 'purchases_salon_minor'
+  | 'operating_costs_minor' | 'operating_result_minor' | 'free_minor'
+export type FinanceMetric = {
+  key: FinanceMetricKey; current: number | null; hidden: boolean
+  previous: number | null; previous_hidden: boolean; average_3: number | null; average_3_hidden: boolean
+  change_previous: Change | null; change_average_3: Change | null   // null: no comparison, or a side hidden / undefined
+}
+export type FinanceDriver = { kind: 'team_earnings' | 'purchases_salon' | 'expense_category'; label: string | null
+  current_minor: number; previous_minor: number; delta_minor: number; percent: number | null }
+export type BusinessFinance = {
+  period: PeriodMetrics['period']
+  source: PeriodMetrics['source']
+  comparison: BusinessHealth['meta']['comparison']
+  private_fields: PrivateField[]
+  pending_rules_count: number
+  metrics: FinanceMetric[]
+  indicators: { operating_cost_ratio_pct: number | null; retention_pct: number | null; retention_previous_pct: number | null
+                retention_average_3_pct: number | null; retention_change_previous_pp: number | null; retention_change_average_3_pp: number | null }
+  result_change: Change | null
+  drivers: FinanceDriver[]
+  trend: { id: string; label: string; state: PeriodState; is_complete: boolean; production_minor: number
+           operating_result_minor: number | null; retention_pct: number | null; private_fields: ('operating_result_minor' | 'retention_pct')[] }[]
+  reserve: { balance_minor: number; allocated_minor: number; used_minor: number
+             previous_allocated_minor: number | null; previous_used_minor: number | null }   // previous: only with a valid comparison
+  obligations: { state: PeriodState; approved: boolean; paid_team_minor: number | null; unpaid_team_minor: number | null
+                 free_minor: number | null; undistributed_minor: number | null; owners_decision: OwnersDecision }
+  open_periods: BusinessHealth['open_periods']
 }

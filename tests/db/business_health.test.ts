@@ -211,7 +211,7 @@ describe('individual finance is not inferable (07 D9 · B11): hidden only where 
       unpaid_team_minor: K(30000), private_fields: [] })
     expect(m6.current.retention_pct).not.toBeNull()
     expect(m6.current.free_minor).not.toBeNull()
-    expect(b6.current.private_fields).toEqual([...HIDDEN, 'unpaid_team_minor'])
+    expect(b6.current.private_fields).toEqual([...HIDDEN, 'unpaid_team_minor', 'paid_team_minor'])   // paid: Slice 05
     for (const k of [...HIDDEN, 'unpaid_team_minor'] as const) expect(b6.current[k], k).toBeNull()
     for (const k of ['production_minor', 'services_count', 'expenses_minor', 'purchases_salon_minor', 'pending_rules_count', 'approved'] as const)
       expect(b6.current[k], k).toBe(m6.current[k])
@@ -261,7 +261,7 @@ describe('individual finance is not inferable (07 D9 · B11): hidden only where 
     const r = await dev.rpc('verify_person', { p_person_id: id('e206'), p_secret: '545454', p_scope: 'private_session' })
     expect(r.data?.ok, JSON.stringify(r.data)).toBe(true)
     const own = await health(P['Semana E2']!)                       // e206 knows its own share: the rest would be e201's
-    expect(own.current.private_fields).toEqual([...HIDDEN])
+    expect(own.current.private_fields).toEqual([...HIDDEN, 'paid_team_minor'])   // paid + unpaid would give the team's pay
     expect(own.current.unpaid_team_minor).toBe(0)                   // nobody is owed: nothing to protect
   })
 

@@ -128,6 +128,7 @@ export function OverviewPage() {
       <button className="pick" onClick={() => navigate(`/privado/negocio/equipa?p=${c.period.id}`)}><strong>Equipa</strong><span aria-hidden className="muted">›</span></button>
       <button className="pick" onClick={() => navigate(`/privado/negocio/servicos?p=${c.period.id}`)}><strong>Serviços</strong><span aria-hidden className="muted">›</span></button>
       <button className="pick" onClick={() => navigate(`/privado/negocio/custos?p=${c.period.id}`)}><strong>Custos & Stock</strong><span aria-hidden className="muted">›</span></button>
+      <button className="pick" onClick={() => navigate(`/privado/negocio/financas?p=${c.period.id}`)}><strong>Finanças</strong><span aria-hidden className="muted">›</span></button>
       {ctx.view === 'manager' && <button className="pick" onClick={() => navigate(`/privado/fecho?p=${c.period.id}`)}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>}
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>

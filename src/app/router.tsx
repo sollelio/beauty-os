@@ -28,6 +28,7 @@ import { OverviewPage } from '../spaces/negocio/OverviewPage'
 import { TeamPage } from '../spaces/negocio/TeamPage'
 import { ServicesPage } from '../spaces/negocio/ServicesPage'
 import { CostsPage } from '../spaces/negocio/CostsPage'
+import { FinancePage } from '../spaces/negocio/FinancePage'
 
 export const router = createBrowserRouter([
   {
@@ -71,6 +72,7 @@ export const router = createBrowserRouter([
               { path: 'negocio/equipa', element: <TeamPage /> },
               { path: 'negocio/servicos', element: <ServicesPage /> },
               { path: 'negocio/custos', element: <CostsPage /> },
+              { path: 'negocio/financas', element: <FinancePage /> },
             ],
           },
         ],
