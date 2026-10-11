@@ -1,7 +1,8 @@
-// Business Health core insights (Slice 01): deterministic, generated on demand from the business_health read model.
-// Nothing here computes a financial figure: it compares figures the database already produced against the V1
-// thresholds, picks, groups and orders the insights, and says how each was reached. Wording states what changed
-// together, never why (correlation, not causality).
+// Business Health insights (Slices 01–06): one deterministic engine, generated on demand from the privacy-redacted read
+// models (business_health, business_team, business_services, business_costs). Nothing here computes a financial
+// figure: it compares figures the database already produced against the V1 thresholds, picks, groups and orders the
+// insights, and says how each was reached. Wording states what changed together, never why (correlation, not
+// causality). The overview (top 5), the detail pages and Negócio → Insights all read this engine; nothing is stored.
 import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, ComparisonReason, ServiceRow } from './types'
 import { INSIGHT_THRESHOLDS, type InsightThresholds } from './thresholds'
 
@@ -9,12 +10,21 @@ export type Severity = 'ACTION_REQUIRED' | 'ATTENTION' | 'INFORMATION'
 export type InsightKind = 'payments_pending' | 'period_blocked' | 'production_up_result_down' | 'production_decline' | 'expense_category_high'
   | 'team_concentration' | 'service_decline' | 'service_growth' | 'service_concentration' | 'purchases_up' | 'product_attention'
 export type Driver = { label: string; delta_minor: number; text: string }
+/** state: an open business situation (active while it lasts, gone once resolved); period: an analytical fact about the period. */
+export type InsightScope = 'state' | 'period'
+/** The Negócio area where the insight can be investigated (open to every business.health.read viewer). */
+export type InsightSource = 'financas' | 'equipa' | 'servicos' | 'custos'
 export type Insight = {
-  id: string
+  id: string                                        // stable: kind + the period(s) it is about
   kind: InsightKind
   severity: Severity
-  periods: { id: string; label: string }[]
+  scope: InsightScope
+  source: InsightSource
+  period_id: string                                 // the period it was generated for
+  periods: { id: string; label: string }[]          // the period(s) it is about
   title: string
+  summary: string                                   // one short line under the title
+  impact_minor: number | null                       // money at stake, from visible figures only; ordering, never shown alone
   detail: {
     current?: string; reference?: string; change?: string
     basis: string                                   // periods used / what the comparison is against
@@ -25,12 +35,37 @@ export type Insight = {
 }
 export type SkippedInsight = { kind: InsightKind; reason: ComparisonReason | 'not_enough_services' | 'figure_hidden' | 'not_enough_professionals' | 'not_enough_services_performed' }
 
-const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
+export const SEVERITY_ORDER: Severity[] = ['ACTION_REQUIRED', 'ATTENTION', 'INFORMATION']
+export const SEVERITY_LABEL: Record<Severity, string> = { ACTION_REQUIRED: 'Ação necessária', ATTENTION: 'Atenção', INFORMATION: 'Informação' }
+const META: Record<InsightKind, { scope: InsightScope; source: InsightSource }> = {
+  payments_pending: { scope: 'state', source: 'financas' }, period_blocked: { scope: 'state', source: 'financas' },
+  product_attention: { scope: 'state', source: 'custos' },
+  production_up_result_down: { scope: 'period', source: 'financas' }, production_decline: { scope: 'period', source: 'financas' },
+  expense_category_high: { scope: 'period', source: 'custos' }, purchases_up: { scope: 'period', source: 'custos' },
+  team_concentration: { scope: 'period', source: 'equipa' },
+  service_concentration: { scope: 'period', source: 'servicos' }, service_growth: { scope: 'period', source: 'servicos' }, service_decline: { scope: 'period', source: 'servicos' },
+}
+export const SOURCE_AREA: Record<InsightSource, { label: string; path: string }> = {
+  financas: { label: 'Finanças', path: '/privado/negocio/financas' }, equipa: { label: 'Equipa', path: '/privado/negocio/equipa' },
+  servicos: { label: 'Serviços', path: '/privado/negocio/servicos' }, custos: { label: 'Custos & Stock', path: '/privado/negocio/custos' },
+}
+type Draft = Omit<Insight, 'scope' | 'source' | 'period_id' | 'summary' | 'impact_minor'> & { impact_minor?: number | null }
+/** Completes a generated insight with the catalogue metadata; the summary is its change, else its current values. */
+const make = (i: Draft, periodId: string): Insight =>
+  ({ ...i, ...META[i.kind], period_id: periodId, summary: i.detail.change ?? i.detail.current ?? i.detail.basis, impact_minor: i.impact_minor ?? null })
 const KIND_ORDER: InsightKind[] = ['payments_pending', 'period_blocked', 'production_up_result_down', 'production_decline', 'expense_category_high', 'purchases_up', 'product_attention', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth']
 const pct = (n: number) => `${Math.round(Math.abs(n))}%`
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
+/** The overview's insights: the engine's list, at most `maxShown` (5). */
 export function buildInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam, services?: BusinessServices, costs?: BusinessCosts):
+  { insights: Insight[]; skipped: SkippedInsight[] } {
+  const r = generateInsights(h, money, t, team, services, costs)
+  return { insights: r.insights.slice(0, t.maxShown), skipped: r.skipped }
+}
+
+/** Every insight of the period, deduplicated, grouped and in priority order (sortInsights). */
+export function generateInsights(h: BusinessHealth, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS, team?: BusinessTeam, services?: BusinessServices, costs?: BusinessCosts):
   { insights: Insight[]; skipped: SkippedInsight[] } {
   const out: Insight[] = []
   const skipped: SkippedInsight[] = []
@@ -42,8 +77,8 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
   const unpaid = h.open_periods.filter((p) => (p.unpaid_team_minor ?? 0) > 0)
   if (unpaid.length > 0) {
     const total = unpaid.reduce((s, p) => s + (p.unpaid_team_minor ?? 0), 0)
-    out.push({
-      id: `payments_pending:${unpaid.map((p) => p.id).join(',')}`, kind: 'payments_pending', severity: 'ACTION_REQUIRED',
+    out.push(make({
+      id: `payments_pending:${unpaid.map((p) => p.id).join(',')}`, kind: 'payments_pending', severity: 'ACTION_REQUIRED', impact_minor: total,
       periods: unpaid.map((p) => ({ id: p.id, label: p.label })),
       title: `Ainda faltam ${money(total)} por pagar à equipa.`,
       detail: {
@@ -53,14 +88,14 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
         action: { label: 'Ver pagamentos', to: `/privado/fecho/pagamentos?p=${unpaid[0]!.id}`, finance: true },
         confidence: 'Valor do fecho aprovado; desaparece quando os pagamentos forem confirmados.',
       },
-    })
+    }, cur.period.id))
   }
 
   // 2 · Ended periods whose approval is blocked by rules still to decide, one grouped insight
   const blocked = h.open_periods.filter((p) => p.is_complete && p.state === 'aberto' && p.pending_rules_count > 0)
   if (blocked.length > 0) {
     const rules = blocked.reduce((s, p) => s + p.pending_rules_count, 0)
-    out.push({
+    out.push(make({
       id: `period_blocked:${blocked.map((p) => p.id).join(',')}`, kind: 'period_blocked', severity: 'ACTION_REQUIRED',
       periods: blocked.map((p) => ({ id: p.id, label: p.label })),
       title: blocked.length === 1
@@ -72,7 +107,7 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
         action: { label: 'Abrir o fecho', to: `/privado/fecho?p=${blocked[0]!.id}`, finance: true },
         confidence: 'Enquanto houver regras por definir, os custos, o resultado e o livre do período ficam por calcular.',
       },
-    })
+    }, cur.period.id))
   }
 
   // 3 / 4 · Against the previous comparable period
@@ -87,8 +122,8 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
       skipped.push({ kind: 'production_up_result_down', reason: 'figure_hidden' })
     if (prod.percent !== null && res.percent !== null && prod.percent >= t.productionUpPct && res.percent <= -t.resultDropPct) {
       const drivers = costDrivers(h, money).slice(0, t.maxDrivers)
-      out.push({
-        id: `production_up_result_down:${cur.period.id}`, kind: 'production_up_result_down', severity: 'ATTENTION',
+      out.push(make({
+        id: `production_up_result_down:${cur.period.id}`, kind: 'production_up_result_down', severity: 'ATTENTION', impact_minor: res.delta_minor === null ? null : Math.abs(res.delta_minor),
         periods: [{ id: cur.period.id, label: cur.period.label }],
         title: `A produção subiu ${pct(prod.percent)} face a ${prevLabel}, mas o resultado operacional desceu ${pct(res.percent)}.`,
         detail: {
@@ -99,12 +134,12 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
           drivers,
           confidence: drivers.length ? 'Custos que mais subiram no mesmo período; não indica que tenham sido a causa.' : 'Sem um custo que se destaque.',
         },
-      })
+      }, cur.period.id))
     }
     if (prod.percent !== null && prod.percent <= -t.productionDropPct) {
       if (cur.services_count < t.minServices) skipped.push({ kind: 'production_decline', reason: 'not_enough_services' })
-      else out.push({
-        id: `production_decline:${cur.period.id}`, kind: 'production_decline', severity: 'ATTENTION',
+      else out.push(make({
+        id: `production_decline:${cur.period.id}`, kind: 'production_decline', severity: 'ATTENTION', impact_minor: prod.delta_minor === null ? null : Math.abs(prod.delta_minor),
         periods: [{ id: cur.period.id, label: cur.period.label }],
         title: `A produção desceu ${pct(prod.percent)} face a ${prevLabel}.`,
         detail: {
@@ -115,7 +150,7 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
           drivers: [],
           confidence: `Com ${plural(cur.services_count, 'serviço registado', 'serviços registados')} (mínimo ${t.minServices}).`,
         },
-      })
+      }, cur.period.id))
     }
   }
 
@@ -132,8 +167,9 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
     if (high.length > 0) {
       const above = (c: (typeof high)[number]) => ((c.current_minor - c.average_3_minor!) * 100) / c.average_3_minor!
       const used = h.average_3.periods.map((p) => p.label).join(', ')
-      out.push({
+      out.push(make({
         id: `expense_category_high:${cur.period.id}`, kind: 'expense_category_high', severity: 'ATTENTION',
+        impact_minor: high.reduce((s, c) => s + c.current_minor - c.average_3_minor!, 0),
         periods: [{ id: cur.period.id, label: cur.period.label }],
         title: high.length === 1
           ? `${high[0]!.label}: ${pct(above(high[0]!))} acima da média dos últimos ${t.averageWindow} períodos.`
@@ -146,7 +182,7 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
           drivers: high.map((c) => ({ label: c.label, delta_minor: c.current_minor - c.average_3_minor!, text: `+${money(c.current_minor - c.average_3_minor!)} acima da média` })),
           confidence: `Categoria presente em pelo menos ${t.categoryMinPresence} dos ${t.averageWindow} períodos; o excesso passa ${t.categoryMinImpactPctOfProduction}% da produção.`,
         },
-      })
+      }, cur.period.id))
     }
   }
 
@@ -168,12 +204,32 @@ export function buildInsights(h: BusinessHealth, money: (minor: number) => strin
     out.push(...r.insights.filter((i) => !(told && i.kind === 'purchases_up'))); skipped.push(...r.skipped)
   }
 
-  return { insights: sortInsights(out).slice(0, t.maxShown), skipped }
+  return { insights: sortInsights(out), skipped }
 }
 
-/** Action before attention before information; within a severity, a fixed order of kinds. */
+/** Priority (07 D9, deterministic, no score): severity (action, attention, information); within it, an open situation
+ *  (state) before a period analysis; then the money at stake, larger first, where it is known from visible figures;
+ *  then a fixed order of kinds. Grouped cards (several periods, services, products, blockers) make recency within a
+ *  surface moot; persistence across periods is what the service trends already require. */
 export const sortInsights = (list: Insight[]) =>
-  [...list].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity) || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+  [...list].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
+    || (a.scope === b.scope ? 0 : a.scope === 'state' ? -1 : 1)
+    || (b.impact_minor ?? -1) - (a.impact_minor ?? -1)
+    || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+
+export type InsightInputs = { health: BusinessHealth; team?: BusinessTeam; services?: BusinessServices; costs?: BusinessCosts }
+/** Negócio → Insights: the open situations as of now (state insights of the current period's reads) and the analysis of
+ *  the selected period (its period insights). The two never overlap; "resolved" is not stored, so a resolved
+ *  situation simply no longer appears (no resolution history in V1). */
+export function buildInsightHub(now: InsightInputs, selected: InsightInputs, money: (minor: number) => string, t: InsightThresholds = INSIGHT_THRESHOLDS) {
+  const gen = (x: InsightInputs) => generateInsights(x.health, money, t, x.team, x.services, x.costs)
+  const sel = gen(selected)
+  const active = gen(now).insights.filter((i) => i.scope === 'state')
+  const period = sel.insights.filter((i) => i.scope === 'period')
+  const all = [...active, ...period]
+  const counts = Object.fromEntries(SEVERITY_ORDER.map((s) => [s, all.filter((i) => i.severity === s).length])) as Record<Severity, number>
+  return { active, period, skipped: sel.skipped, counts }
+}
 
 /** Operating cost components that rose against the previous period, largest first; expense categories inside. */
 export function costDrivers(h: BusinessHealth, money: (minor: number) => string): Driver[] {
@@ -218,7 +274,7 @@ export function teamConcentration(team: BusinessTeam, t: InsightThresholds = INS
   if (!one && !two) return {}
   if (team.summary.active_count < t.concentrationMinProfessionals) return { skipped: { kind: 'team_concentration', reason: 'not_enough_professionals' } }
   const p = team.period
-  return { insight: {
+  return { insight: make({
     id: `team_concentration:${p.id}`, kind: 'team_concentration', severity: 'ATTENTION', periods: [{ id: p.id, label: p.label }],
     title: one ? `${pct(c.top)} da produção está concentrada num profissional.` : `${pct(c.topTwo)} da produção está concentrada em dois profissionais.`,
     detail: {
@@ -229,7 +285,7 @@ export function teamConcentration(team: BusinessTeam, t: InsightThresholds = INS
       action: { label: 'Ver a equipa', to: `/privado/negocio/equipa?p=${p.id}`, finance: false },
       confidence: 'Descreve como a produção se distribui neste período; não avalia ninguém.',
     },
-  } }
+  }, p.id) }
 }
 
 /** Insights 7–9 · what customers buy and how demand moves, per service. Wording states what moved, never why: no
@@ -245,7 +301,7 @@ export function serviceInsights(sv: BusinessServices, money: (minor: number) => 
     if (n < t.serviceMinDistinct) skipped.push({ kind: 'service_concentration', reason: 'not_enough_services_performed' })
     else {
       const one = top >= t.serviceTopPct
-      out.push({ id: `service_concentration:${p.id}`, kind: 'service_concentration', severity: 'INFORMATION', periods: at,
+      out.push(make({ id: `service_concentration:${p.id}`, kind: 'service_concentration', severity: 'INFORMATION', periods: at,
         title: one ? `Um serviço representa ${top}% da produção.` : `Dois serviços representam ${topTwo}% da produção.`,
         detail: {
           current: `Maior serviço ${top}% · dois maiores ${topTwo}% · ${plural(n, 'serviço realizado', 'serviços diferentes realizados')}`,
@@ -253,7 +309,7 @@ export function serviceInsights(sv: BusinessServices, money: (minor: number) => 
           drivers: [],
           action: { label: 'Ver serviços', to: `/privado/negocio/servicos?p=${p.id}`, finance: false },
           confidence: `Com pelo menos ${t.serviceMinDistinct} serviços diferentes no período. Descreve a distribuição; não diz se é bom ou mau.`,
-        } })
+        } }, p.id))
     }
   }
 
@@ -273,7 +329,7 @@ export function serviceInsights(sv: BusinessServices, money: (minor: number) => 
       if (rows.length === 0) return
       const up = kind === 'service_growth'
       const total = (s: ServiceRow) => Math.round(((s.count - s.before_previous!.count) * 100) / s.before_previous!.count)
-      out.push({ id: `${kind}:${p.id}`, kind, severity: up ? 'INFORMATION' : 'ATTENTION', periods: at,
+      out.push(make({ id: `${kind}:${p.id}`, kind, severity: up ? 'INFORMATION' : 'ATTENTION', periods: at,
         title: rows.length === 1 ? `${rows[0]!.name} ${up ? 'cresce' : 'caiu'} pelo segundo período consecutivo.`
                                  : `${rows.length} serviços ${up ? 'crescem' : 'caíram'} pelo segundo período consecutivo.`,
         detail: {
@@ -285,7 +341,7 @@ export function serviceInsights(sv: BusinessServices, money: (minor: number) => 
           ...(up ? {} : { action: { label: 'Ver serviços', to: `/privado/negocio/servicos?p=${p.id}`, finance: false } }),
           confidence: `${up ? 'Subida' : 'Descida'} em dois períodos seguidos, de pelo menos ${t.serviceTrendPct}% no total, a partir de pelo menos ${t.serviceTrendMinBaseline} registos.`
             + (up ? '' : ' Vale investigar procura, disponibilidade, preço ou promoção; os dados não dizem a causa.'),
-        } })
+        } }, p.id))
     }
     trend(moves(1), 'service_growth')
     trend(moves(-1), 'service_decline')
@@ -308,7 +364,7 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
   else if (ch.percent !== null && ch.percent >= t.purchasesUpPct && c.summary.purchases_pct_of_production !== null
            && c.summary.purchases_pct_of_production >= t.purchasesMinPctOfProduction) {
     const top = c.purchases.products.slice(0, t.maxDrivers)
-    out.push({ id: `purchases_up:${p.id}`, kind: 'purchases_up', severity: 'ATTENTION', periods: at,
+    out.push(make({ id: `purchases_up:${p.id}`, kind: 'purchases_up', severity: 'ATTENTION', periods: at, impact_minor: ch.delta_minor,
       title: `As compras suportadas pelo salão aumentaram ${pct(ch.percent)}.`,
       detail: {
         current: `${money(c.purchases.salon_minor!)} (${String(c.summary.purchases_pct_of_production).replace('.', ',')}% da produção)`,
@@ -317,7 +373,7 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
         basis: `${p.label} comparado com ${prevLabel} (fechado). Só a parte paga pelo salão.`,
         drivers: top.map((x) => ({ label: x.name, delta_minor: x.salon_minor ?? 0, text: `${money(x.salon_minor ?? 0)} · ${plural(x.purchases_count, 'compra', 'compras')}` })),
         confidence: 'Produtos com mais valor comprado neste período; não indica que tenham sido a causa.',
-      } })
+      } }, p.id))
   }
 
   // 11 · products that keep coming back (bought, or marked baixo/comprar, repeatedly), one card
@@ -328,7 +384,7 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
     const what = (x: (typeof rep)[number]) => [
       x.purchases >= t.productRepeatCount ? plural(x.purchases, 'compra', 'compras') : '',
       x.marks >= t.productRepeatCount ? `${plural(x.marks, 'marcação', 'marcações')} como baixo ou para comprar` : ''].filter(Boolean).join(' e ')
-    out.push({ id: `product_attention:${p.id}`, kind: 'product_attention', severity: 'ATTENTION', periods: at,
+    out.push(make({ id: `product_attention:${p.id}`, kind: 'product_attention', severity: 'ATTENTION', periods: at,
       title: rep.length === 1 ? `${rep[0]!.name} merece atenção: ${what(rep[0]!)} nos últimos ${days} dias.`
                               : `${rep.length} produtos merecem atenção nos últimos ${days} dias.`,
       detail: {
@@ -337,7 +393,7 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
         drivers: [],
         action: { label: 'Ver stock', to: '/stock', finance: false },
         confidence: `Pelo menos ${t.productRepeatCount} compras ou ${t.productRepeatCount} marcações. Vale rever a quantidade habitual de compra ou o padrão de utilização; o sistema não mede o consumo.`,
-      } })
+      } }, p.id))
   }
 
   return { insights: sortInsights(out), skipped }

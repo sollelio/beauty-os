@@ -13,6 +13,7 @@ import { TeamPage } from './TeamPage'
 import { ServicesPage } from './ServicesPage'
 import { CostsPage } from './CostsPage'
 import { FinancePage } from './FinancePage'
+import { InsightsPage } from './InsightsPage'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const K = (kz: number) => kz * 100
@@ -138,6 +139,7 @@ function renderAt(path = '/privado/negocio') {
               <Route path="negocio/servicos" element={<ServicesPage />} />
               <Route path="negocio/custos" element={<CostsPage />} />
               <Route path="negocio/financas" element={<FinancePage />} />
+              <Route path="negocio/insights" element={<InsightsPage />} />
               <Route path="fecho" element={<p>Fecho</p>} />
               <Route path="equipa" element={<p>Equipa</p>} />
               <Route path="situacao/:personId" element={<p>Situação</p>} />
@@ -224,9 +226,10 @@ describe('Negócio · Visão geral', () => {
     serve(base)
     renderAt()
     const cards = await screen.findAllByTestId('insight')
-    expect(cards.map((c) => c.dataset.kind)).toEqual(['payments_pending', 'production_up_result_down', 'expense_category_high'])
-    fireEvent.click(within(cards[1]!).getByRole('button'))
-    const d = within(cards[1]!).getByTestId('insight-detail').textContent!
+    // attention ordered by money at stake (Slice 06 priority): the category excess before the result drop here
+    expect(cards.map((c) => c.dataset.kind)).toEqual(['payments_pending', 'expense_category_high', 'production_up_result_down'])
+    fireEvent.click(within(cards[2]!).getByRole('button'))
+    const d = within(cards[2]!).getByTestId('insight-detail').textContent!
     expect(d).toContain('Semana 5 comparado com Semana 4 (fechado).')
     expect(d).toContain('não indica que tenham sido a causa')
     fireEvent.click(within(cards[0]!).getByRole('button'))
@@ -425,11 +428,12 @@ describe('Negócio → Custos & Stock', () => {
     serve(withMaterials, status({ view: 'self' }), even, quietSv, cs)
     renderAt('/privado/negocio/custos')
     const cards = await screen.findAllByTestId('insight')
-    expect(cards.map((c) => c.dataset.kind)).toEqual(['expense_category_high', 'purchases_up', 'product_attention'])
-    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Materiais: 64% acima da média dos últimos 3 períodos.',
-      'As compras suportadas pelo salão aumentaram 130%.', 'Acetona merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.'])
-    fireEvent.click(within(cards[2]!).getByRole('button'))
-    expect(within(cards[2]!).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
+    // the open stock situation first, then the period analyses by money at stake (Slice 06 priority)
+    expect(cards.map((c) => c.dataset.kind)).toEqual(['product_attention', 'purchases_up', 'expense_category_high'])
+    expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Acetona merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.',
+      'As compras suportadas pelo salão aumentaram 130%.', 'Materiais: 64% acima da média dos últimos 3 períodos.'])
+    fireEvent.click(within(cards[0]!).getByRole('button'))
+    expect(within(cards[0]!).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
   })
 
   it('a salon-funded figure that would give one person\'s contribution is "Não mostrado", with the reason; no purchases-up insight', async () => {
@@ -571,5 +575,117 @@ describe('Negócio · Finanças', () => {
     renderAt('/privado/negocio/financas')
     expect((await screen.findByTestId('indicators')).textContent).toBe('Sem produção neste período: sem rácios.')
     expect(screen.getByTestId('finance-changes').textContent).toBe('O que mudou?O período anterior ainda não está fechado: os valores dele podem mudar.')
+  })
+})
+
+describe('Negócio → Insights', () => {
+  const kinds = (el: HTMLElement) => within(el).queryAllByTestId('insight').map((c) => c.dataset.kind)
+  const quiet: BusinessHealth = { ...base, previous: null, average_3: null, changes: { previous: null, average_3: null }, open_periods: [],
+    meta: { ...base.meta, baseline: 'none', comparison: { previous: { available: false, reason: 'no_previous_period', period: null }, average_3: { available: false, reason: 'insufficient_history', window: 3 } } } }
+
+  it('needs an active private context', async () => {
+    serve(base, { active: false })
+    renderAt('/privado/negocio/insights')
+    expect(await screen.findByText('Entrada privada')).toBeTruthy()
+    expect(rpc.mock.calls.some(([fn]) => fn === 'business_health')).toBe(false)
+  })
+
+  it('a viewer without business.health.read is told the area is not theirs', async () => {
+    serve({ error: 'NOT_AUTHORIZED' })
+    renderAt('/privado/negocio/insights')
+    expect(await screen.findByText('Esta área é só para quem acompanha o negócio.')).toBeTruthy()
+  })
+
+  it('open situations now, the period analysis, severity counts; filters by severity', async () => {
+    serve(base, status(), team, sv, cs)
+    renderAt('/privado/negocio/insights')
+    const active = await screen.findByTestId('active'), analysis = screen.getByTestId('analysis')
+    expect(kinds(active)).toEqual(['payments_pending', 'product_attention'])
+    // attention by money at stake (Luz 14.667 above its average · result −13.500 · purchases +13.000), then kinds without an amount
+    expect(kinds(analysis)).toEqual(['expense_category_high', 'production_up_result_down', 'purchases_up', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth'])
+    expect(within(screen.getByTestId('severity-counts')).getAllByRole('definition').map((d) => d.textContent)).toEqual(['1', '6', '2'])
+    fireEvent.click(screen.getByRole('button', { name: 'Ação necessária' }))
+    expect(kinds(active)).toEqual(['payments_pending'])
+    expect(within(analysis).getByText('Nada com este filtro.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Informação' }))
+    expect(kinds(analysis)).toEqual(['service_concentration', 'service_growth'])
+    fireEvent.click(screen.getByRole('button', { name: 'Todos' }))
+    expect(kinds(analysis)).toHaveLength(7)
+  })
+
+  it('a card: severity, title, summary, source area, period; the detail explains it and links to the source', async () => {
+    serve(base, status(), team, sv, cs)
+    renderAt('/privado/negocio/insights')
+    await screen.findByTestId('active')
+    const card = screen.getAllByTestId('insight').find((c) => c.dataset.kind === 'team_concentration')!
+    expect(card.textContent).toContain('68% da produção está concentrada em dois profissionais.')
+    expect(card.textContent).toContain('Atenção · Equipa · Semana 5 · Ver detalhe')
+    fireEvent.click(within(card).getByRole('button'))
+    const d = within(card).getByTestId('insight-detail').textContent!
+    expect(d).toContain('Períodos')
+    expect(d).toContain('não avalia ninguém')
+    fireEvent.click(within(card).getByRole('button', { name: 'Investigar em Equipa' }))
+    expect(await screen.findByText('Negócio · Equipa')).toBeTruthy()
+  })
+
+  it('a Fecho / payments action only for a team-finance holder; the Negócio source for everyone', async () => {
+    for (const view of ['manager', 'self']) {
+      serve(base, status({ view }), team, sv, cs)
+      renderAt('/privado/negocio/insights')
+      const card = (await screen.findAllByTestId('insight')).find((c) => c.dataset.kind === 'payments_pending')!
+      fireEvent.click(within(card).getByRole('button'))
+      expect(!!within(card).queryByRole('button', { name: 'Ver pagamentos' }), view).toBe(view === 'manager')
+      expect(within(card).getByRole('button', { name: 'Investigar em Finanças' })).toBeTruthy()
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('another period: its analysis; the open situations stay those of now', async () => {
+    const w4: BusinessHealth = { ...quiet, current: { ...cur, period: period('e4', 'Semana 4') }, trend: base.trend }
+    serve(base, status(), team, sv, cs)
+    const inner = rpc.getMockImplementation()!
+    rpc.mockImplementation(async (fn: string, args?: { p_period_id?: string | null }) =>
+      fn === 'business_health' && args?.p_period_id === 'e4' ? { data: w4, error: null } : inner(fn, args))
+    renderAt('/privado/negocio/insights')
+    fireEvent.click(within(await screen.findByTestId('history')).getByRole('button', { name: 'Semana 4' }))
+    expect(await screen.findByText('Em Semana 4')).toBeTruthy()
+    expect(kinds(screen.getByTestId('active'))).toEqual(['payments_pending', 'product_attention'])
+    expect(kinds(screen.getByTestId('analysis'))).not.toContain('production_up_result_down')
+    expect(screen.getByTestId('insufficient').textContent).toContain('Ainda não há um período anterior para comparar.')
+  })
+
+  it('nothing to say: no invented claim', async () => {
+    serve(quiet, status(), even, quietSv, quietCs)
+    renderAt('/privado/negocio/insights')
+    expect(await screen.findByText('Nada por resolver.')).toBeTruthy()
+    expect(screen.getByText('Nada a assinalar neste período.')).toBeTruthy()
+    expect(screen.getByTestId('none')).toBeTruthy()
+    expect(within(screen.getByTestId('severity-counts')).getAllByRole('definition').map((d) => d.textContent)).toEqual(['0', '0', '0'])
+  })
+
+  it('B11: a hidden figure feeds no insight; the page says values are hidden and shows none of them', async () => {
+    const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'] as const
+    const none = { delta_minor: null, percent: null }
+    serve({ ...base,
+      current: { ...cur, team_earnings_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null, unpaid_team_minor: null, private_fields: [...H] },
+      changes: { previous: { ...base.changes.previous!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none }, average_3: base.changes.average_3 },
+      open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }] }, status({ view: 'self' }), aggregate, sv, cs)
+    renderAt('/privado/negocio/insights')
+    const active = await screen.findByTestId('active')
+    expect(kinds(active)).not.toContain('payments_pending')
+    expect(kinds(screen.getByTestId('analysis'))).not.toContain('production_up_result_down')
+    expect(screen.getByTestId('active-private').textContent).toContain('permitiria calcular')
+    expect(screen.getByTestId('analysis-private').textContent).toContain('Nenhum insight usa esses valores.')
+    for (const c of screen.getAllByTestId('insight')) fireEvent.click(within(c).getAllByRole('button')[0]!)
+    const txt = document.body.textContent!
+    for (const v of ['30.000 Kz', '38.500 Kz', '48.000 Kz', '81.500 Kz', 'Profissional']) expect(txt, v).not.toContain(v)
+  })
+
+  it('"Ver todos os insights" from the overview', async () => {
+    serve(base)
+    renderAt()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver todos os insights' }))
+    expect(await screen.findByText('Negócio · Insights')).toBeTruthy()
+    expect(await screen.findByTestId('severity-counts')).toBeTruthy()
   })
 })

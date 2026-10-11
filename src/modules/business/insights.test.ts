@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { costInsights, serviceInsights, teamConcentration, buildInsights } from './insights'
+import { costInsights, serviceInsights, teamConcentration, buildInsights, buildInsightHub, generateInsights, SOURCE_AREA, type Insight, type InsightKind } from './insights'
 import { INSIGHT_THRESHOLDS } from './thresholds'
 import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
 
@@ -81,7 +81,8 @@ describe('buildInsights thresholds', () => {
   it('priority: action first, then attention; never more than 5', () => {
     const h = health({ prod: 20, result: -10, avg: true, cats: [cat(10_000_00, 5_000_00, 3)],
       open: [{ id: 'a', label: 'A', state: 'aberto', is_complete: true, unpaid_team_minor: 1, unpaid_private: false, pending_rules_count: 1 }] })
-    expect(kinds(h)).toEqual(['payments_pending', 'period_blocked', 'production_up_result_down', 'expense_category_high'])
+    // within attention, the larger money at stake first: the category's 5.000 excess before the result's tiny drop
+    expect(kinds(h)).toEqual(['payments_pending', 'period_blocked', 'expense_category_high', 'production_up_result_down'])
     expect(buildInsights(h, money, { ...INSIGHT_THRESHOLDS, maxShown: 2 }).insights).toHaveLength(2)
     expect(INSIGHT_THRESHOLDS.maxShown).toBe(5)
   })
@@ -173,5 +174,121 @@ describe('cost and stock insights (10–11)', () => {
     const ks = buildInsights(h, money, INSIGHT_THRESHOLDS, undefined, undefined, { ...costs(), period: { ...costs().period, id: 'cur' } }).insights.map((i) => i.kind)
     expect(ks).toContain('production_up_result_down')
     expect(ks).not.toContain('purchases_up')
+  })
+})
+
+describe('shared insight model (Slice 06): one engine for the overview, the detail pages and Insights', () => {
+  const tm = (top: number, topTwo: number): BusinessTeam => ({
+    period: { id: 'cur', label: 'CUR', state: 'aberto', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    summary: { production_minor: 100, services_count: 10, average_ticket_minor: 10, active_count: 4, top_share_pct: top, top_two_share_pct: topTwo },
+    comparison: { available: false, reason: 'no_previous_period', period: null }, people: null })
+  const cmp = { available: true, reason: null, period: { id: 'prev', label: 'PREV', state: 'fechado' as const } }
+  const svc = (): BusinessServices => ({
+    period: { id: 'cur', label: 'CUR', state: 'aberto', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    summary: { production_minor: 100, services_count: 30, average_ticket_minor: 10, distinct_services: 6, top_share_pct: 40, top_two_share_pct: 60 },
+    comparison: { previous: cmp, before_previous: cmp },
+    services: [[10, 12, 14], [10, 8, 6]].map(([c2, c1, c0], i) => ({ service_id: `s${i}`, name: `S${i}`, count: c0!, revenue_minor: c0!, average_ticket_minor: 1, share_pct: null,
+      previous: { count: c1!, revenue_minor: c1! }, before_previous: { count: c2!, revenue_minor: c2! }, change: null })), other: null })
+  const cst = (): BusinessCosts => ({
+    period: { id: 'cur', label: 'CUR', state: 'aberto', starts_on: '2025-01-01', ends_on: '2025-01-07', is_complete: true },
+    comparison: { previous: cmp, average_3: { available: true, reason: null, window: 3 } },
+    summary: { production_minor: 100_000_00, expenses_minor: 0, purchases_salon_minor: 10_000_00, expenses_pct_of_production: 0, purchases_pct_of_production: 10, purchases_private: false, products_attention: 0 },
+    expenses: [], purchases: { salon_minor: 10_000_00, private: false, previous_private: false, previous_salon_minor: 4_000_00, change: { delta_minor: 6_000_00, percent: 150 }, products: [] },
+    stock: { baixo: 0, comprar: 0, on_list: 0, urgent: 0, attention: [], window: { days: 30, from: '2024-12-09', to: '2025-01-07' },
+             activity: [{ product_id: 'p', name: 'Acetona', purchases: 3, marks: 0, last_purchased_at: null }, { product_id: 'q', name: 'Luvas', purchases: 0, marks: 4, last_purchased_at: null }] } })
+  const open = [{ id: 'a', label: 'A', state: 'em_pagamento' as const, is_complete: true, unpaid_team_minor: 7_000_00, unpaid_private: false, pending_rules_count: 0 },
+                { id: 'b', label: 'B', state: 'aberto' as const, is_complete: true, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 1 },
+                { id: 'c', label: 'C', state: 'aberto' as const, is_complete: true, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 2 }]
+  const full = () => {
+    const h = health({ prod: 20, result: -10, avg: true, cats: [cat(10_000_00, 5_000_00, 3)], open })
+    return { health: h, team: tm(45, 70), services: svc(), costs: cst() }
+  }
+  const declining = () => ({ ...full(), health: health({ prod: -20, result: 0, services: 20 }) })
+  const gen = (x: ReturnType<typeof full>) => generateInsights(x.health, money, INSIGHT_THRESHOLDS, x.team, x.services, x.costs)
+
+  it('every V1 family comes through the one model, with its scope, source area and period', () => {
+    const all = [...gen(full()).insights, ...gen(declining()).insights]
+    const by = new Map(all.map((i) => [i.kind, i]))
+    const expected: [InsightKind, Insight['scope'], Insight['source']][] = [
+      ['payments_pending', 'state', 'financas'], ['period_blocked', 'state', 'financas'], ['production_up_result_down', 'period', 'financas'],
+      ['production_decline', 'period', 'financas'], ['expense_category_high', 'period', 'custos'], ['purchases_up', 'period', 'custos'],
+      ['team_concentration', 'period', 'equipa'], ['service_concentration', 'period', 'servicos'], ['service_growth', 'period', 'servicos'],
+      ['service_decline', 'period', 'servicos'], ['product_attention', 'state', 'custos']]
+    for (const [k, scope, source] of expected) expect(by.get(k), k).toMatchObject({ scope, source, period_id: 'cur' })
+    for (const i of all) {
+      expect(i.summary.length, i.kind).toBeGreaterThan(0)
+      expect(i.id.startsWith(`${i.kind}:`)).toBe(true)
+      expect(SOURCE_AREA[i.source].path).toMatch(/^\/privado\/negocio\//)
+    }
+    expect(by.get('payments_pending')!.impact_minor).toBe(7_000_00)
+  })
+
+  it('grouping: blockers, products and services each one card', () => {
+    const r = gen(full()).insights
+    const blocked = r.filter((i) => i.kind === 'period_blocked')
+    expect(blocked).toHaveLength(1)
+    expect(blocked[0]!.title).toBe('2 períodos terminados não podem ser aprovados: 3 regras de remuneração por definir.')
+    expect(blocked[0]!.periods.map((p) => p.id)).toEqual(['b', 'c'])
+    expect(r.filter((i) => i.kind === 'product_attention')).toHaveLength(1)
+    expect(r.find((i) => i.kind === 'product_attention')!.title).toBe('2 produtos merecem atenção nos últimos 30 dias.')
+  })
+
+  it('priority: action, then attention (open situations first, then money at stake), then information', () => {
+    const r = gen(full()).insights.map((i) => i.kind)
+    expect(r).toEqual(['payments_pending', 'period_blocked', 'product_attention', 'purchases_up', 'expense_category_high', 'production_up_result_down',
+                       'service_decline', 'team_concentration', 'service_concentration', 'service_growth'].filter((k) => r.includes(k as InsightKind)))
+    expect(r.indexOf('product_attention')).toBeLessThan(r.indexOf('purchases_up'))         // state before period within attention
+  })
+
+  it('the overview is the first 5 of the same list, with the same titles', () => {
+    const x = full()
+    const all = gen(x).insights, top = buildInsights(x.health, money, INSIGHT_THRESHOLDS, x.team, x.services, x.costs).insights
+    expect(all.length).toBeGreaterThan(5)
+    expect(top).toEqual(all.slice(0, 5))
+  })
+
+  it('deduplication: "purchases up" folded into "result down" when purchases lead it, on every surface', () => {
+    const x = full()
+    x.health.changes.previous!.purchases_salon_minor = { delta_minor: 9_000_00, percent: 900 }
+    expect(gen(x).insights.map((i) => i.kind)).not.toContain('purchases_up')
+    expect(buildInsightHub(x, x, money).period.map((i) => i.kind)).not.toContain('purchases_up')
+  })
+
+  it('hub: open situations from now, analysis from the selected period; no overlap; counts by severity', () => {
+    const now = full(), selected = declining()
+    const hub = buildInsightHub(now, selected, money)
+    expect(hub.active.map((i) => i.kind)).toEqual(['payments_pending', 'period_blocked', 'product_attention'])
+    expect(hub.period.every((i) => i.scope === 'period')).toBe(true)
+    expect(hub.period.map((i) => i.kind)).toContain('production_decline')
+    expect(hub.period.map((i) => i.kind)).not.toContain('production_up_result_down')
+    const all = [...hub.active, ...hub.period]
+    expect(new Set(all.map((i) => i.id)).size).toBe(all.length)
+    expect(hub.counts).toEqual({ ACTION_REQUIRED: 2, ATTENTION: all.filter((i) => i.severity === 'ATTENTION').length, INFORMATION: all.filter((i) => i.severity === 'INFORMATION').length })
+  })
+
+  it('insufficient data: no analytical claim, the reason is kept', () => {
+    const hub = buildInsightHub({ health: health() }, { health: health() }, money)
+    expect([...hub.active, ...hub.period]).toEqual([])
+    expect(hub.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'no_previous_period' })
+    expect(hub.skipped).toContainEqual({ kind: 'expense_category_high', reason: 'insufficient_history' })
+  })
+
+  it('privacy: a hidden figure feeds no insight, driver or amount (07 D9 · B11)', () => {
+    const x = full()
+    const h = x.health
+    h.current = { ...h.current, operating_result_minor: null, team_earnings_minor: null, private_fields: ['team_earnings_minor', 'operating_result_minor'] }
+    h.changes.previous = { ...h.changes.previous!, operating_result_minor: { delta_minor: null, percent: null }, team_earnings_minor: { delta_minor: null, percent: null } }
+    h.open_periods = [{ ...open[0]!, unpaid_team_minor: null, unpaid_private: true }]
+    x.costs.purchases = { ...x.costs.purchases, salon_minor: null, private: true }
+    const r = generateInsights(h, money, INSIGHT_THRESHOLDS, x.team, x.services, x.costs)
+    const ks = r.insights.map((i) => i.kind)
+    expect(ks).not.toContain('payments_pending')
+    expect(ks).not.toContain('production_up_result_down')
+    expect(ks).not.toContain('purchases_up')
+    expect(r.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'figure_hidden' })
+    expect(r.skipped).toContainEqual({ kind: 'purchases_up', reason: 'figure_hidden' })
+    const txt = JSON.stringify(r.insights)
+    expect(txt).not.toContain(money(7_000_00))
+    expect(txt).not.toMatch(/Ganhos da equipa/)
   })
 })

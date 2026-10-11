@@ -111,6 +111,7 @@ export function OverviewPage() {
         <h3 id="atencao" className="label">Precisa da tua atenção</h3>
         {insights.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nada a assinalar neste período.</p>
           : insights.map((i) => <InsightCard key={i.id} insight={i} finance={ctx.view === 'manager'} />)}
+        <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => navigate(`/privado/negocio/insights?p=${c.period.id}`)}>Ver todos os insights</button>
       </section>
 
       {h.trend.length > 1 && (

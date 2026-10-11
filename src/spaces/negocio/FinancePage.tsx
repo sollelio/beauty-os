@@ -10,7 +10,7 @@ import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, usePrivateContext } from '../../modules/org/privateContext'
 import { businessKeys, getBusinessCosts, getBusinessFinance, getBusinessHealth, listBusinessPeriods,
          type BusinessFinance, type Change, type FinanceDriver, type FinanceMetric, type FinanceMetricKey } from '../../modules/business/api'
-import { buildInsights, COMPARISON_UNAVAILABLE, type InsightKind } from '../../modules/business/insights'
+import { generateInsights, COMPARISON_UNAVAILABLE, type InsightKind } from '../../modules/business/insights'
 import { INSIGHT_THRESHOLDS } from '../../modules/business/thresholds'
 import { STATE_LABEL } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
@@ -74,7 +74,7 @@ export function FinancePage() {
   const o = f.obligations
   const h = health.data && health.data.current.period.id === f.period.id ? health.data : undefined
   const c = costs.data && costs.data.period.id === f.period.id ? costs.data : undefined
-  const insights = h ? buildInsights(h, m, INSIGHT_THRESHOLDS, undefined, undefined, c).insights.filter((i) => FINANCE_INSIGHTS.includes(i.kind)) : []
+  const insights = h ? generateInsights(h, m, INSIGHT_THRESHOLDS, undefined, undefined, c).insights.filter((i) => FINANCE_INSIGHTS.includes(i.kind)) : []
   const pending = f.pending_rules_count > 0
   const why = f.private_fields.length > 0 ? hiddenWhy(f.private_fields) : null
 

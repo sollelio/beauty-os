@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, usePrivateContext } from '../../modules/org/privateContext'
 import { businessKeys, getBusinessCosts, getBusinessHealth, listBusinessPeriods, type Change, type CostCategory } from '../../modules/business/api'
-import { buildInsights, COMPARISON_UNAVAILABLE, costInsights, sortInsights } from '../../modules/business/insights'
+import { generateInsights, COMPARISON_UNAVAILABLE, costInsights, sortInsights } from '../../modules/business/insights'
 import { STATE_LABEL } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
 import { formatMoney } from '../../shared/money'
@@ -59,7 +59,7 @@ export function CostsPage() {
   const c = q.data
   const s = c.summary
   const fromHealth = health.data && health.data.current.period.id === c.period.id
-    ? buildInsights(health.data, m).insights.filter((i) => i.kind === 'expense_category_high') : []
+    ? generateInsights(health.data, m).insights.filter((i) => i.kind === 'expense_category_high') : []
   const insights = sortInsights([...fromHealth, ...costInsights(c, m).insights])
   const prev = c.comparison.previous, avg = c.comparison.average_3
 

@@ -171,11 +171,12 @@ describe('insights from the read model', () => {
 
   it('E5: production up / result down, expense category high (X only)', async () => {
     const r = buildInsights(await health(P['Semana E5']!), money)
-    expect(r.insights.map((i) => i.kind)).toEqual(['production_up_result_down', 'expense_category_high'])
-    const up = r.insights[0]!
+    // attention by money at stake (Slice 06 priority): the category's excess over its average before the result's drop
+    expect(r.insights.map((i) => i.kind)).toEqual(['expense_category_high', 'production_up_result_down'])
+    const up = r.insights[1]!
     expect(up.detail.drivers.map((d) => d.label)).toEqual(['Despesas', 'Compras (parte do salão)', 'Ganhos da equipa'])
     expect(up.detail.drivers[0]!.text).toBe('+15500 Kz · sobretudo Categoria X +14000 Kz')
-    expect(r.insights[1]!.detail.drivers.map((d) => d.label)).toEqual(['Categoria X'])   // Y: 1 of 3 periods · Z: impact below 3%
+    expect(r.insights[0]!.detail.drivers.map((d) => d.label)).toEqual(['Categoria X'])   // Y: 1 of 3 periods · Z: impact below 3%
   })
 
   it('E6: payments pending and production decline; E7: blocked period first-class, payments of E6 still listed', async () => {
