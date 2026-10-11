@@ -1,8 +1,9 @@
 -- Business Health Slice 05 (Negócio → Finanças). Synthetic, not pilot data.
 -- "Teste Finanças F" (code TEST-ORG-F-2026), used by tests/db/business_finance and the browser smoke.
---   77a1, 77a2 professionals A, B (standing 40%) · 77a3 C (30% for F1 only; a later 90% rule changes F1's live figures,
---   not its close statement) · 77a5 manager PIN 717171 · 77a6 business.health.read only PIN 727272 · 77a7 none PIN 737373
--- Eight 7-day periods from 2025-09-01. Figures in Kz:
+--   77a1, 77a2 professionals A, B (standing 40%; B also business.health.read, PIN 747474) · 77a3 C (30% for F1; a later
+--   90% rule changes F1's live figures, not its close statement) · 77a5 manager PIN 717171 · 77a6 business.health.read
+--   only PIN 727272 · 77a7 none PIN 737373
+-- Ten 7-day periods from 2025-09-01. Figures in Kz:
 --         production  team    Materiais Renda  purchases → result  reserve alloc/used  owners'  Livre  Não distr.  paid / unpaid
 --   F1    210.000     83.000  10.000    30.000 10.000    → 77.000  20.000 / —          30.000   57.000 27.000      83.000 / 0      fechado
 --   F2    200.000     80.000  12.000    30.000 12.000    → 66.000  10.000 / —          none     56.000 56.000      80.000 / 0      fechado
@@ -13,6 +14,9 @@
 --   F6    100.000 (A only)     —         30.000 —         → 30.000                                                              aberto
 --   F7    100.000     40.000  —         30.000 —         → 30.000  A advanced 50.000 > earned 20.000 (only A above earnings) aberto
 --   F8    nothing recorded                                                                                                    aberto
+--   F9    200.000     80.000  —         30.000 —         → 90.000  A advanced 10.000, nobody paid: paid 0 / unpaid 70.000      em_pagamento
+--   F10   210.000     89.000  —         30.000 —         → 91.000  A, B paid 10.000 each, C (90%) unpaid: 20.000 / 69.000      em_pagamento
+--         (team earnings − unpaid = advances + paid: one other person in F9 for anyone, in F10 for B, two in F10 otherwise)
 -- Reserve balance: 20.000 + 10.000 + 10.000 − 5.000 = 35.000.
 insert into public.organizations (id, name, timezone, currency_code, currency_exponent, currency_symbol) values
   ('00000000-0000-4000-8000-0000000000f4', 'Teste Finanças F', 'Africa/Luanda', 'AOA', 2, 'Kz') on conflict (id) do nothing;
@@ -32,12 +36,14 @@ insert into public.people (id, organization_id, display_name) values
 insert into private.person_secrets (person_id, organization_id, secret_hash) values
   ('00000000-0000-4000-8000-0000000077a5', '00000000-0000-4000-8000-0000000000f4', extensions.crypt('717171', extensions.gen_salt('bf', 8))),
   ('00000000-0000-4000-8000-0000000077a6', '00000000-0000-4000-8000-0000000000f4', extensions.crypt('727272', extensions.gen_salt('bf', 8))),
-  ('00000000-0000-4000-8000-0000000077a7', '00000000-0000-4000-8000-0000000000f4', extensions.crypt('737373', extensions.gen_salt('bf', 8))) on conflict (person_id) do nothing;
+  ('00000000-0000-4000-8000-0000000077a7', '00000000-0000-4000-8000-0000000000f4', extensions.crypt('737373', extensions.gen_salt('bf', 8))),
+  ('00000000-0000-4000-8000-0000000077a2', '00000000-0000-4000-8000-0000000000f4', extensions.crypt('747474', extensions.gen_salt('bf', 8))) on conflict (person_id) do nothing;
 insert into private.person_permissions (organization_id, person_id, permission)
 select '00000000-0000-4000-8000-0000000000f4'::uuid, '00000000-0000-4000-8000-0000000077a5'::uuid, perm
   from (values ('team.finance.read'), ('business.health.read'), ('movement.confirm'), ('period.decide'), ('payment.confirm'),
                ('period.close'), ('records.correct')) x(perm)
 union all select '00000000-0000-4000-8000-0000000000f4', '00000000-0000-4000-8000-0000000077a6', 'business.health.read'
+union all select '00000000-0000-4000-8000-0000000000f4', '00000000-0000-4000-8000-0000000077a2', 'business.health.read'
 on conflict do nothing;
 insert into public.rule_versions (organization_id, person_id, kind, percent, effective_from, set_by_person_id, set_at)
 select '00000000-0000-4000-8000-0000000000f4', r.p::uuid, 'standing', r.pct, '2000-01-01', '00000000-0000-4000-8000-0000000077a5', '2000-01-01 09:00+01'
@@ -52,7 +58,7 @@ declare
   v_mat uuid := '00000000-0000-4000-8000-0000000077c1'; v_renda uuid := '00000000-0000-4000-8000-0000000077c2';
   -- per period: services of A, B, C (10.000 each); Materiais, Renda, salon purchase; reserve allocated; reserve used on
   -- Renda; owners' decision (null none, 0 'none', > 0 amount); state: 3 closed, 2 em_pagamento (B paid 10.000), 0 aberto;
-  -- advance to A
+  -- advance to A; pay: the payments of an em_pagamento period per person (default: B 10.000, everyone else in full)
   v_spec jsonb := '[
     {"a": 10, "b": 10, "c": 1, "mat": 1000000, "renda": 3000000, "pur": 1000000, "alloc": 2000000, "use": 0,      "dec": 3000000, "state": 3},
     {"a": 10, "b": 10, "c": 0, "mat": 1200000, "renda": 3000000, "pur": 1200000, "alloc": 1000000, "use": 0,      "dec": 0,       "state": 3},
@@ -61,11 +67,13 @@ declare
     {"a": 10, "b": 10, "c": 0, "mat": 1000000, "renda": 3000000, "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 2},
     {"a": 10, "b": 0,  "c": 0, "mat": 0,       "renda": 3000000, "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 0},
     {"a": 5,  "b": 5,  "c": 0, "mat": 0,       "renda": 3000000, "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 0, "adv": 5000000},
-    {"a": 0,  "b": 0,  "c": 0, "mat": 0,       "renda": 0,       "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 0}]';
+    {"a": 0,  "b": 0,  "c": 0, "mat": 0,       "renda": 0,       "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 0},
+    {"a": 10, "b": 10, "c": 0, "mat": 0,       "renda": 3000000, "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 2, "adv": 1000000, "pay": {}},
+    {"a": 10, "b": 10, "c": 1, "mat": 0,       "renda": 3000000, "pur": 0,       "alloc": 0,       "use": 0,      "dec": null,    "state": 2, "pay": {"a": 1000000, "b": 1000000}}]';
   s jsonb; v_n int; i int; v_start date; v_pid uuid; v_at timestamptz; v_rec uuid; v_e uuid; v_renda_id uuid; v_pur uuid; v_p public.periods;
   v_pos jsonb; v_aid uuid; v_lines jsonb; x jsonb; p uuid;
 begin
-  for v_n in 1..8 loop
+  for v_n in 1..10 loop
     v_start := date '2025-09-01' + (v_n - 1) * 7;
     insert into public.periods (organization_id, label, starts_on, ends_on) values (v_org, 'Semana F' || v_n, v_start, v_start + 6)
     on conflict do nothing returning id into v_pid;
@@ -140,7 +148,12 @@ begin
     insert into public.period_transitions (organization_id, period_id, from_state, to_state, actor_person_id, at, review_revision)
     values (v_org, v_pid, 'aberto', 'pronto_para_pagamento', v_mgr, v_at + interval '7 days', v_p.review_revision);
     for x in select y from jsonb_array_elements(private.approval_payments(private.current_approval(v_pid))) y where (y ->> 'approved_minor')::bigint > 0 loop
-      if (s ->> 'state')::int = 2 and (x ->> 'person_id')::uuid = v_b then
+      if s ? 'pay' then
+        continue when coalesce((s -> 'pay' ->> case (x ->> 'person_id')::uuid when v_a then 'a' when v_b then 'b' else 'c' end)::bigint, 0) = 0;
+        insert into public.payments (organization_id, period_id, person_id, amount_minor, payment_method_id, paid_at, confirmed_by_person_id, command_id, approval_id)
+        values (v_org, v_pid, (x ->> 'person_id')::uuid, (s -> 'pay' ->> case (x ->> 'person_id')::uuid when v_a then 'a' when v_b then 'b' else 'c' end)::bigint,
+                v_cash, v_at + interval '8 days', v_mgr, gen_random_uuid(), v_aid);
+      elsif (s ->> 'state')::int = 2 and (x ->> 'person_id')::uuid = v_b then
         insert into public.payments (organization_id, period_id, person_id, amount_minor, payment_method_id, paid_at, confirmed_by_person_id, command_id, approval_id)
         values (v_org, v_pid, v_b, 1000000, v_cash, v_at + interval '8 days', v_mgr, gen_random_uuid(), v_aid);
       else

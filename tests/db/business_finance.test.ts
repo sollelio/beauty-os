@@ -10,8 +10,8 @@ import type { BusinessCosts, BusinessFinance, BusinessHealth, FinanceMetric } fr
 
 const id = (s: string) => `00000000-0000-4000-8000-0000000077${s}`
 const K = (kz: number) => kz * 100
-const MANAGER = id('a5'), BUSINESS_ONLY = id('a6'), NO_PERMS = id('a7')
-const PIN: Record<string, string> = { [MANAGER]: '717171', [BUSINESS_ONLY]: '727272', [NO_PERMS]: '737373' }
+const MANAGER = id('a5'), BUSINESS_ONLY = id('a6'), NO_PERMS = id('a7'), PRO_B = id('a2')   // B: professional + business.health.read
+const PIN: Record<string, string> = { [MANAGER]: '717171', [BUSINESS_ONLY]: '727272', [NO_PERMS]: '737373', [PRO_B]: '747474' }
 const A_OCT = '00000000-0000-4000-8000-0000000ca802'           // a period of test organization A
 const money = (m: number) => `${m / 100} Kz`
 type Row = Record<string, any>                                 // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -208,5 +208,63 @@ describe('business-only viewer: hidden where a figure resolves to one other pers
   it('no person-level figure anywhere', async () => {
     for (const label of ['Semana F1', 'Semana F4', 'Semana F5', 'Semana F7'])
       expect(JSON.stringify(await finance(label)).match(/.{20}(person_id|display_name|advance|earned_minor|outstanding|"lines").{10}/)?.[0], label).toBeUndefined()
+  })
+})
+
+describe('unpaid total: team earnings − unpaid = advances + paid must not resolve to one other person (07 D9)', () => {
+  const health = async (label: string) => (await dev.rpc('business_health', { p_period_id: P[label] })).data as BusinessHealth
+
+  it('a team.finance.read viewer sees the full values', async () => {
+    await as(MANAGER)
+    expect((await finance('Semana F9')).obligations).toMatchObject({ unpaid_team_minor: K(70000), paid_team_minor: 0 })
+    expect((await finance('Semana F10')).obligations).toMatchObject({ unpaid_team_minor: K(69000), paid_team_minor: K(20000) })
+    expect(metric(await finance('Semana F9'), 'team_earnings_minor').current).toBe(K(80000))
+  })
+
+  it('exactly one other person advanced (nobody paid, two still owed): unpaid hidden, and paid with it', async () => {
+    await as(BUSINESS_ONLY)
+    const f = await finance('Semana F9')
+    expect(f.private_fields).toEqual(['unpaid_team_minor', 'paid_team_minor'])
+    expect(f.obligations).toMatchObject({ unpaid_team_minor: null, paid_team_minor: null })
+    expect(metric(f, 'team_earnings_minor').current).toBe(K(80000))           // the aggregate earnings stay
+    const seen = numbers(f)
+    expect(seen).not.toContain(K(70000))
+    for (const v of seen) expect(K(80000) - v, String(v)).not.toBe(K(10000))  // no figure gives A's advance
+    expect((await health('Semana F9')).current.unpaid_team_minor).toBeNull()  // the overview follows the same rule
+  })
+
+  it('the viewer is one of the two paid: exactly one other remains, so hidden for them', async () => {
+    await as(PRO_B)
+    const f = await finance('Semana F10')
+    expect(f.private_fields).toEqual(['unpaid_team_minor', 'paid_team_minor'])
+    expect(numbers(f)).not.toContain(K(69000))
+    expect(metric(f, 'team_earnings_minor').current).toBe(K(89000))
+  })
+
+  it('two other people paid: the aggregate stays visible', async () => {
+    await as(BUSINESS_ONLY)
+    const f = await finance('Semana F10')
+    expect(f.private_fields).toEqual([])
+    expect(f.obligations).toMatchObject({ unpaid_team_minor: K(69000), paid_team_minor: K(20000) })
+    expect((await finance('Semana F4')).obligations).toMatchObject({ unpaid_team_minor: 0, paid_team_minor: K(88000) })   // closed, all paid
+  })
+
+  it('no comparison, open-period or insight leak of a hidden unpaid total', async () => {
+    // (for B, F5's 30.000 is B's own outstanding amount and F5's team earnings are hidden: nothing about anyone else)
+    const cases = [[BUSINESS_ONLY, { 'Semana F5': K(30000), 'Semana F9': K(70000) }], [PRO_B, { 'Semana F9': K(70000), 'Semana F10': K(69000) }]] as const
+    for (const [who, hidden] of cases) {
+      await as(who)
+      const h = await health('Semana F10')
+      const hid: Record<string, number> = hidden
+      for (const label of Object.keys(hid)) expect(h.open_periods.find((x) => x.label === label)!.unpaid_team_minor, `${who} ${label}`).toBeNull()
+      const txt = JSON.stringify(buildInsights(h, money).insights)
+      for (const v of Object.values(hid)) expect(txt).not.toContain(money(v))
+      const f = await finance('Semana F10')
+      expect(f.trend.every((t) => !('unpaid_team_minor' in t))).toBe(true)
+      expect(f.comparison.previous.available).toBe(false)                     // F9 is not closed: nothing to compare
+    }
+    await as(BUSINESS_ONLY)                                                   // the visible F10 total is the only one counted
+    const pending = buildInsights(await health('Semana F10'), money).insights.find((i) => i.kind === 'payments_pending')!
+    expect(pending.title).toBe(`Ainda faltam ${money(K(69000))} por pagar à equipa.`)
   })
 })
