@@ -63,6 +63,28 @@ This proves the CAPTCHA-protected anonymous sign-in succeeds while the device st
 the cleanup after 24 h. What an unbound device session can reach is covered by the schema-level checks above and by the
 identical Dev schema's test suite.
 
+## Business Health V1 (2026-10-11)
+
+- **Database:** 11 migrations `20261008000100_business_health` … `20261011000100_business_unpaid_inference` applied to
+  Prod through the seed-free working copy (`seeds: []`, dry run first). History 32/32, matching Dev. Functions only: the
+  Business Health reads and redaction helpers, plus `private_context_status` (a `business_health` flag),
+  `admin_set_permission` (accepts `business.health.read`) and the Stock reads/trigger reading active purchases only. No
+  table, policy or data change. Afterwards the `public`/`private` schema dump is identical to Dev's (0 differing lines);
+  RLS on all 32 `public` tables; `anon` executes no function; browser roles execute no Business Health helper in
+  `private`; the Business Health reads are executable only by `authenticated` and refuse an unbound session
+  (`NOT_AUTHORIZED`). Prod still has no rows in any table and no Auth users (no seeds, no test organizations or PINs).
+- **Frontend:** `main` fast-forwarded `d593b4f..3137561`; Netlify production deploy of `3137561` live at
+  `https://beauty.sollelio.com`.
+- **Production smoke (automated, no CAPTCHA solved, nothing created): PASS.** App loads; Turnstile shown and enrollment
+  blocked until solved; anonymous sign-in without a token refused (`captcha_failed`); the six Business Health reads and
+  every table denied without a session; `/privado/negocio/insights` and `/privado/negocio/financas` deep links served
+  (SPA) and show only enrollment on an unbound device; bundle: Prod URL, one publishable key, no secret, no Dev
+  reference, no test content; browser talks only to the app, Supabase Prod and Turnstile; no app runtime errors.
+- **Not yet exercised in Production:** the Negócio screens with real data. They need a bound salon device and a verified
+  person with `business.health.read`, which exist only after the real salon setup. They were exercised on Dev.
+
 ## Next: real salon setup (needs explicit approval)
 
-Load the real salon data and enroll the salon's Android phone per `pilot-runbook.md` and `pilot-permissions.sql` (check the spelling of every name, including "Duart"). Nothing of this has been done.
+Load the real salon data and enroll the salon's Android phone per `pilot-runbook.md` and `pilot-permissions.sql` (check the spelling of every name, including "Duart"; it now also grants `business.health.read` to Fernando, Mercy and Duart). Nothing of this has been done: real Salão Agradável onboarding is still pending.
+
+Device support for the pilot stays **Android only** (Android Chrome validated); iOS Safari physical validation is still deferred until hardware is available, and remains a gate before pilot sign-off.
