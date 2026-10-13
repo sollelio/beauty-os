@@ -14,8 +14,12 @@ import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
+import { AmountField } from '../../shared/ui/AmountField'
 import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { Field } from '../../shared/ui/Field'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
 import { useFlow } from '../../shared/ui/navigation'
 import { PaymentFields } from '../../shared/ui/PaymentFields'
 
@@ -78,11 +82,11 @@ export function RecordServiceFlow() {
           <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
         </BottomActionBar>
       }>
-        <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
-          <span aria-hidden className="success-mark">✓</span>
+        <div className="stack center success">
+          <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
           <h2>Serviço registado com sucesso.</h2>
-          <p className="muted" style={{ margin: 0 }}>{service.name} · {person.display_name} · {methodText}</p>
-          <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
+          <p className="note">{service.name} · {person.display_name} · {methodText}</p>
+          <p className="note num">Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/service/${record.result!.record_id}`)}>Corrigir este registo</button>
         </div>
       </AppScreen>
@@ -91,7 +95,7 @@ export function RecordServiceFlow() {
 
   const footer = step === 3 && person && service && (
     <BottomActionBar>
-      <span className="muted num" style={{ textAlign: 'center' }}>
+      <span className="bar-summary">
         {service.name} · {person.display_name} · {valueMinor !== null ? formatMoney(valueMinor, org) : '—'}
       </span>
       {record.status === 'error' ? (
@@ -120,7 +124,7 @@ export function RecordServiceFlow() {
               <button key={p.id} className="tile" aria-current={p.id === person?.id || undefined}
                 onClick={() => { if (p.id !== person?.id) { setPerson(p); setService(null) } flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
-                <span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span>
+                <span className="support">{p.capabilities.join(' · ')}</span>
               </button>
             ))}
           </div>
@@ -136,31 +140,27 @@ export function RecordServiceFlow() {
 
       {step === 3 && person && service && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Valor e pagamento</h2>
-            <div className="stack" style={{ gap: '0.25rem' }}>
+            <div className="stack stack-tight">
               <span className="label">Valor</span>
               {!editing ? (
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <div className="row-between">
                   <span className="amount num">{formatMoney(service.default_price_minor, org)}</span>
                   <button className="link-btn" onClick={() => { setEditing(true); setPriceDigits('') }}>Editar</button>
                 </div>
               ) : (
                 <>
-                  <label className="field">
-                    <input inputMode="numeric" autoFocus aria-label="Valor" value={priceDigits}
-                      placeholder={String(service.default_price_minor / 10 ** org.currency_exponent)}
-                      onChange={(e) => setPriceDigits(e.target.value.replace(/\D/g, '').slice(0, 9))} />
-                    <span className="muted">{org.currency_symbol}</span>
-                  </label>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="muted num">Habitual: {formatMoney(service.default_price_minor, org)}</span>
+                  <AmountField label="Valor" hideLabel autoFocus value={priceDigits} onChange={setPriceDigits} symbol={org.currency_symbol}
+                    placeholder={String(service.default_price_minor / 10 ** org.currency_exponent)} />
+                  <div className="row-between">
+                    <span className="support num">Habitual: {formatMoney(service.default_price_minor, org)}</span>
                     <button className="link-btn" onClick={() => { setEditing(false); setPriceDigits('') }}>Repor</button>
                   </div>
                 </>
               )}
               {valueMinor !== null && valueMinor !== service.default_price_minor && valueMinor > 0 && (
-                <span className="muted" style={{ fontSize: '0.9rem' }}>Valor diferente do habitual. Fica registado no histórico.</span>
+                <span className="support">Valor diferente do habitual. Fica registado no histórico.</span>
               )}
               {valueMinor === 0 && <div className="notice notice-warning">Valor zero. Confirme que este serviço não foi cobrado.</div>}
             </div>
@@ -204,33 +204,25 @@ function ServiceStep({ person, selectedId, draftValue, onChangePerson, onPick }:
   return (
     <section className="stack">
       <h2>Que serviço?</h2>
-      <div><button className="chip" onClick={onChangePerson} aria-label={`Mudar profissional: ${person.display_name}`}>{person.display_name} ✎</button></div>
-      <label className="field">
-        <input type="search" aria-label="Procurar serviço" placeholder="Procurar serviço" value={query} onChange={(e) => setQuery(e.target.value)} />
-      </label>
+      <div><button className="chip" onClick={onChangePerson} aria-label={`Mudar profissional: ${person.display_name}`}>{person.display_name}<Icon name="edit" size={16} /></button></div>
+      <Field label="Procurar serviço" hideLabel leading={<Icon name="search" />}>
+        <input type="search" enterKeyHint="search" placeholder="Procurar serviço" value={query} onChange={(e) => setQuery(e.target.value)} />
+      </Field>
       {!q && hasFrequent && !showAll && <span className="label">Frequentes de {person.display_name}</span>}
       {(catalogue.isError || frequent.isError) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
-      <div className="stack">
-        {list.map((s) => (
-          <button key={s.id} className="pick" aria-current={s.id === selectedId || undefined} onClick={() => onPick(s)}
-            style={s.id === selectedId && draftValue !== null ? { paddingTop: '0.5rem', paddingBottom: '0.5rem' } : undefined}>
-            {s.id === selectedId && draftValue !== null ? (
-              <span>
-                <span style={{ display: 'block', fontWeight: 600 }}>{s.name}</span>
-                <span className="num" style={{ display: 'block', fontSize: '0.9375rem' }}>
-                  <strong>{formatMoney(draftValue, org)}</strong><span className="muted"> · Habitual: {formatMoney(s.default_price_minor, org)}</span>
-                </span>
-              </span>
-            ) : (
-              <>
-                <span style={{ fontWeight: 600 }}>{s.name}</span>
-                <span className="num muted">{formatMoney(s.default_price_minor, org)}</span>
-              </>
-            )}
-          </button>
-        ))}
-        {q && list.length === 0 && <span className="muted">Sem resultados para «{query.trim()}».</span>}
-      </div>
+      {list.length > 0 && (
+        <ListGroup>
+          {list.map((s) => {
+            const edited = s.id === selectedId && draftValue !== null
+            return (
+              <ListRow key={s.id} as="button" onClick={() => onPick(s)} current={s.id === selectedId} title={s.name}
+                subtitle={edited ? <><strong className="num">{formatMoney(draftValue, org)}</strong><span className="num"> · Habitual: {formatMoney(s.default_price_minor, org)}</span></> : undefined}
+                trailing={edited ? undefined : <span className="row-value num muted">{formatMoney(s.default_price_minor, org)}</span>} />
+            )
+          })}
+        </ListGroup>
+      )}
+      {q && list.length === 0 && <span className="support">Sem resultados para «{query.trim()}».</span>}
       {!q && hasFrequent && !showAll && <button className="link-btn" onClick={() => setShowAll(true)}>Ver o catálogo completo</button>}
     </section>
   )

@@ -26,6 +26,11 @@ import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { Field } from '../../shared/ui/Field'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow, RowIcon } from '../../shared/ui/ListRow'
+import { SegmentedControl } from '../../shared/ui/SegmentedControl'
+import { StatusChip } from '../../shared/ui/StatusChip'
 import { useFlow, useSheet } from '../../shared/ui/navigation'
 
 type Line = { key: string; productId: string | null; name: string; unitWord: string; quantity: number; costDigits: string; insteadOf?: string | null }
@@ -137,18 +142,18 @@ export function PurchaseFlow() {
           <button className="btn btn-secondary" onClick={startOver}>Registar outra compra</button>
         </BottomActionBar>
       }>
-        <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
-          <span aria-hidden className="success-mark">✓</span>
+        <div className="stack center success">
+          <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
           <h2>Compra registada com sucesso.</h2>
-          <p className="muted num" style={{ margin: 0 }}>{plural(r.line_count)} · {formatMoney(r.total_minor, org)} · {payersText(r.salon_amount_minor, r.contributors)}</p>
-          <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(r.occurred_at, org.timezone)}</p>
+          <p className="note num">{plural(r.line_count)} · {formatMoney(r.total_minor, org)} · {payersText(r.salon_amount_minor, r.contributors)}</p>
+          <p className="note num">Hoje às {formatTime(r.occurred_at, org.timezone)}</p>
           <span className="notice notice-success">Registada no histórico de {plural(r.line_count)}</span>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/purchase/${r.purchase_id}`)}>Corrigir este registo</button>
         </div>
         {reviewLines && (
-          <section className="stock-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.625rem' }}>
+          <section className="panel">
             <span className="label">Stock</span>
-            <span className="muted" style={{ fontSize: '0.9rem' }}>As compras ficaram no histórico de cada produto. O estado (OK · Baixo · Comprar) só muda se alguém o mudar — agora ou mais tarde, no Stock.</span>
+            <span className="support">As compras ficaram no histórico de cada produto. O estado (OK · Baixo · Comprar) só muda se alguém o mudar — agora ou mais tarde, no Stock.</span>
             <button className="btn btn-secondary" onClick={() => navigate('/stock/rever', { state: { lines: reviewLines } })}>Rever stock · {plural(reviewLines.length)}</button>
             <button className="link-btn" onClick={() => navigate('/stock')}>Voltar a Stock</button>
           </section>
@@ -164,17 +169,19 @@ export function PurchaseFlow() {
 
   const footer = step === 1 ? (
     <BottomActionBar>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }} className="num">
+      <div className="row-between num">
         <span className="muted">{plural(lines.length)}</span><strong>Total {formatMoney(totalMinor, org)}</strong>
       </div>
-      <div style={{ display: 'flex', gap: '0.625rem' }}>
-        <button className="btn btn-secondary" style={{ flex: '0 0 auto', width: 'auto' }} onClick={() => { setQuery(''); setLastAdded(null); sheets.open({ stage: 'search' }) }}>+ Produto</button>
+      <div className="bar-actions">
+        <button className="btn btn-secondary btn-fit" aria-label="Adicionar produto" onClick={() => { setQuery(''); setLastAdded(null); sheets.open({ stage: 'search' }) }}>
+          <Icon name="plus" />Produto
+        </button>
         <button className="btn btn-primary btn-tall" disabled={!linesReady} onClick={() => flow.goTo(2)}>Continuar</button>
       </div>
     </BottomActionBar>
   ) : step === 2 ? (
     <BottomActionBar>
-      <span className="muted num" style={{ textAlign: 'center' }}>{plural(lines.length)} · {formatMoney(totalMinor, org)}</span>
+      <span className="bar-summary">{plural(lines.length)} · {formatMoney(totalMinor, org)}</span>
       <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
     </BottomActionBar>
   ) : step === 3 && input ? (
@@ -202,75 +209,67 @@ export function PurchaseFlow() {
           <section className="stack">
             <h2>O que comprou?</h2>
             {trip && <div className="lock-note"><span>Pré-preenchido pela lista de compras. Ajuste as quantidades e introduza o que pagou por cada linha.</span></div>}
-            {lines.length === 0 && <p className="muted" style={{ margin: 0 }}>Ainda não há produtos nesta compra.</p>}
-            <div className="list">
-              {lines.map((l) => (
-                <div className="list-row" key={l.key}>
-                  <button className="grow pick" style={{ border: 0, padding: 0, background: 'transparent' }} onClick={() => sheets.open(lineStage({ ...l }, true))}>
-                    <span className="grow" style={{ textAlign: 'left' }}>
-                      <strong>{l.name}</strong>
-                      <span className="muted num" style={{ display: 'block', fontSize: '0.9rem' }}>{l.quantity} × {l.unitWord}{l.insteadOf ? ` · em vez de ${l.insteadOf}` : ''}</span>
-                    </span>
-                    {l.costDigits === '' ? <span className="muted" style={{ fontSize: '0.875rem' }}>custo por introduzir</span> : <span className="num" style={{ fontWeight: 600 }}>{formatMoney(lineCost(l), org)}</span>}
-                  </button>
-                  <button className="icon-btn" aria-label={`Remover ${l.name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>🗑</button>
-                </div>
-              ))}
-            </div>
-            {trip && <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Toque numa linha para corrigir quantidade ou custo. Pode remover ou acrescentar produtos — a compra real não tem de ser igual ao plano.</p>}
+            {lines.length === 0 && <p className="note">Ainda não há produtos nesta compra.</p>}
+            {lines.length > 0 && (
+              <ListGroup>
+                {lines.map((l) => (
+                  <div className="row-line" key={l.key}>
+                    <ListRow as="button" onClick={() => sheets.open(lineStage({ ...l }, true))} title={l.name}
+                      subtitle={<span className="num">{l.quantity} × {l.unitWord}{l.insteadOf ? ` · em vez de ${l.insteadOf}` : ''}</span>}
+                      trailing={l.costDigits === '' ? <StatusChip tone="warning">custo por introduzir</StatusChip> : <span className="row-value num">{formatMoney(lineCost(l), org)}</span>} />
+                    <button className="icon-btn" aria-label={`Remover ${l.name}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}><Icon name="trash" /></button>
+                  </div>
+                ))}
+              </ListGroup>
+            )}
+            {trip && <p className="note support">Toque numa linha para corrigir quantidade ou custo. Pode remover ou acrescentar produtos — a compra real não tem de ser igual ao plano.</p>}
           </section>
         </>
       )}
 
       {step === 2 && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Quem pagou?</h2>
             <span className="num"><span className="muted">Total</span> <strong>{formatMoney(totalMinor, org)}</strong></span>
             <div className="stack">
-              <div className="stack" style={{ gap: '0.25rem' }}>
-                <span style={{ fontWeight: 600 }}>Salão</span>
-                <AmountField label="Salão" value={salonDigits ?? String(minorToWholeUnits(contrib.salonMinor, org))} onChange={setSalonDigits} symbol={org.currency_symbol} />
-                <span className="muted" style={{ fontSize: '0.875rem' }}>{contrib.salonMinor === 0 ? 'não contribui' : contrib.salonAutomatic ? 'o resto, automático' : ''}</span>
+              <div className="stack stack-tight">
+                <span className="row-title">Salão</span>
+                <AmountField label="Salão" hideLabel value={salonDigits ?? String(minorToWholeUnits(contrib.salonMinor, org))} onChange={setSalonDigits} symbol={org.currency_symbol}
+                  hint={contrib.salonMinor === 0 ? 'não contribui' : contrib.salonAutomatic ? 'o resto, automático' : undefined} />
               </div>
               {rows.map((r) => (
-                <div key={r.personId} className="stack" style={{ gap: '0.25rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600 }}>{r.name}</span>
-                    <button className="icon-btn" aria-label={`Remover ${r.name}`} onClick={() => setRows((rs) => rs.filter((x) => x.personId !== r.personId))}>×</button>
+                <div key={r.personId} className="stack stack-tight">
+                  <div className="row-between">
+                    <span className="row-title">{r.name}</span>
+                    <button className="icon-btn" aria-label={`Remover ${r.name}`} onClick={() => setRows((rs) => rs.filter((x) => x.personId !== r.personId))}><Icon name="close" /></button>
                   </div>
-                  <AmountField label={`Quanto pagou ${r.name}`} value={r.digits} placeholder="" onChange={(v) => setRows((rs) => rs.map((x) => (x.personId === r.personId ? { ...x, digits: v } : x)))} symbol={org.currency_symbol} />
+                  <AmountField label={`Quanto pagou ${r.name}`} hideLabel value={r.digits} placeholder="" onChange={(v) => setRows((rs) => rs.map((x) => (x.personId === r.personId ? { ...x, digits: v } : x)))} symbol={org.currency_symbol} />
                 </div>
               ))}
               {pickingPerson ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="wrap">
                   {people.data?.filter((p) => !rows.some((r) => r.personId === p.id)).map((p) => (
                     <button key={p.id} className="chip" onClick={() => { setRows((rs) => [...rs, { personId: p.id, name: p.display_name, digits: '' }]); setPickingPerson(false) }}>{p.display_name}</button>
                   ))}
                   <button className="link-btn" onClick={() => setPickingPerson(false)}>Cancelar</button>
                 </div>
               ) : (
-                <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setPickingPerson(true)}>+ Outra pessoa contribuiu</button>
+                <button className="link-btn self-start" onClick={() => setPickingPerson(true)}><Icon name="plus" size={18} />Outra pessoa contribuiu</button>
               )}
-              <span className="muted num" data-testid="contribution-sentence">{contrib.sentence}</span>
+              <span className="support num" data-testid="contribution-sentence">{contrib.sentence}</span>
             </div>
-            <div className="stack">
-              <span className="label">Onde comprou (opcional)</span>
-              <div className="segmented" role="group" aria-label="Onde comprou">
-                {origins.data?.map((o) => (
-                  <button key={o.id} className="seg" aria-pressed={originId === o.id} onClick={() => setOriginId(originId === o.id ? null : o.id)}>{o.label}</button>
-                ))}
-              </div>
-            </div>
+            <SegmentedControl label="Onde comprou (opcional)" options={(origins.data ?? []).map((o) => ({ id: o.id, label: o.label }))}
+              value={originId} onChange={(id) => setOriginId(originId === id ? null : id)} />
           </section>
         </>
       )}
 
       {step === 3 && input && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Confirmação necessária</h2>
-            <p className="muted" style={{ margin: 0 }}>Esta compra tem de ser confirmada por uma pessoa autorizada.</p>
+            <p className="note">Esta compra tem de ser confirmada por uma pessoa autorizada.</p>
             <dl className="kv-card">
               <div><dt>Produtos</dt><dd>{plural(lines.length)}</dd></div>
               <div><dt>Total</dt><dd className="num">{formatMoney(totalMinor, org)}</dd></div>
@@ -289,36 +288,37 @@ export function PurchaseFlow() {
 
       {sheet?.stage === 'search' && (
         <BottomSheet labelledBy="add-title" onDismiss={sheets.close}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="row-between">
             <h2 id="add-title" className="sheet-title">Adicionar produto</h2>
-            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}>×</button>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
           </div>
           {lastAdded && (
-            <div className="notice notice-success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="notice notice-success row-between">
               <span>{lastAdded} adicionado</span>
               <button className="link-btn" onClick={sheets.close}>Terminar</button>
             </div>
           )}
-          <label className="field"><input type="search" data-autofocus aria-label="Procurar ou escrever produto" placeholder="Procurar ou escrever produto" value={query} onChange={(e) => setQuery(e.target.value)} /></label>
-          <div className="stack">
-            {matches.map((p) => {
-              const inList = lines.find((l) => l.productId === p.id)
-              return (
-                <button key={p.id} className="pick" onClick={() => inList
-                  ? sheets.update(lineStage({ ...inList }, true))
-                  : sheets.update(lineStage({ key: crypto.randomUUID(), productId: p.id, name: p.name, unitWord: p.unit_word, quantity: 1, costDigits: '' }, false))}>
-                  <span style={{ fontWeight: 600 }}>{p.name}</span>
-                  <span className="muted">{inList ? `já na compra · ${inList.quantity} × ${inList.unitWord}` : p.unit_word}</span>
-                </button>
-              )
-            })}
-            {q.length >= 2 && !exists && (
-              <button className="pick" style={{ borderStyle: 'dashed' }} onClick={() => sheets.update(lineStage({ key: crypto.randomUUID(), productId: null, name: q, unitWord: '', quantity: 1, costDigits: '' }, false))}>
-                <span style={{ fontWeight: 600, color: 'var(--accent)' }}>Criar produto novo: «{q}»</span>
-              </button>
-            )}
-            {q && matches.length === 0 && <span className="muted">Sem resultados para «{q}».</span>}
-          </div>
+          <Field label="Procurar ou escrever produto" hideLabel leading={<Icon name="search" />}>
+            <input type="search" enterKeyHint="search" data-autofocus placeholder="Procurar ou escrever produto" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </Field>
+          {(matches.length > 0 || (q.length >= 2 && !exists)) && (
+            <ListGroup>
+              {matches.map((p) => {
+                const inList = lines.find((l) => l.productId === p.id)
+                return (
+                  <ListRow key={p.id} as="button" title={p.name} onClick={() => inList
+                    ? sheets.update(lineStage({ ...inList }, true))
+                    : sheets.update(lineStage({ key: crypto.randomUUID(), productId: p.id, name: p.name, unitWord: p.unit_word, quantity: 1, costDigits: '' }, false))}
+                    trailing={inList ? <StatusChip tone="neutral">já na compra · {inList.quantity} × {inList.unitWord}</StatusChip> : <span className="muted">{p.unit_word}</span>} />
+                )
+              })}
+              {q.length >= 2 && !exists && (
+                <ListRow as="button" leading={<RowIcon name="plus" />} title={<span className="row-accent">Criar produto novo: «{q}»</span>}
+                  onClick={() => sheets.update(lineStage({ key: crypto.randomUUID(), productId: null, name: q, unitWord: '', quantity: 1, costDigits: '' }, false))} />
+              )}
+            </ListGroup>
+          )}
+          {q && matches.length === 0 && <span className="support">Sem resultados para «{q}».</span>}
         </BottomSheet>
       )}
 
@@ -347,31 +347,28 @@ function LineSheet({ line, editing, unitWords, symbol, onChange: setLine, onBack
   // typed quantity/cost would be lost by a stray tap: no backdrop or Escape dismissal; ← and Android back ask first when changed
   return (
     <BottomSheet labelledBy="line-title" dismissible={false}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <button className="icon-btn" aria-label="Voltar" onClick={onBack}>←</button>
+      <div className="sheet-head">
+        <button className="icon-btn" aria-label="Voltar" onClick={onBack}><Icon name="back" /></button>
         <h2 id="line-title" className="sheet-title">{line.name}</h2>
       </div>
       {isNew && (
         <div className="stack">
           <span className="label">Unidade</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {unitWords.map((w) => <button key={w} className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={line.unitWord === w} onClick={() => setLine({ ...line, unitWord: w })}>{w}</button>)}
+          <div className="wrap" role="group" aria-label="Unidade">
+            {unitWords.map((w) => <button key={w} type="button" className="chip chip-outline" aria-pressed={line.unitWord === w} onClick={() => setLine({ ...line, unitWord: w })}>{w}</button>)}
           </div>
         </div>
       )}
       <div className="stack">
         <span className="label">Quantidade</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button className="icon-btn" style={{ border: '1px solid var(--line-strong)' }} aria-label="Menos" onClick={() => setLine({ ...line, quantity: Math.max(1, line.quantity - 1) })}>−</button>
-          <span className="num" style={{ fontSize: '1.4rem', fontWeight: 700, minWidth: '6rem', textAlign: 'center' }}>{line.quantity} {line.unitWord}</span>
-          <button className="icon-btn" style={{ border: '1px solid var(--line-strong)' }} aria-label="Mais" onClick={() => setLine({ ...line, quantity: Math.min(9999, line.quantity + 1) })}>+</button>
+        <div className="stepper">
+          <button className="step" aria-label="Menos" onClick={() => setLine({ ...line, quantity: Math.max(1, line.quantity - 1) })}><Icon name="minus" /></button>
+          <span className="stepper-value num">{line.quantity} {line.unitWord}</span>
+          <button className="step" aria-label="Mais" onClick={() => setLine({ ...line, quantity: Math.min(9999, line.quantity + 1) })}><Icon name="plus" /></button>
         </div>
       </div>
-      <div className="stack" style={{ gap: '0.25rem' }}>
-        <span className="label">Quanto pagou por estas unidades</span>
-        <AmountField label="Quanto pagou por estas unidades" value={line.costDigits} onChange={(v) => setLine({ ...line, costDigits: v })} placeholder="" symbol={symbol} />
-        <span className="muted" style={{ fontSize: '0.875rem' }}>Total desta linha, não o preço de cada unidade.</span>
-      </div>
+      <AmountField label="Quanto pagou por estas unidades" hint="Total desta linha, não o preço de cada unidade." value={line.costDigits}
+        onChange={(v) => setLine({ ...line, costDigits: v })} placeholder="" symbol={symbol} />
       <button className="btn btn-primary" disabled={!ready} onClick={() => onSave(line)}>{editing ? 'Guardar alteração' : 'Adicionar à compra'}</button>
     </BottomSheet>
   )

@@ -11,7 +11,7 @@ export function ConfirmDialog({ title, children, safeLabel, destructiveLabel, on
   return (
     <BottomSheet labelledBy={id} onDismiss={onSafe}>
       <h2 id={id} className="sheet-title">{title}</h2>
-      <p className="muted" style={{ margin: 0 }}>{children}</p>
+      <p className="note">{children}</p>
       <button className="btn btn-primary" data-autofocus onClick={onSafe}>{safeLabel}</button>
       <button className="btn btn-destructive" onClick={onDestructive}>{destructiveLabel}</button>
     </BottomSheet>

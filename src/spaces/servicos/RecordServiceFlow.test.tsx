@@ -55,7 +55,7 @@ describe('RecordServiceFlow back/history contract', () => {
     expect(await screen.findByText('Quem fez o serviço?')).toBeTruthy()
     expect(router.state.location.pathname).toBe(PATH)
     await act(() => router.navigate(2))                                                       // forward, twice
-    expect((await screen.findByLabelText('Valor') as HTMLInputElement).value).toBe('15000')
+    expect((await screen.findByLabelText('Valor') as HTMLInputElement).value).toBe('15.000')
   })
 
   it('the app-bar ← steps back through history, not to a fixed path', async () => {
@@ -126,7 +126,7 @@ describe('RecordServiceFlow back/history contract', () => {
       expect(screen.getByRole('button', { name: /Corte/ }).getAttribute('aria-current')).toBeNull()
       fireEvent.click(row)                                                      // the same service again
       expect(await screen.findByLabelText('Valor')).toBeTruthy()
-      expect(valueField().value).toBe('15000')
+      expect(valueField().value).toBe('15.000')
       expect(screen.getByText('Coloração · Ana · 15.000 Kz')).toBeTruthy()
     })
 
@@ -142,7 +142,7 @@ describe('RecordServiceFlow back/history contract', () => {
       const other = screen.getByRole('button', { name: /Corte/ })               // other rows stay as they were
       expect(other.textContent).toBe('Corte5.000 Kz')
       fireEvent.click(row)                                                      // same service: the draft comes back
-      expect(valueField().value).toBe('154656')
+      expect(valueField().value).toBe('154.656')
     })
 
     it('a chosen service still at its habitual price keeps the normal row, only highlighted', async () => {
@@ -186,7 +186,7 @@ describe('RecordServiceFlow back/history contract', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
       fireEvent.click(screen.getByText('Ana'))
       fireEvent.click(await screen.findByRole('button', { name: /Coloração/ }))
-      expect(valueField().value).toBe('15000')
+      expect(valueField().value).toBe('15.000')
     })
 
     it('a different service starts from its own catalogue price', async () => {

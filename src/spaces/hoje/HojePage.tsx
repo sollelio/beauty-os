@@ -1,5 +1,4 @@
 // Hoje (Slice 01 §3): primary action, salon-level count line, recent records. No money totals, no per-person totals.
-import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
@@ -9,35 +8,12 @@ import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
 import { formatTime, formatToday } from '../../shared/time'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow, RowIcon } from '../../shared/ui/ListRow'
 import { useSheet } from '../../shared/ui/navigation'
 
 // Capture flows opened from here go back here (history) when they finish or close (useFlow.leaveTo).
 const FROM_HOJE = { from: '/' }
-
-// Small stroke icons for the Hoje actions (no icon library in the app; currentColor, decorative only).
-const icon = (paths: ReactNode) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">{paths}</svg>
-)
-const icons = {
-  plus: icon(<path d="M12 5v14M5 12h14" />),
-  advance: icon(<><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></>),
-  expense: icon(<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>),
-  stock: icon(<><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /></>),
-  person: icon(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>),
-  close: icon(<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4" /></>),
-  business: icon(<path d="M3 21h18M6 17v-6M12 17V5M18 17v-9" />),
-  lock: icon(<><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>),
-}
-
-function ActionContent({ glyph, label, quiet }: { glyph: ReactNode; label: string; quiet?: boolean }) {
-  return (
-    <>
-      <span className={quiet ? 'action-icon action-icon-quiet' : 'action-icon'}>{glyph}</span>
-      <span className="action-label">{label}</span>
-      <span aria-hidden className="action-chevron">›</span>
-    </>
-  )
-}
 
 export function HojePage() {
   const org = useOrganization()
@@ -47,35 +23,40 @@ export function HojePage() {
 
   return (
     <main className="app-main">
-      <header className="stack" style={{ gap: '0.25rem' }}>
+      <header className="stack stack-tight">
         <span className="label">{formatToday(org.timezone)}</span>
         <h1>Hoje</h1>
       </header>
 
       <Link to="/servicos/registar" state={FROM_HOJE} className="btn btn-primary hoje-cta">
-        {icons.plus}Registar serviço
+        <Icon name="plus" />Registar serviço
       </Link>
-      <nav className="action-card" aria-label="Outras ações">
-        <Link to="/equipa/adiantamento" state={FROM_HOJE} className="action-row"><ActionContent glyph={icons.advance} label="Adiantamento" /></Link>
-        <button className="action-row" onClick={() => chooser.open(true)}><ActionContent glyph={icons.expense} label="Despesa ou compra" /></button>
-        <Link to="/stock" className="action-row"><ActionContent glyph={icons.stock} label="Stock" /></Link>
+      <nav aria-label="Outras ações">
+        <ListGroup>
+          <ListRow as="link" to="/equipa/adiantamento" state={FROM_HOJE} leading={<RowIcon name="card" />} title="Adiantamento" chevron />
+          <ListRow as="button" onClick={() => chooser.open(true)} leading={<RowIcon name="receipt" />} title="Despesa ou compra" chevron />
+          <ListRow as="link" to="/stock" leading={<RowIcon name="box" />} title="Stock" chevron />
+        </ListGroup>
       </nav>
 
       {(toBuy.data ?? 0) > 0 && (
         <section className="stack" aria-label="Atenção">
           <span className="label">Atenção</span>
-          <Link to="/stock" className="pick" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <span>{toBuy.data} {toBuy.data === 1 ? 'produto marcado' : 'produtos marcados'} a comprar</span><span aria-hidden className="muted">›</span>
-          </Link>
+          <ListGroup>
+            <ListRow as="link" to="/stock" leading={<RowIcon name="alert" tone="warning" />} chevron
+              title={`${toBuy.data} ${toBuy.data === 1 ? 'produto marcado' : 'produtos marcados'} a comprar`} />
+          </ListGroup>
         </section>
       )}
 
       <section className="stack" aria-labelledby="hoje-private">
-        <span className="label action-group-label" id="hoje-private">{icons.lock}Privado · com PIN</span>
-        <nav className="action-card" aria-label="Privado">
-          <Link to="/privado/entrar" className="action-row"><ActionContent glyph={icons.person} label="Área privada" quiet /></Link>
-          <Link to="/privado/fecho" className="action-row"><ActionContent glyph={icons.close} label="Fecho" quiet /></Link>
-          <Link to="/privado/negocio" className="action-row"><ActionContent glyph={icons.business} label="Negócio" quiet /></Link>
+        <span className="label group-label" id="hoje-private"><Icon name="lock" size={14} />Privado · com PIN</span>
+        <nav aria-label="Privado">
+          <ListGroup>
+            <ListRow as="link" to="/privado/entrar" leading={<RowIcon name="person" tone="quiet" />} title="Área privada" chevron />
+            <ListRow as="link" to="/privado/fecho" leading={<RowIcon name="calendarCheck" tone="quiet" />} title="Fecho" chevron />
+            <ListRow as="link" to="/privado/negocio" leading={<RowIcon name="chart" tone="quiet" />} title="Negócio" chevron />
+          </ListGroup>
         </nav>
       </section>
 
@@ -87,24 +68,17 @@ export function HojePage() {
 
       {summary.data && (
         <>
-          <p className="muted num" style={{ margin: 0 }} data-testid="count-line">{countLine(summary.data, org.timezone)}</p>
+          <p className="note num" data-testid="count-line">{countLine(summary.data, org.timezone)}</p>
           {summary.data.recent.length > 0 && (
             <section className="stack" aria-label="Recentes">
               <span className="label">Recentes</span>
-              <div className="list">
+              <ListGroup>
                 {summary.data.recent.map((r) => (
-                  <div className="list-row" key={r.id}>
-                    <span className="num muted" style={{ width: '3rem' }}>{formatTime(r.occurred_at, org.timezone)}</span>
-                    <span className="grow">
-                      <strong>{r.service_name}</strong>
-                      <span className="muted" style={{ display: 'block', fontSize: '0.9rem' }}>
-                        {r.person_name} · {r.payment_kind === 'mixed' ? 'Misto' : r.method_label}
-                      </span>
-                    </span>
-                    <span className="num" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{formatMoney(r.value_minor, org)}</span>
-                  </div>
+                  <ListRow key={r.id} leading={<span className="row-time num">{formatTime(r.occurred_at, org.timezone)}</span>}
+                    title={r.service_name} subtitle={`${r.person_name} · ${r.payment_kind === 'mixed' ? 'Misto' : r.method_label}`}
+                    trailing={<span className="row-value num">{formatMoney(r.value_minor, org)}</span>} />
                 ))}
-              </div>
+              </ListGroup>
             </section>
           )}
         </>
@@ -113,12 +87,12 @@ export function HojePage() {
         // choosing replaces the sheet's history entry with the flow, so back from the flow returns to Hoje
         <BottomSheet labelledBy="chooser-title" onDismiss={chooser.close}>
           <h2 id="chooser-title" className="sheet-title">O que quer registar?</h2>
-          <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => chooser.leaveTo('/dinheiro/despesa', FROM_HOJE)}>
-            <span><strong style={{ display: 'block' }}>Registar despesa</strong><span className="muted">Contas e gastos do salão — não entra no stock</span></span>
-          </button>
-          <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => chooser.leaveTo('/dinheiro/compra', FROM_HOJE)}>
-            <span><strong style={{ display: 'block' }}>Registar compra</strong><span className="muted">Produtos que usamos nos serviços e ficam no stock</span></span>
-          </button>
+          <ListGroup>
+            <ListRow as="button" onClick={() => chooser.leaveTo('/dinheiro/despesa', FROM_HOJE)} leading={<RowIcon name="receipt" />} chevron
+              title="Registar despesa" subtitle="Contas e gastos do salão — não entra no stock" />
+            <ListRow as="button" onClick={() => chooser.leaveTo('/dinheiro/compra', FROM_HOJE)} leading={<RowIcon name="box" />} chevron
+              title="Registar compra" subtitle="Produtos que usamos nos serviços e ficam no stock" />
+          </ListGroup>
           <button className="btn btn-secondary" onClick={chooser.close}>Cancelar</button>
         </BottomSheet>
       )}

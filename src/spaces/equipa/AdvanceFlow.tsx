@@ -16,6 +16,8 @@ import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
+import { Field } from '../../shared/ui/Field'
+import { Icon } from '../../shared/ui/Icon'
 import { useFlow } from '../../shared/ui/navigation'
 import { PaymentFields } from '../../shared/ui/PaymentFields'
 import { effectiveChoice, type PaymentChoice } from '../../shared/payment'
@@ -71,11 +73,11 @@ export function AdvanceFlow() {
           <button className="btn btn-secondary" onClick={startOver}>Registar outro adiantamento</button>
         </BottomActionBar>
       }>
-        <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
-          <span aria-hidden className="success-mark">✓</span>
+        <div className="stack center success">
+          <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
           <h2>Adiantamento registado com sucesso.</h2>
-          <p className="muted num" style={{ margin: 0 }}>{person.display_name} · {formatMoney(amountMinor, org)} · {methodRow?.label}</p>
-          <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(advance.result.occurred_at, org.timezone)}</p>
+          <p className="note num">{person.display_name} · {formatMoney(amountMinor, org)} · {methodRow?.label}</p>
+          <p className="note num">Hoje às {formatTime(advance.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/advance/${advance.result!.advance_id}`)}>Corrigir este registo</button>
         </div>
       </AppScreen>
@@ -86,7 +88,7 @@ export function AdvanceFlow() {
 
   const footer = step === 2 && person ? (
     <BottomActionBar>
-      <span className="muted num" style={{ textAlign: 'center' }}>
+      <span className="bar-summary">
         {amountMinor ? `Para ${person.display_name} · ${formatMoney(amountMinor, org)} · ${methodRow?.label ?? ''}` : 'Indique o valor para continuar.'}
       </span>
       <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
@@ -118,11 +120,11 @@ export function AdvanceFlow() {
             {people.data?.map((p) => (
               <button key={p.id} className="tile" onClick={() => { setPerson(p); flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
-                <span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span>
+                <span className="support">{p.capabilities.join(' · ')}</span>
               </button>
             ))}
           </div>
-          <p className="muted" style={{ fontSize: '0.9rem', margin: 0 }}>
+          <p className="note support">
             Dinheiro entregue a uma pessoa da equipa por conta do que vai receber. Não é uma despesa do salão.
           </p>
         </section>
@@ -130,31 +132,24 @@ export function AdvanceFlow() {
 
       {step === 2 && person && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Quanto e como?</h2>
-            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar pessoa: ${person.display_name}`}>{person.display_name} ✎</button></div>
-            <div className="stack" style={{ gap: '0.375rem' }}>
-              <span className="label">Valor entregue</span>
-              <AmountField label="Valor entregue" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
-              <span className="muted" style={{ fontSize: '0.875rem' }}>Valor em {org.currency_symbol}, sem cêntimos.</span>
-            </div>
+            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar pessoa: ${person.display_name}`}>{person.display_name}<Icon name="edit" size={16} /></button></div>
+            <AmountField label="Valor entregue" hint={`Valor em ${org.currency_symbol}, sem cêntimos.`} value={amount} onChange={setAmount} symbol={org.currency_symbol} />
             <PaymentFields label="Forma de entrega" methods={methodList} choice={methodRow?.id ?? null} onChoice={setMethod}
               allowMixed={false} symbol={org.currency_symbol} />
-            <div className="stack" style={{ gap: '0.375rem' }}>
-              <span className="label">Nota (opcional)</span>
-              <label className="field">
-                <input aria-label="Nota (opcional)" maxLength={60} value={note} onChange={(e) => setNote(e.target.value)} />
-              </label>
-            </div>
+            <Field label="Nota (opcional)">
+              <input maxLength={60} enterKeyHint="done" value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
           </section>
         </>
       )}
 
       {step === 3 && person && input && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Confirmação necessária</h2>
-            <p className="muted" style={{ margin: 0 }}>Este adiantamento tem de ser confirmado por uma pessoa autorizada.</p>
+            <p className="note">Este adiantamento tem de ser confirmado por uma pessoa autorizada.</p>
             <dl className="kv-card">
               <div><dt>Para</dt><dd>{person.display_name}</dd></div>
               <div><dt>Valor</dt><dd className="num">{formatMoney(input.amountMinor, org)}</dd></div>

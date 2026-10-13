@@ -33,7 +33,7 @@ describe('Hoje', () => {
     expect(href(within(other).getByRole('link', { name: 'Stock' }))).toBe('/stock')
     const priv = screen.getByRole('navigation', { name: 'Privado' })
     expect(within(priv).getAllByRole('link').map(href)).toEqual(['/privado/entrar', '/privado/fecho', '/privado/negocio'])
-    expect(within(priv).getAllByRole('link').map((a) => a.textContent)).toEqual(['Área privada›', 'Fecho›', 'Negócio›'])
+    expect(within(priv).getAllByRole('link').map((a) => a.textContent)).toEqual(['Área privada', 'Fecho', 'Negócio'])
     expect(await screen.findByText('2 produtos marcados a comprar')).toBeTruthy()
     expect(await screen.findByText('Ainda não há serviços registados hoje.')).toBeTruthy()
   })

@@ -17,6 +17,8 @@ import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { PaymentFields } from '../../shared/ui/PaymentFields'
 import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
+import { Field } from '../../shared/ui/Field'
+import { Icon } from '../../shared/ui/Icon'
 import { useFlow } from '../../shared/ui/navigation'
 
 export function ExpenseFlow() {
@@ -70,11 +72,11 @@ export function ExpenseFlow() {
           <button className="btn btn-secondary" onClick={startOver}>Registar outra despesa</button>
         </BottomActionBar>
       }>
-        <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
-          <span aria-hidden className="success-mark">✓</span>
+        <div className="stack center success">
+          <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
           <h2>Despesa registada com sucesso.</h2>
-          <p className="muted num" style={{ margin: 0 }}>{category.label} · {formatMoney(amountMinor, org)} · {methodText}</p>
-          <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(command.result.occurred_at, org.timezone)}</p>
+          <p className="note num">{category.label} · {formatMoney(amountMinor, org)} · {methodText}</p>
+          <p className="note num">Hoje às {formatTime(command.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/expense/${command.result!.expense_id}`)}>Corrigir este registo</button>
         </div>
       </AppScreen>
@@ -84,7 +86,7 @@ export function ExpenseFlow() {
   const err = command.status === 'error' ? command.error : null
   const footer = step === 2 && category ? (
     <BottomActionBar>
-      <span className="muted num" style={{ textAlign: 'center' }}>
+      <span className="bar-summary">
         {amountMinor ? `${category.label} · ${formatMoney(amountMinor, org)} · ${methodText}` : 'Indique o valor para continuar.'}
       </span>
       <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
@@ -114,9 +116,9 @@ export function ExpenseFlow() {
           <h2>Que despesa?</h2>
           <div className="tiles">
             {categories.data?.map((c) => (
-              <button key={c.id} className="tile" style={{ minHeight: '6.5rem' }} onClick={() => { setCategory(c); flow.goTo(2) }}>
+              <button key={c.id} className="tile tile-short" onClick={() => { setCategory(c); flow.goTo(2) }}>
                 <strong>{c.label}</strong>
-                {c.hint && <span className="muted" style={{ fontSize: '0.875rem' }}>{c.hint}</span>}
+                {c.hint && <span className="support">{c.hint}</span>}
               </button>
             ))}
           </div>
@@ -125,28 +127,24 @@ export function ExpenseFlow() {
 
       {step === 2 && category && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Quanto e como?</h2>
-            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar despesa: ${category.label}`}>{category.label} ✎</button></div>
-            <div className="stack" style={{ gap: '0.375rem' }}>
-              <span className="label">Valor pago</span>
-              <AmountField label="Valor pago" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
-            </div>
+            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar despesa: ${category.label}`}>{category.label}<Icon name="edit" size={16} /></button></div>
+            <AmountField label="Valor pago" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
             <PaymentFields label="Forma de pagamento" methods={methodList} choice={choice} onChoice={setMethod} mixed={mixed} onMixed={setMixed}
               sentence={choice === MIXED ? check.sentence : null} symbol={org.currency_symbol} />
-            <div className="stack" style={{ gap: '0.375rem' }}>
-              <span className="label">Nota (opcional)</span>
-              <label className="field"><input aria-label="Nota (opcional)" maxLength={60} value={note} onChange={(e) => setNote(e.target.value)} /></label>
-            </div>
+            <Field label="Nota (opcional)">
+              <input maxLength={60} enterKeyHint="done" value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
           </section>
         </>
       )}
 
       {step === 3 && category && input && (
         <>
-          <section className="stack" style={{ gap: '1rem' }}>
+          <section className="stack stack-loose">
             <h2>Confirmação necessária</h2>
-            <p className="muted" style={{ margin: 0 }}>Esta despesa tem de ser confirmada por uma pessoa autorizada.</p>
+            <p className="note">Esta despesa tem de ser confirmada por uma pessoa autorizada.</p>
             <dl className="kv-card">
               <div><dt>Despesa</dt><dd>{category.label}</dd></div>
               <div><dt>Valor</dt><dd className="num">{formatMoney(input.amountMinor, org)}</dd></div>

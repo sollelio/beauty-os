@@ -85,7 +85,7 @@ describe('ExpenseFlow', () => {
 
 describe('PurchaseFlow', () => {
   async function addShampoo(cost: string) {
-    fireEvent.click(button('+ Produto'))
+    fireEvent.click(button('Adicionar produto'))
     fireEvent.click(await screen.findByText('Shampoo 5 L'))
     fireEvent.click(button('Mais'))
     fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: cost } })
@@ -111,7 +111,7 @@ describe('PurchaseFlow', () => {
     await addShampoo('14000')
     fireEvent.click(button('Continuar'))
     expect(screen.getByText('o resto, automático')).toBeTruthy()
-    fireEvent.click(button('+ Outra pessoa contribuiu'))
+    fireEvent.click(button('Outra pessoa contribuiu'))
     fireEvent.click(await screen.findByRole('button', { name: 'Nádia' }))
     expect(screen.getByTestId('contribution-sentence').textContent).toBe('Indique quanto pagou Nádia ou remova a linha.')
     expect(button('Continuar').disabled).toBe(true)
@@ -184,7 +184,7 @@ describe('ExpenseFlow back/history contract', () => {
 
 describe('PurchaseFlow back/history contract', () => {
   async function addLine(cost: string) {
-    fireEvent.click(button('+ Produto'))
+    fireEvent.click(button('Adicionar produto'))
     fireEvent.click(await screen.findByText('Shampoo 5 L'))
     fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: cost } })
     fireEvent.click(button('Adicionar à compra'))
@@ -194,7 +194,7 @@ describe('PurchaseFlow back/history contract', () => {
 
   it('Android back closes the open sheet first and stays on the purchase', async () => {
     const { router } = renderPurchase(fromHoje(PURCHASE))
-    fireEvent.click(await screen.findByRole('button', { name: '+ Produto' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Adicionar produto' }))
     const sheet = await screen.findByRole('dialog', { name: 'Adicionar produto' })
     expect(sheet.getAttribute('aria-modal')).toBe('true')
     expect(document.activeElement).toBe(screen.getByLabelText('Procurar ou escrever produto'))
@@ -206,7 +206,7 @@ describe('PurchaseFlow back/history contract', () => {
 
   // Line sheet (J4): a half-typed line is a draft — back never drops it silently, and never leaves Compra.
   async function openShampooLine() {
-    fireEvent.click(await screen.findByRole('button', { name: '+ Produto' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Adicionar produto' }))
     fireEvent.click(await screen.findByText('Shampoo 5 L'))
     return screen.findByRole('dialog', { name: 'Shampoo 5 L' })
   }
