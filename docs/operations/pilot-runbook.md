@@ -68,7 +68,7 @@ select private.admin_create_period(:org, '<label>', '<first day>', '<last day>')
 | `business.health.read` | B11 | Negócio (Business Health) |
 | `catalogue.manage` | B10 (catalogue) | Gestão: add, edit, deactivate services and products; change prices and units |
 
-Own situation (B3) needs only a PIN. **Salão Agradável (07 D8 update, 2026-10-13):** see [`salao-agradavel-onboarding.md`](salao-agradavel-onboarding.md) §4; the onboarding SQL sets them. **Earlier pilot assignments (07 D8):** run [`pilot-permissions.sql`](pilot-permissions.sql) after the people exist — Fernando: movement.confirm, team.finance.read, period.decide, period.close, period.reopen, records.correct; Mercy: movement.confirm, team.finance.read, period.decide, payment.confirm, records.correct; everyone else none.
+Own situation (B3) needs only a PIN. **Salão Agradável (07 D8 update, 2026-10-13):** see [`salao-agradavel-onboarding.md`](salao-agradavel-onboarding.md) §4; the onboarding SQL sets them. **Earlier pilot assignments (07 D8):** run [`pilot-permissions.sql`](pilot-permissions.sql) after the people exist — Fernando: movement.confirm, team.finance.read, period.decide, period.close, period.reopen, records.correct; Marcelina (Merce): movement.confirm, team.finance.read, period.decide, payment.confirm, records.correct; everyone else none.
 
 ## 5. Abuse controls (ADR-0009 mitigation 4)
 

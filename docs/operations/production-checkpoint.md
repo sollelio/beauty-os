@@ -85,6 +85,6 @@ identical Dev schema's test suite.
 
 ## Next: real salon setup (needs explicit approval)
 
-Load the real salon data and enroll the salon's Android phone per `pilot-runbook.md` and `pilot-permissions.sql` (check the spelling of every name, including "Duart"; it now also grants `business.health.read` to Fernando, Mercy and Duart). Nothing of this has been done: real Salão Agradável onboarding is still pending.
+Load the real salon data and enroll the salon's Android phone per `salao-agradavel-onboarding.md` and `salao-agradavel-onboarding.sql`, which supersede `pilot-permissions.sql` for Salão Agradável (07 D8 update, 2026-10-13: Marcelina, display name Merce, reads and confirms payments only; Duart is not onboarded). Nothing of this has been done: real Salão Agradável onboarding is still pending.
 
 Device support for the pilot stays **Android only** (Android Chrome validated); iOS Safari physical validation is still deferred until hardware is available, and remains a gate before pilot sign-off.

@@ -140,7 +140,7 @@ Open (Aberto) → Ready for payment (Pronto para pagamento) → Payment in progr
 5. Review expenses, purchases and reserves.
 6. Review operational financial position.
 7. Approve amounts payable.
-8. Finance (Mercy in the pilot) processes payments — possibly remotely.
+8. Finance (Marcelina, known in the salon as Merce, in the pilot) processes payments — possibly remotely.
 9. Confirm payments.
 10. Close period.
 

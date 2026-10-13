@@ -92,7 +92,7 @@ Names appear in these docs only as discovery evidence.
 | Person | Observed responsibilities |
 |---|---|
 | Fernando | Owner; operational manager; nail professional; barber; financial/reconciliation support; purchasing/procurement. Present in the salon; holds much operational knowledge. |
-| Mercy | Owner; finance; payroll/payment processing; HR-like support. |
+| Marcelina (Merce) | Owner; finance; payroll/payment processing; HR-like support. |
 | Duarte | Owner; social media / marketing. Not regularly involved in daily finance. |
 | Hair collaborator | Primarily hair professional; also performs nail and other beauty services. Distinct remuneration and cost-sharing arrangement (see [01 §2](01_DISCOVERY_SUMMARY.md#2-remuneration)). |
 | Other professionals (e.g. Laurindo) | Perform services under differing remuneration arrangements. |

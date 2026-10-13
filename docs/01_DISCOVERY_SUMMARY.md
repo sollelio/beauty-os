@@ -10,8 +10,8 @@ Status tags: see [00 · Status vocabulary](00_PRODUCT_CONTEXT.md#status-vocabula
 
 - Professionals record their work manually in notebooks.
 - Fernando keeps his own operational records.
-- At month end, Fernando and Mercy review the notebooks, calculate each person's production, apply remuneration rules and process payments.
-- When Mercy is not present, Fernando calculates totals and sends them via WhatsApp; Mercy processes payments remotely.
+- At month end, Fernando and Marcelina (Merce) review the notebooks, calculate each person's production, apply remuneration rules and process payments.
+- When Marcelina is not present, Fernando calculates totals and sends them via WhatsApp; Marcelina processes payments remotely.
 
 The same information may be recorded manually, duplicated, checked, recalculated, transferred via WhatsApp and reconciled at month end.
 

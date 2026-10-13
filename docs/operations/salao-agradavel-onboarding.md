@@ -26,7 +26,7 @@ repository.
 | Fernanda — Colaboradora | Cabeleireira · Unhas (all services) | 60% | own situation |
 | Laurindo — mestre de unhas | Unhas | 50% | own situation |
 | Patrícia | Unhas · Tranças · Puxinhos de gel · Secar · Brexe · Ativar cachos | 50% | own situation |
-| Merce (Marcelina) — finanças / RH, remote | none (performs no services; not in capture) | none (§6.4) | finance read + payments (§4) |
+| Marcelina (display name Merce) — finanças / RH, remote | none (performs no services; not in capture) | none (§6.4) | finance read + payments (§4) |
 | Duart | **not onboarded**, no access | — | — |
 
 Rules: `admin_set_rule(person, 'standing', %, '2026-10-12', Fernando)`. Capabilities are labels shown in capture and
