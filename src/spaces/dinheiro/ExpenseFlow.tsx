@@ -8,13 +8,13 @@ import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import { listExpenseCategories, moneyKeys, recordExpense, type ExpenseCategory, type RecordExpenseInput, type RecordExpenseResult } from '../../modules/money/api'
-import { listPaymentMethods, servicesKeys, type PaymentPart } from '../../modules/services/api'
-import { checkPayment } from '../../shared/payment'
+import { listPaymentMethods, servicesKeys } from '../../modules/services/api'
+import { checkPayment, choiceLabel, effectiveChoice, MIXED, paymentParts, type PaymentChoice } from '../../shared/payment'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
-import { PaymentFields, type PaymentChoice } from '../../shared/ui/PaymentFields'
+import { PaymentFields } from '../../shared/ui/PaymentFields'
 import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
 import { useFlow } from '../../shared/ui/navigation'
@@ -26,7 +26,7 @@ export function ExpenseFlow() {
 
   const [category, setCategory] = useState<ExpenseCategory | null>(null)
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<PaymentChoice>('numerario')
+  const [method, setMethod] = useState<PaymentChoice>(null)
   const [mixed, setMixed] = useState<[string, string]>(['', ''])
   const [note, setNote] = useState('')
   const [confirmerId, setConfirmerId] = useState<string | null>(null)
@@ -37,23 +37,16 @@ export function ExpenseFlow() {
 
   const amountMinor = wholeUnitsToMinor(amount, org)
   const mixedMinor: [number | null, number | null] = [wholeUnitsToMinor(mixed[0], org), wholeUnitsToMinor(mixed[1], org)]
-  const check = checkPayment(amountMinor, method === 'mixed' ? 'mixed' : 'single', mixedMinor, org)
-  const methodId = (code: string) => methods.data?.find((m) => m.code === code)?.id
-  const methodText = method === 'mixed' ? 'Misto' : methods.data?.find((m) => m.code === method)?.label ?? ''
+  // the organization's own active methods (codes and labels are tenant data); the first is preselected
+  const methodList = methods.data ?? []
+  const choice = effectiveChoice(method, methodList)
+  const check = checkPayment(amountMinor, choice === MIXED ? 'mixed' : 'single', mixedMinor, org)
+  const methodText = choiceLabel(choice, methodList)
   const hasData = amount !== '' || note.trim() !== '' || mixed[0] !== '' || mixed[1] !== ''
 
-  let input: RecordExpenseInput | null = null
-  if (category && amountMinor && amountMinor > 0 && check.valid) {
-    let payments: PaymentPart[] | null = null
-    if (method === 'mixed') {
-      const cash = methodId('numerario'), transfer = methodId('transferencia')
-      if (cash && transfer) payments = [{ method_id: cash, amount_minor: mixedMinor[0] ?? 0 }, { method_id: transfer, amount_minor: mixedMinor[1] ?? 0 }]
-    } else {
-      const id = methodId(method)
-      if (id) payments = [{ method_id: id, amount_minor: amountMinor }]
-    }
-    if (payments) input = { categoryId: category.id, amountMinor, payments, note: note.trim() || null }
-  }
+  const payments = paymentParts(choice, methodList, amountMinor, mixedMinor)
+  const input: RecordExpenseInput | null = category && amountMinor && amountMinor > 0 && check.valid && payments
+    ? { categoryId: category.id, amountMinor, payments, note: note.trim() || null } : null
 
   const flow = useFlow({ steps: 3, parent: '/', dirty: hasData, reachable: (n) => (n === 2 ? category !== null : input !== null) })
   const step = flow.step
@@ -65,7 +58,7 @@ export function ExpenseFlow() {
   }
   function startOver() {
     command.reset()
-    setCategory(null); setAmount(''); setMethod('numerario'); setMixed(['', '']); setNote(''); setConfirmerId(null); setSecret('')
+    setCategory(null); setAmount(''); setMethod(null); setMixed(['', '']); setNote(''); setConfirmerId(null); setSecret('')
     flow.restart()
   }
 
@@ -139,8 +132,8 @@ export function ExpenseFlow() {
               <span className="label">Valor pago</span>
               <AmountField label="Valor pago" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
             </div>
-            <PaymentFields label="Forma de pagamento" method={method} onMethod={setMethod} mixed={mixed} onMixed={setMixed}
-              sentence={method === 'mixed' ? check.sentence : null} symbol={org.currency_symbol} />
+            <PaymentFields label="Forma de pagamento" methods={methodList} choice={choice} onChoice={setMethod} mixed={mixed} onMixed={setMixed}
+              sentence={choice === MIXED ? check.sentence : null} symbol={org.currency_symbol} />
             <div className="stack" style={{ gap: '0.375rem' }}>
               <span className="label">Nota (opcional)</span>
               <label className="field"><input aria-label="Nota (opcional)" maxLength={60} value={note} onChange={(e) => setNote(e.target.value)} /></label>

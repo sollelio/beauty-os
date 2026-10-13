@@ -17,8 +17,8 @@ import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
 import { useFlow } from '../../shared/ui/navigation'
-
-type Method = 'numerario' | 'transferencia'
+import { PaymentFields } from '../../shared/ui/PaymentFields'
+import { effectiveChoice, type PaymentChoice } from '../../shared/payment'
 
 export function AdvanceFlow() {
   const org = useOrganization()
@@ -27,7 +27,7 @@ export function AdvanceFlow() {
 
   const [person, setPerson] = useState<CapturePerson | null>(null)
   const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<Method>('numerario')
+  const [method, setMethod] = useState<PaymentChoice>(null)
   const [note, setNote] = useState('')
   const [confirmerId, setConfirmerId] = useState<string | null>(null)
   const [secret, setSecret] = useState('')
@@ -36,7 +36,9 @@ export function AdvanceFlow() {
   const methods = useQuery({ queryKey: servicesKeys.paymentMethods, queryFn: listPaymentMethods })
 
   const amountMinor = wholeUnitsToMinor(amount, org)
-  const methodRow = methods.data?.find((m) => m.code === method)
+  // the organization's own active methods; advances are paid with one method (no Misto, Slice 02 #7)
+  const methodList = methods.data ?? []
+  const methodRow = methodList.find((m) => m.id === effectiveChoice(method, methodList))
   const hasData = amount !== '' || note.trim() !== ''
 
   const input: RecordAdvanceInput | null =
@@ -57,7 +59,7 @@ export function AdvanceFlow() {
   }
   function startOver() {
     advance.reset()
-    setPerson(null); setAmount(''); setMethod('numerario'); setNote(''); setConfirmerId(null); setSecret('')
+    setPerson(null); setAmount(''); setMethod(null); setNote(''); setConfirmerId(null); setSecret('')
     flow.restart()
   }
 
@@ -137,14 +139,8 @@ export function AdvanceFlow() {
               <AmountField label="Valor entregue" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
               <span className="muted" style={{ fontSize: '0.875rem' }}>Valor em {org.currency_symbol}, sem cêntimos.</span>
             </div>
-            <div className="stack">
-              <span className="label">Forma de entrega</span>
-              <div className="segmented" role="group" aria-label="Forma de entrega">
-                {([['numerario', 'Numerário'], ['transferencia', 'Transferência']] as const).map(([code, label]) => (
-                  <button key={code} className="seg" aria-pressed={method === code} onClick={() => setMethod(code)}>{label}</button>
-                ))}
-              </div>
-            </div>
+            <PaymentFields label="Forma de entrega" methods={methodList} choice={methodRow?.id ?? null} onChoice={setMethod}
+              allowMixed={false} symbol={org.currency_symbol} />
             <div className="stack" style={{ gap: '0.375rem' }}>
               <span className="label">Nota (opcional)</span>
               <label className="field">

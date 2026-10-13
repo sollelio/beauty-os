@@ -1,15 +1,15 @@
 // Registar serviço (Slice 01 §4): Quem fez o serviço? → Que serviço? → Valor e pagamento → Sucesso.
 // Steps are history entries and a typed value is never dropped silently (useFlow, the mobile back contract).
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { listServices, catalogueKeys, type CatalogueService } from '../../modules/catalogue/api'
 import {
   listCapturePeople, listFrequentServices, listPaymentMethods, servicesKeys,
-  type CapturePerson, type PaymentPart, type RecordServiceInput,
+  type CapturePerson, type RecordServiceInput,
 } from '../../modules/services/api'
-import { checkPayment, type PaymentMode } from '../../shared/payment'
+import { checkPayment, choiceLabel, effectiveChoice, MIXED, paymentParts, type PaymentChoice, type PaymentMode } from '../../shared/payment'
 import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
@@ -17,8 +17,7 @@ import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { useFlow } from '../../shared/ui/navigation'
-
-type Method = 'numerario' | 'transferencia' | 'mixed'
+import { PaymentFields } from '../../shared/ui/PaymentFields'
 
 export function RecordServiceFlow() {
   const org = useOrganization()
@@ -29,7 +28,7 @@ export function RecordServiceFlow() {
   const [service, setService] = useState<CatalogueService | null>(null)
   const [editing, setEditing] = useState(false)
   const [priceDigits, setPriceDigits] = useState('')
-  const [method, setMethod] = useState<Method>('numerario')
+  const [method, setMethod] = useState<PaymentChoice>(null)
   const [mixed, setMixed] = useState<[string, string]>(['', ''])
 
   const people = useQuery({ queryKey: servicesKeys.people, queryFn: listCapturePeople })
@@ -37,26 +36,16 @@ export function RecordServiceFlow() {
 
   const typed = editing ? wholeUnitsToMinor(priceDigits, org) : null
   const valueMinor = service ? (typed ?? service.default_price_minor) : null
-  const mode: PaymentMode = method === 'mixed' ? 'mixed' : 'single'
+  // the organization's own active methods (codes and labels are tenant data); the first is preselected
+  const methodList = methods.data ?? []
+  const choice = effectiveChoice(method, methodList)
+  const mode: PaymentMode = choice === MIXED ? 'mixed' : 'single'
   const mixedMinor: [number | null, number | null] = [wholeUnitsToMinor(mixed[0], org), wholeUnitsToMinor(mixed[1], org)]
   const check = checkPayment(valueMinor, mode, mixedMinor, org)
 
-  const methodId = (code: string) => methods.data?.find((m) => m.code === code)?.id
-  const input: RecordServiceInput | null = useMemo(() => {
-    if (!person || !service || valueMinor === null || !check.valid) return null
-    let payments: PaymentPart[]
-    if (method === 'mixed') {
-      const cash = methodId('numerario'), transfer = methodId('transferencia')
-      if (!cash || !transfer) return null
-      payments = [{ method_id: cash, amount_minor: mixedMinor[0] ?? 0 }, { method_id: transfer, amount_minor: mixedMinor[1] ?? 0 }]
-    } else {
-      const id = methodId(method)
-      if (!id) return null
-      payments = [{ method_id: id, amount_minor: valueMinor }]
-    }
-    return { personId: person.id, serviceId: service.id, valueMinor, payments }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [person, service, valueMinor, check.valid, method, mixed[0], mixed[1], methods.data])
+  const payments = paymentParts(choice, methodList, valueMinor, mixedMinor)
+  const input: RecordServiceInput | null = person && service && valueMinor !== null && check.valid && payments
+    ? { personId: person.id, serviceId: service.id, valueMinor, payments } : null
 
   // a typed value or mixed amounts are worth a "discard?"; picking a person or a service alone is not
   const dirty = (editing && priceDigits !== '') || mixed[0] !== '' || mixed[1] !== ''
@@ -71,7 +60,7 @@ export function RecordServiceFlow() {
   function startOver() {
     record.reset()
     setPerson(null); setService(null); setEditing(false); setPriceDigits('')
-    setMethod('numerario'); setMixed(['', ''])
+    setMethod(null); setMixed(['', ''])
     flow.restart()
   }
 
@@ -81,7 +70,7 @@ export function RecordServiceFlow() {
   }
 
   if (flow.completed && person && service && record.result) {
-    const methodText = method === 'mixed' ? 'Misto' : methods.data?.find((m) => m.code === method)?.label
+    const methodText = choiceLabel(choice, methodList)
     return (
       <AppScreen actions={
         <BottomActionBar>
@@ -176,27 +165,9 @@ export function RecordServiceFlow() {
               {valueMinor === 0 && <div className="notice notice-warning">Valor zero. Confirme que este serviço não foi cobrado.</div>}
             </div>
 
-            <div className="stack">
-              <span className="label">Forma de pagamento</span>
-              <div className="segmented" role="group" aria-label="Forma de pagamento">
-                {([['numerario', 'Numerário'], ['transferencia', 'Transferência'], ['mixed', 'Misto']] as const).map(([code, label]) => (
-                  <button key={code} className="seg" aria-pressed={method === code} onClick={() => setMethod(code)}>{label}</button>
-                ))}
-              </div>
-              {method === 'mixed' && (
-                <div className="stack">
-                  {(['Numerário', 'Transferência'] as const).map((label, i) => (
-                    <label key={label} className="field">
-                      <span className="muted" style={{ width: '7.5rem' }}>{label}</span>
-                      <input inputMode="numeric" aria-label={label} value={mixed[i]}
-                        onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 9); setMixed(i === 0 ? [v, mixed[1]] : [mixed[0], v]) }} />
-                      <span className="muted">{org.currency_symbol}</span>
-                    </label>
-                  ))}
-                  {check.sentence && <span className="muted num" data-testid="mixed-sentence">{check.sentence}</span>}
-                </div>
-              )}
-            </div>
+            {methods.isError && <div className="notice notice-error" role="alert">Não foi possível carregar as formas de pagamento.</div>}
+            <PaymentFields label="Forma de pagamento" methods={methodList} choice={choice} onChoice={setMethod}
+              mixed={mixed} onMixed={setMixed} sentence={choice === MIXED ? check.sentence : null} symbol={org.currency_symbol} />
           </section>
 
           {record.status === 'error' && record.error && (
