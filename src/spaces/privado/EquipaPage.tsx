@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listTeamPeople, situationKeys } from '../../modules/team/situation'
 import { exitPrivateContext, usePrivateContext } from '../../modules/org/privateContext'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 
 export function EquipaPage() {
   const navigate = useNavigate()
@@ -18,6 +19,11 @@ export function EquipaPage() {
         <span className="priv">Privado</span>
       </header>
       <div className="stack">
+        {team.isPending && <Skeleton rows={3} />}
+        {team.isError && <ErrorState onRetry={() => team.refetch()}>Não foi possível carregar a equipa.</ErrorState>}
+        {team.isSuccess && team.data.length === 0 && (
+          <EmptyState icon="person" title="Ainda sem equipa">Aparecem aqui as pessoas da equipa que fazem serviços.</EmptyState>
+        )}
         {team.data?.map((p) => (
           <button key={p.id} className="pick" onClick={() => navigate(`/privado/situacao/${p.id}`)}>
             <span><strong style={{ display: 'block' }}>{p.display_name}</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span></span>

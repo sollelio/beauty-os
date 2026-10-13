@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
-import type { Situation } from '../../modules/team/situation'
+import type { HistoryRow, Situation } from '../../modules/team/situation'
 
 const rpc = vi.fn()
 vi.mock('../../shared/supabase/client', () => ({ getSupabase: () => ({ rpc }) }))
@@ -163,5 +163,57 @@ describe('private data lifetime', () => {
     await screen.findByText('Hoje')
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('end_private_context'))
     expect(cached(qc)).toBe(0)
+  })
+})
+
+describe('Situação · Histórico states', () => {
+  type Reply = { data: unknown; error: unknown }
+  function serveHistory(history: () => Promise<Reply>) {
+    rpc.mockImplementation(async (fn: string) => {
+      if (fn === 'private_context_status') return { data: active(), error: null }
+      if (fn === 'end_private_context') return { data: { ok: true }, error: null }
+      if (fn === 'team_situation') return { data: base, error: null }
+      if (fn === 'team_history') return history()
+      return { data: [], error: null }
+    })
+  }
+  const row: HistoryRow = { kind: 'service', record_id: 'r1', occurred_at: '2026-10-05T10:00:00Z', title: 'Corte', method_label: 'Numerário', confirmed_by: null, note: null, amount_minor: K(3500), purchase: null }
+  const loading = () => screen.queryByRole('status', { name: 'A carregar' })
+  const openHistory = async () => fireEvent.click(await screen.findByRole('button', { name: 'Histórico' }))
+
+  it('loading is a skeleton, never the empty text; the empty text appears only once the load succeeded', async () => {
+    let resolve!: (r: Reply) => void
+    serveHistory(() => new Promise<Reply>((res) => { resolve = res }))
+    renderAt(); await openHistory()
+    await waitFor(() => expect(loading()).toBeTruthy())
+    expect(screen.queryByText('Sem registos neste período.')).toBeNull()
+    await act(async () => { resolve({ data: { total_count: 0, rows: [] }, error: null }) })
+    expect(await screen.findByText('Sem registos neste período.')).toBeTruthy()
+    expect(loading()).toBeNull()
+  })
+  it('a failed load is an alert with Retry; the situation itself stays on screen', async () => {
+    let calls = 0
+    serveHistory(async () => (++calls === 1 ? { data: null, error: { message: 'down', code: 'PGRST' } } : { data: { total_count: 1, rows: [row] }, error: null }))
+    renderAt(); await openHistory()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Não foi possível carregar o histórico.')
+    expect(screen.queryByText('Sem registos neste período.')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Histórico' })).toBeTruthy()       // not replaced
+    fireEvent.click(within(alert).getByRole('button', { name: 'Tentar novamente' }))
+    expect(await screen.findByText('Corte')).toBeTruthy()
+  })
+  it('changing the filter keeps the current rows visible (dimmed, busy) until the next ones arrive', async () => {
+    let second!: (r: Reply) => void
+    let calls = 0
+    serveHistory(() => (++calls === 1 ? Promise.resolve({ data: { total_count: 1, rows: [row] }, error: null }) : new Promise<Reply>((res) => { second = res })))
+    renderAt(); await openHistory()
+    expect(await screen.findByText('Corte')).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Filtro' })).getByRole('button', { name: 'Adiantamentos' }))
+    await waitFor(() => expect(screen.getByTestId('history-list').getAttribute('aria-busy')).toBe('true'))
+    expect(screen.getByText('Corte')).toBeTruthy()                                   // still there
+    expect(loading()).toBeNull()                                                     // no skeleton over existing rows
+    await act(async () => { second({ data: { total_count: 0, rows: [] }, error: null }) })
+    expect(await screen.findByText('Nenhum adiantamento neste período.')).toBeTruthy()
+    expect(screen.getByTestId('history-list').getAttribute('aria-busy')).toBeNull()
   })
 })

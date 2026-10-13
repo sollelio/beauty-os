@@ -2,7 +2,8 @@
 // screen only arranges and words them. Manager view (B4) shows attributions; the self view (B3) never does.
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ErrorState, Skeleton } from '../../shared/ui/states'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { clearPrivateData, exitPrivateContext } from '../../modules/org/privateContext'
 import {
@@ -35,7 +36,8 @@ export function SituationPage() {
   const [sheet, setSheet] = useState<null | 'explain' | 'period'>(null)
 
   const situation = useQuery({ queryKey: situationKeys.situation(personId, periodId), queryFn: () => getSituation(personId, periodId) })
-  const history = useQuery({ queryKey: situationKeys.history(personId, periodId, filter), queryFn: () => getHistory(personId, periodId, filter), enabled: tab === 'hist' })
+  const history = useQuery({ queryKey: situationKeys.history(personId, periodId, filter), queryFn: () => getHistory(personId, periodId, filter), enabled: tab === 'hist',
+    placeholderData: keepPreviousData })                      // a filter change keeps the current rows visible while the next load
   const periods = useQuery({ queryKey: situationKeys.periods(personId), queryFn: () => listPeriods(personId), enabled: sheet === 'period' })
 
   // The server ended the context (expiry, revocation, another holder): drop everything sensitive.
@@ -81,7 +83,8 @@ export function SituationPage() {
 
       {tab === 'resumo'
         ? <Summary s={s} onExplain={() => setSheet('explain')} onHistory={goHist} />
-        : <HistoryView s={s} filter={filter} onFilter={setFilter} rows={history.data?.rows} total={history.data?.total_count} />}
+        : <HistoryView s={s} filter={filter} onFilter={setFilter} rows={history.data?.rows} total={history.data?.total_count}
+            loading={history.isPending} error={history.isError && !lost} stale={history.isPlaceholderData} onRetry={() => history.refetch()} />}
 
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
 
@@ -235,8 +238,9 @@ function ExplainSheet({ s, onClose }: { s: Situation; onClose: () => void }) {
   )
 }
 
-function HistoryView({ s, filter, onFilter, rows, total }: {
+function HistoryView({ s, filter, onFilter, rows, total, loading, error, stale, onRetry }: {
   s: Situation; filter: HistoryKind | null; onFilter: (k: HistoryKind | null) => void; rows?: HistoryRow[]; total?: number
+  loading: boolean; error: boolean; stale: boolean; onRetry: () => void
 }) {
   const org = useOrganization()
   const navigate = useNavigate()
@@ -273,6 +277,9 @@ function HistoryView({ s, filter, onFilter, rows, total }: {
       <div className="filter-chips" role="group" aria-label="Filtro">
         {FILTERS.map((f) => <button key={f.label} className="chip chip-outline" aria-pressed={filter === f.kind} onClick={() => onFilter(f.kind)}>{f.label}</button>)}
       </div>
+      {loading && <Skeleton rows={3} />}
+      {error && <ErrorState onRetry={onRetry}>Não foi possível carregar o histórico.</ErrorState>}
+      <div className={stale ? 'stack busy' : 'stack'} aria-busy={stale || undefined} data-testid="history-list">
       {rows && total !== undefined && total > 0 && (
         <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="history-count">
           {total > rows.length ? `${total} registos neste período · mostra os ${rows.length} mais recentes` : `${count(total, 'registo', 'registos')} neste período`}
@@ -295,6 +302,7 @@ function HistoryView({ s, filter, onFilter, rows, total }: {
           ))}
         </div>
       ))}
+      </div>
       {filter === 'advance' && <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Adiantamentos são dinheiro recebido antes, por conta do que há a receber neste período. Entram no cálculo de «Falta receber».</p>}
       {filter === 'contribution' && s.contributions.count > 0 && (
         <>

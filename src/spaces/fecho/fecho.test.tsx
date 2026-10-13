@@ -1,10 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import { AppError } from '../../shared/errors'
-import type { ApprovalLine, Fecho, PersonFigures } from '../../modules/period/api'
+import type { ApprovalLine, Fecho, PersonFigures, RulePreview } from '../../modules/period/api'
 
 vi.mock('../../modules/org/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/org/api')>()),
@@ -17,9 +17,10 @@ vi.mock('../../modules/services/api', async (orig) => ({
 }))
 vi.mock('../../modules/period/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/period/api')>()),
-  getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]), reopenPeriod: vi.fn(),
+  getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]), reopenPeriod: vi.fn(), getRulePreview: vi.fn(),
 }))
-import { approvePeriod, closePeriod, confirmPayment, getFecho, getFechoHistory, reopenPeriod } from '../../modules/period/api'
+import { approvePeriod, closePeriod, confirmPayment, getFecho, getFechoHistory, getRulePreview, reopenPeriod } from '../../modules/period/api'
+import { RuleFlow } from './RuleFlow'
 import { ReopenPage } from './ReopenPage'
 import { FechoHome } from './FechoHome'
 import { ProfessionalsPage } from './ProfessionalsPage'
@@ -85,6 +86,7 @@ function renderAt(path: string) {
             <Route path="/privado/fecho/fechar" element={<ClosePage />} />
             <Route path="/privado/fecho/historico" element={<HistoryPage />} />
             <Route path="/privado/fecho/reabrir" element={<ReopenPage />} />
+            <Route path="/privado/fecho/regra/:personId" element={<RuleFlow />} />
             <Route path="*" element={<p>Outro ecrã</p>} />
           </Routes>
         </MemoryRouter>
@@ -250,5 +252,55 @@ describe('reopen', () => {
     expect(await screen.findByText('Todos os pagamentos confirmados')).toBeTruthy()
     expect(screen.getByText(/Reaberto por Mercy · 4 nov 09:30 · motivo: distribuição aos sócios registada com valor errado./)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Fechar período' })).toBeTruthy()
+  })
+})
+
+describe('RuleFlow states: typing never replaces the screen', () => {
+  const previewFor = (pct: number | null): RulePreview => ({
+    person: pct === null ? carla : person('c', 'Carla', 32000, 10000), current: carla, base_minor: K(131000),
+    after: { sobra_minor: K(pct === null ? 131000 : 99000), livre_minor: null, pending: pct === null ? [{ person_id: 'c', display_name: 'Carla' }] : [],
+             distribution_minor: null, undistributed_minor: null, owners_decision: null },
+    history: [],
+  })
+  function deferred<T>() { let resolve!: (v: T) => void, reject!: (e: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
+  const percentInput = async () => await screen.findByLabelText('Percentagem para Carla') as HTMLInputElement
+  const continuar = () => screen.getByRole('button', { name: 'Continuar' }) as HTMLButtonElement
+
+  it('a keystroke keeps the input (focused, with its value) and the previous preview, dimmed and busy, until the new one arrives', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho())
+    const d = deferred<RulePreview>()
+    vi.mocked(getRulePreview).mockReset().mockResolvedValueOnce(previewFor(null)).mockReturnValueOnce(d.promise)
+    renderAt('/privado/fecho/regra/c')
+    const input = await percentInput()
+    input.focus()
+    fireEvent.change(input, { target: { value: '40' } })
+    expect(screen.queryByText('A carregar…')).toBeNull()                            // the screen stays
+    expect(document.activeElement).toBe(input)
+    expect(input.value).toBe('40')
+    const effect = await screen.findByTestId('rule-effect')
+    expect(effect.getAttribute('aria-busy')).toBe('true')
+    expect(within(effect).getByText('A recalcular…')).toBeTruthy()
+    expect(continuar().disabled).toBe(true)                                           // never confirm a stale preview
+    await act(async () => { d.resolve(previewFor(40)) })
+    await waitFor(() => expect(screen.getByTestId('rule-effect').getAttribute('aria-busy')).toBeNull())
+    expect(within(screen.getByTestId('rule-effect')).getByText(/32\.000 Kz = 40% × 64\.000/)).toBeTruthy()   // the new figures
+    expect(continuar().disabled).toBe(false)
+    expect(document.activeElement).toBe(input)
+    expect(vi.mocked(getRulePreview).mock.calls.map((c) => c[2])).toEqual([null, 40])
+  })
+  it('a failed recalculation keeps the screen and the previous figures, says so and offers Retry', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho())
+    vi.mocked(getRulePreview).mockReset().mockResolvedValueOnce(previewFor(null)).mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(previewFor(40))
+    renderAt('/privado/fecho/regra/c')
+    const input = await percentInput()
+    fireEvent.change(input, { target: { value: '40' } })
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Não foi possível calcular esta regra.')
+    expect(screen.getByLabelText('Percentagem para Carla')).toBeTruthy()
+    expect(continuar().disabled).toBe(true)
+    fireEvent.click(within(alert).getByRole('button', { name: 'Tentar novamente' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(await within(screen.getByTestId('rule-effect')).findByText(/32\.000 Kz = 40% × 64\.000/)).toBeTruthy()
+    expect(continuar().disabled).toBe(false)
   })
 })

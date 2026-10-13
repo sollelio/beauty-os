@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createProduct, getStockOverview, LEVEL_LABEL, stockKeys, updateStock, type StockEdit, type StockProduct } from '../../modules/stock/api'
 import { ProductPicker } from '../../modules/stock/ProductPicker'
 import type { PickedProduct } from '../../modules/stock/trip'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 
 function listContext(p: StockProduct): string {
   const rest = [...(p.level ? [LEVEL_LABEL[p.level].toLocaleLowerCase('pt-PT')] : []), ...(p.reserve_units > 0 ? [`${p.reserve_units} em reserva`] : [])]
@@ -69,13 +70,17 @@ export function ListPage() {
         <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Um plano para levar ao mercado. A compra real regista-se depois, com o que comprou de facto.</p>
       </section>
       {failed && <div className="notice notice-error" role="alert">Não foi possível guardar a alteração. Tente novamente.</div>}
-      {urgent.length > 0 && <section className="stack" style={{ gap: 0 }}><span className="label">Urgente · comprar já</span>{urgent.map(entry)}</section>}
-      <section className="stack" style={{ gap: 0 }}>
-        <span className="label">Compra do mês</span>
-        {month.length === 0 && <p className="muted" style={{ margin: '0.5rem 0 0' }}>Nada na lista. Adicione produtos abaixo.</p>}
-        {month.map(entry)}
-      </section>
-      {suggested.length > 0 && (
+      {overview.isPending && <Skeleton rows={3} />}
+      {overview.isError && <ErrorState onRetry={() => overview.refetch()}>Não foi possível carregar a lista de compra.</ErrorState>}
+      {overview.isSuccess && urgent.length > 0 && <section className="stack" style={{ gap: 0 }}><span className="label">Urgente · comprar já</span>{urgent.map(entry)}</section>}
+      {overview.isSuccess && (
+        <section className="stack" style={{ gap: 0 }}>
+          <span className="label">Compra do mês</span>
+          {month.length === 0 && <EmptyState icon="box" title="Nada na lista">Adicione produtos abaixo, ou marque-os «Comprar» no Stock.</EmptyState>}
+          {month.map(entry)}
+        </section>
+      )}
+      {overview.isSuccess && suggested.length > 0 && (
         <section className="stack" style={{ gap: 0 }}>
           <span className="label">Marcados «baixo» · juntar?</span>
           {suggested.map((p) => (
@@ -86,10 +91,10 @@ export function ListPage() {
           ))}
         </section>
       )}
-      <button className="btn btn-secondary btn-dashed" onClick={() => setAdding(true)}>+ Outro produto</button>
+      {overview.isSuccess && <button className="btn btn-secondary btn-dashed" onClick={() => setAdding(true)}>+ Outro produto</button>}
       <div className="footer">
         <span className="muted" style={{ textAlign: 'center' }}>
-          {listed.length === 0 ? 'Lista vazia.' : `${listed.length} ${listed.length === 1 ? 'produto' : 'produtos'}${urgent.length ? ` · ${urgent.length} ${urgent.length === 1 ? 'urgente' : 'urgentes'}` : ''}`}
+          {!overview.isSuccess ? '' : listed.length === 0 ? 'Lista vazia.' : `${listed.length} ${listed.length === 1 ? 'produto' : 'produtos'}${urgent.length ? ` · ${urgent.length} ${urgent.length === 1 ? 'urgente' : 'urgentes'}` : ''}`}
         </span>
         <button className="btn btn-primary btn-tall" disabled={listed.length === 0} onClick={() => navigate('/stock/mercado')}>Ir às compras</button>
       </div>

@@ -12,13 +12,27 @@ import {
 } from '../../modules/stock/trip'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { useSheet } from '../../shared/ui/navigation'
+import { ErrorState, Skeleton } from '../../shared/ui/states'
 
 type Sheet = null | { kind: 'options'; key: string } | { kind: 'substitute'; key: string } | { kind: 'unplanned' } | { kind: 'unplanned-qty'; pick: PickedProduct; qty: number }
 
 export function MarketPage() {
+  const navigate = useNavigate()
   const overview = useQuery({ queryKey: stockKeys.overview, queryFn: getStockOverview })
-  if (!overview.data) return <main className="app-main"><p className="muted">A carregar…</p></main>
-  return <MarketTrip products={overview.data} />
+  if (overview.data) return <MarketTrip products={overview.data} />
+  return (
+    <main className="app-main">
+      <header className="flow-header-row">
+        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate('/stock/lista')}>←</button>
+        <span className="muted" style={{ fontWeight: 600 }}>Compras</span><span style={{ width: '2.75rem' }} />
+      </header>
+      {overview.isError
+        ? <ErrorState onRetry={() => overview.refetch()} action={<button type="button" className="link-btn" onClick={() => navigate('/stock/lista')}>Voltar à lista</button>}>
+            Não foi possível carregar a lista de compra.
+          </ErrorState>
+        : <Skeleton rows={4} />}
+    </main>
+  )
 }
 
 function MarketTrip({ products }: { products: StockProduct[] }) {

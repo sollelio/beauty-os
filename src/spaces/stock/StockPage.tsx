@@ -10,6 +10,7 @@ import {
 } from '../../modules/stock/api'
 import { formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 
 const ORDER: Record<StockState, number> = { comprar: 0, baixo: 1, ok: 2 }
 
@@ -50,8 +51,12 @@ export function StockPage() {
       <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/lista')}>
         {onList > 0 ? `Preparar compra · ${onList} ${onList === 1 ? 'produto' : 'produtos'}` : 'Preparar compra'}
       </button>
-      {overview.isError && <div className="notice notice-error" role="alert">Não foi possível carregar o Stock. <button className="link-btn" onClick={() => overview.refetch()}>Tentar novamente</button></div>}
-      {overview.data && (
+      {overview.isPending && <Skeleton rows={4} />}
+      {overview.isError && <ErrorState onRetry={() => overview.refetch()}>Não foi possível carregar o Stock.</ErrorState>}
+      {overview.data && all.length === 0 && (
+        <EmptyState icon="box" title="Ainda sem produtos">Os produtos aparecem aqui depois da primeira compra registada, ou quando juntar um à lista de compra.</EmptyState>
+      )}
+      {overview.data && all.length > 0 && (
         <>
           {urgent.length > 0 && (
             <section className="stack" style={{ gap: 0 }}><span className="label">Urgente · comprar já</span>{urgent.map((p) => row(p, true))}</section>

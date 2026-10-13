@@ -146,6 +146,26 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .status-danger { background: var(--error-bg); color: var(--error-fg); }
 .status-accent { background: var(--accent-tint); color: var(--accent); }
 
+/* ---------- states: loading (delayed, static), empty (after success only), error (plain words + retry) ---------- */
+.skeleton { display: flex; flex-direction: column; gap: var(--s-2); opacity: 0; animation: skeleton-in 0ms linear 300ms forwards; }
+@keyframes skeleton-in { to { opacity: 1; } }
+.skeleton-headline { height: 2.5rem; width: 55%; border-radius: var(--r-sm); background: var(--line); margin-bottom: var(--s-2); }
+.skeleton-row { display: flex; flex-direction: column; justify-content: center; gap: 0.4rem; min-height: 3.25rem; padding: var(--s-2) 0; }
+.skeleton-line { display: block; height: 0.75rem; border-radius: 999px; background: var(--line); }
+.skeleton-title { width: 60%; }
+.skeleton-sub { width: 35%; height: 0.625rem; background: var(--disabled-bg); }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; opacity: 1; } }
+.empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); padding: var(--s-4) 0; }
+.empty-state-icon { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); color: var(--muted); margin-bottom: var(--s-1); }
+.empty-state-title { font-size: var(--t-headline); font-weight: 600; }
+.empty-state-text { font-size: var(--t-support); line-height: 1.4; color: var(--muted); }
+.empty-state-action { margin-top: var(--s-2); }
+.error-state { display: flex; flex-direction: column; gap: var(--s-1); }
+.error-state-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 calc(-1 * var(--s-1)); }
+.error-state .link-btn { color: var(--error-fg); }
+.busy { opacity: 0.55; transition: opacity var(--motion-base) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .busy { transition: none; } }
+
 /* ---------- the rest of the shared vocabulary ---------- */
 .notice { border-radius: var(--r-md); padding: var(--s-3) var(--s-4); font-size: 0.95rem; }
 .notice-error { background: var(--error-bg); color: var(--error-fg); }

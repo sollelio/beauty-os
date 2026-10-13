@@ -2,10 +2,11 @@
 // a default), and "Se confirmar X%" from the database preview (ADR-0004). Nothing is recorded until confirmed.
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { decidePeriodRule, fechoKeys, getRulePreview } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
+import { ErrorState } from '../../shared/ui/states'
 import { useFecho } from './fecho'
 import { Boundary, KV, Loading } from './ui'
 
@@ -21,11 +22,20 @@ export function RuleFlow() {
   const percent = digits === '' ? null : Number(digits)
   const valid = percent !== null && percent >= 0 && percent <= 100
   const periodId = q.data?.period.id ?? ''
+  // Each percentage is its own query; the previous preview stays on screen (dimmed) while the next one loads, so typing
+  // never unmounts the input. Only the very first load shows the loading screen.
   const preview = useQuery({ queryKey: fechoKeys.rulePreview(periodId, personId, valid ? percent : null),
-    queryFn: () => getRulePreview(periodId, personId, valid ? percent : null), enabled: Boolean(periodId) })
-  if (!q.data || !preview.data) return <Loading q={q.isError ? q : preview} />
+    queryFn: () => getRulePreview(periodId, personId, valid ? percent : null), enabled: Boolean(periodId), placeholderData: keepPreviousData })
+  // A failed recalculation drops the placeholder, so the last good preview is remembered (state derived during render,
+  // the React pattern for "what the previous renders had"): the screen stays and says so.
+  const [lastGood, setLastGood] = useState<typeof preview.data>()
+  if (preview.data && preview.data !== lastGood) setLastGood(preview.data)
+  const current = preview.data ?? lastGood
+  const recalculating = preview.isPlaceholderData || preview.isFetching
+  const stale = recalculating || preview.isError
+  if (!q.data || !current) return <Loading q={q.isError ? q : preview} />
   const f = q.data
-  const p = preview.data
+  const p = current
   const x = p.person, cur = p.current
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
@@ -82,9 +92,11 @@ export function RuleFlow() {
               )}
               {digits !== '' && !valid && <span className="notice notice-error">Indique uma percentagem entre 0 e 100.</span>}
             </div>
+            {preview.isError && <ErrorState onRetry={() => preview.refetch()}>Não foi possível calcular esta regra. Os valores abaixo são os anteriores.</ErrorState>}
             {valid && (
-              <section className="stack" data-testid="rule-effect">
+              <section className={stale ? 'stack busy' : 'stack'} aria-busy={recalculating || undefined} data-testid="rule-effect">
                 <span className="label">Se confirmar {pct(percent)}</span>
+                {recalculating && <span className="support" role="status">A recalcular…</span>}
                 <KV rows={[['Ganho', earnedLine], ['Falta receber', payLine],
                   p.after.livre_minor !== null
                     ? ['Livre para os sócios', `${m(p.after.livre_minor)} = ${g(p.base_minor)} − ${g(x.earned_minor ?? 0)}${excess ? ` − ${g(x.excess_minor ?? 0)}` : ''}`]
@@ -101,7 +113,7 @@ export function RuleFlow() {
           </section>
           <div className="footer">
             <span className="muted" style={{ textAlign: 'center', fontSize: '0.8125rem' }}>Nada fica registado até confirmar.</span>
-            <button className="btn btn-primary btn-tall" disabled={!valid || preview.isFetching} onClick={() => setStep(2)}>Continuar</button>
+            <button className="btn btn-primary btn-tall" disabled={!valid || stale} onClick={() => setStep(2)}>Continuar</button>
           </div>
         </>
       ) : (
