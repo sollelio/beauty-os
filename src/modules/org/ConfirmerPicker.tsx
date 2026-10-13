@@ -1,28 +1,17 @@
-// "Quem confirma?" + PIN inside a Confirmação necessária boundary (Slices 02–03). The mechanism is ADR-0009;
-// its visual form is a placeholder pending product input (05 §3).
+// "Quem confirma?" + PIN inside a Confirmação necessária boundary (ADR-0009): the people who hold the boundary's
+// permission, presented by PinConfirm (the shared person/PIN pattern, also used to enter the private area).
 import { useQuery } from '@tanstack/react-query'
+import type { AppError } from '../../shared/errors'
 import { listConfirmers, verificationKeys, type ConfirmPermission } from './api'
+import { PinConfirm } from './PinConfirm'
 
-
-
-
-export function ConfirmerPicker({ confirmerId, onConfirmer, secret, onSecret, permission = 'movement.confirm' }: {
+export function ConfirmerPicker({ confirmerId, onConfirmer, secret, onSecret, permission = 'movement.confirm', error, messages }: {
   confirmerId: string | null; onConfirmer: (id: string) => void; secret: string; onSecret: (s: string) => void; permission?: ConfirmPermission
+  error?: AppError | null; messages?: Record<string, string>
 }) {
   const confirmers = useQuery({ queryKey: verificationKeys.confirmers(permission), queryFn: () => listConfirmers(permission) })
   return (
-    <div className="stack">
-      <span className="label">Quem confirma?</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-        {confirmers.data?.map((c) => (
-          <button key={c.id} className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={confirmerId === c.id} onClick={() => onConfirmer(c.id)}>{c.display_name}</button>
-        ))}
-        {confirmers.data?.length === 0 && <span className="muted">Nenhuma pessoa autorizada configurada.</span>}
-      </div>
-      <label className="field">
-        <input type="password" inputMode="numeric" autoComplete="off" aria-label="PIN" placeholder="PIN" value={secret}
-          onChange={(e) => onSecret(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-      </label>
-    </div>
+    <PinConfirm legend="Quem confirma?" people={confirmers.data} loading={confirmers.isPending} emptyText="Nenhuma pessoa autorizada configurada."
+      personId={confirmerId} onPerson={onConfirmer} secret={secret} onSecret={onSecret} error={error} messages={messages} />
   )
 }

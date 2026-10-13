@@ -1,10 +1,11 @@
-// Entering the private context on the shared device (ADR-0009 private_session). Its visual form is a placeholder
-// pending product input (05 §3, Slice 04 §1 "authorization mechanism not designed"): person + PIN, as in Slices 02–03.
-import { useState } from 'react'
+// Entering the private context on the shared device (ADR-0009 private_session): person + PIN with the same control as
+// every Confirmação necessária (PinConfirm). The server verifies and owns lockout; the session model is unchanged.
+import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { enterPrivateContext, getPrivateStatus, listPrivatePeople, privateKeys } from '../../modules/org/privateContext'
-import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { PinConfirm } from '../../modules/org/PinConfirm'
+import { isPinError, VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { toAppError } from '../../shared/errors'
 
 export function PrivateEntryPage() {
@@ -23,7 +24,7 @@ export function PrivateEntryPage() {
       navigate(next && next.startsWith('/privado/') ? next : '/privado', { replace: true }) },
     onError: () => setSecret(''),
   })
-  const err = enter.error ? toAppError(enter.error) : null
+  const err = useMemo(() => (enter.error ? toAppError(enter.error) : null), [enter.error])
   const { ended, next } = (location.state as { ended?: boolean; next?: string } | null) ?? {}
 
   return (
@@ -37,16 +38,9 @@ export function PrivateEntryPage() {
         <h2>Quem é?</h2>
         <p className="muted" style={{ margin: 0 }}>Os valores pessoais só aparecem depois de confirmar quem é. A área fecha ao sair e ao fim de pouco tempo.</p>
         {ended && <div className="notice notice-warning" role="status">A área privada terminou.</div>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {people.data?.map((p) => (
-            <button key={p.id} className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={personId === p.id} onClick={() => setPersonId(p.id)}>{p.display_name}</button>
-          ))}
-        </div>
-        <label className="field">
-          <input type="password" inputMode="numeric" autoComplete="off" aria-label="PIN" placeholder="PIN" value={secret}
-            onChange={(e) => setSecret(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-        </label>
-        {err && <div className="notice notice-error" role="alert">{(err.code && VERIFY_MESSAGES[err.code]) || 'Não foi possível entrar.'}</div>}
+        <PinConfirm legend="Pessoa" people={people.data} loading={people.isPending} emptyText="Ninguém com acesso à área privada neste dispositivo."
+          personId={personId} onPerson={setPersonId} secret={secret} onSecret={setSecret} error={err} />
+        {err && !isPinError(err) && <div className="notice notice-error" role="alert">{(err.code && VERIFY_MESSAGES[err.code]) || 'Não foi possível entrar.'}</div>}
       </section>
       <div className="footer">
         <button className="btn btn-primary btn-tall" disabled={!personId || !secret || enter.isPending} onClick={() => enter.mutate()}>

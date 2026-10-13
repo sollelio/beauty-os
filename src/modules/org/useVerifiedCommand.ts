@@ -3,7 +3,7 @@
 // server consumes only that exact grant. If it is no longer valid (expired, used, or superseded by anyone's later
 // verification) the command returns VERIFICATION_REQUIRED and the same confirmer is verified again — another
 // person's verification can never authorize this retry. An already-committed command replays without a grant.
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { newCommandId } from '../../shared/commandId'
 import { toAppError } from '../../shared/errors'
@@ -47,11 +47,14 @@ export function useVerifiedCommand<I, R>(run: (commandId: string, grantId: strin
     mutation.reset()
   }, [mutation])
 
+  // one object per failure (not per render), so the PIN control can react to a new failure (PinConfirm)
+  const error = useMemo(() => (mutation.error ? toAppError(mutation.error) : null), [mutation.error])
+
   return {
     confirm: mutation.mutate,
     status: mutation.status,
     result: mutation.data,
-    error: mutation.error ? toAppError(mutation.error) : null,
+    error,
     commandIdFor,
     reset,
   }

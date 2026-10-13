@@ -125,7 +125,7 @@ describe('Fecho home', () => {
     expect(screen.getByText('Só de leitura; reabrir exige autorização e motivo.')).toBeTruthy()
     expect(screen.getByText('Sem decisão registada ao fechar')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Fechar período|Aprovar|Confirmar pagamentos/ })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Reabrir período (autorização necessária)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reabrir período (autorização necessária)' }).className).toContain('btn-destructive')
   })
 })
 
@@ -238,6 +238,7 @@ describe('reopen', () => {
     fireEvent.change(screen.getByLabelText('Motivo (obrigatório)'), { target: { value: '  Distribuição com valor errado ' } })
     expect(screen.getByText('3 nov às 11:45 por Mercy')).toBeTruthy()
     await confirmAs()
+    expect(screen.getByRole('button', { name: 'Reabrir período' }).className).toContain('btn-danger')   // undoes a close: destructive
     fireEvent.click(screen.getByRole('button', { name: 'Reabrir período' }))
     await waitFor(() => expect(reopenPeriod).toHaveBeenCalled())
     expect(vi.mocked(reopenPeriod).mock.calls[0]![2]).toEqual({ periodId: 'p10', revision: 7, reason: 'Distribuição com valor errado' })

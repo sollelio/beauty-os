@@ -42,3 +42,8 @@ export function AppBar({ title, leading, onLeading, step }: {
 export function BottomActionBar({ children }: { children: ReactNode }) {
   return <div className="bottom-bar">{children}</div>
 }
+
+/** The lock mark of a Confirmação necessária note (replaces the 🔒 emoji). */
+export function LockIcon() {
+  return <svg {...icon} width={18} height={18} style={{ flex: '0 0 auto', marginTop: '0.0625rem' }}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+}

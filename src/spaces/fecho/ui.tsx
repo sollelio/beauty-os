@@ -1,9 +1,11 @@
 // Fecho building blocks (Slice 06 §16): detail header with the Privado badge, state strip, pills, exception rows and
 // the Confirmação necessária boundary used by every Fecho decision (one-shot verification, ADR-0009).
+import { LockIcon } from '../../shared/ui/AppShell'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
+import { isPinError } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import type { ConfirmPermission } from '../../modules/org/api'
 import { fechoKeys, STATE_LABEL, STATE_ORDER, type PeriodState } from '../../modules/period/api'
@@ -60,11 +62,12 @@ export function KV({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="kv-card">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
 }
 
-/** Confirmação necessária (Slice 02 boundary): verify the confirming person, run the command once per intent. */
-export function Boundary<I, R>({ intro, children, lockNote, permission, run, input, label, onSuccess, blocked, onBack }: {
+/** Confirmação necessária (Slice 02 boundary): verify the confirming person, run the command once per intent.
+ *  `destructive`: the command undoes or invalidates something (reabrir, anular aprovação) — its final button says so. */
+export function Boundary<I, R>({ intro, children, lockNote, permission, run, input, label, onSuccess, blocked, onBack, destructive }: {
   intro: string; children?: ReactNode; lockNote: string; permission: ConfirmPermission
   run: (commandId: string, grantId: string, input: I) => Promise<R>; input: I; label: string
-  onSuccess: (r: R) => void; blocked?: boolean; onBack?: () => void
+  onSuccess: (r: R) => void; blocked?: boolean; onBack?: () => void; destructive?: boolean
 }) {
   const qc = useQueryClient()
   const command = useVerifiedCommand<I, R>(run)
@@ -86,12 +89,13 @@ export function Boundary<I, R>({ intro, children, lockNote, permission, run, inp
         <h2>Confirmação necessária</h2>
         <p className="muted" style={{ margin: 0 }}>{intro}</p>
         {children}
-        <div className="lock-note"><span aria-hidden>🔒</span><span>{lockNote}</span></div>
-        {!blocked && <ConfirmerPicker permission={permission} confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />}
+        <div className="lock-note"><LockIcon /><span>{lockNote}</span></div>
+        {!blocked && <ConfirmerPicker permission={permission} confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
+          error={err} messages={FECHO_MESSAGES} />}
         {err?.kind === 'network' && (
           <div className="notice notice-error" role="alert"><strong style={{ display: 'block' }}>Não foi registado.</strong>Não foi possível ligar ao servidor. Nada mudou; tente novamente.</div>
         )}
-        {err && err.kind !== 'network' && (
+        {err && err.kind !== 'network' && !isPinError(err) && (
           <div className={`notice ${stale ? 'notice-warning' : 'notice-error'}`} role="alert">{(err.code && FECHO_MESSAGES[err.code]) || 'Não foi possível registar.'}</div>
         )}
       </section>
@@ -103,7 +107,7 @@ export function Boundary<I, R>({ intro, children, lockNote, permission, run, inp
               {onBack && <button className="btn btn-secondary" onClick={onBack}>Voltar sem registar</button>}
             </>
           ) : (
-            <button className="btn btn-primary btn-tall" disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
+            <button className={`btn ${destructive ? 'btn-danger' : 'btn-primary'} btn-tall`} disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
               {command.status === 'pending' ? 'A confirmar…' : label}
             </button>
           )}

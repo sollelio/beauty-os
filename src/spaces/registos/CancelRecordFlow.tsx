@@ -1,15 +1,20 @@
 // Anular registo (pilot corrections, 2026-10-07): what is being cancelled · mandatory reason · Confirmação necessária
 // by a person who may correct records · success, with the way to record the right value through the normal flow.
+// Shared patterns: app bar with the back contract (a typed reason is never dropped silently), the person/PIN control,
+// and a destructive final action. The correction itself (cancelRecord, nothing deleted) is unchanged.
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
-import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { isPinError, VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import { cancelRecord, correctionKeys, getRecordSummary, KIND_LABEL, RECAPTURE_PATH, type CancelInput, type RecordKind } from '../../modules/corrections/api'
 import { formatMoney } from '../../shared/money'
 import { formatDayShort, formatTime } from '../../shared/time'
+import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
+import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { useFlow } from '../../shared/ui/navigation'
 
 const MESSAGES: Record<string, string> = {
   ...VERIFY_MESSAGES,
@@ -34,6 +39,7 @@ export function CancelRecordFlow() {
   const [done, setDone] = useState(false)
   const m = (n: number) => formatMoney(n, org)
   const err = command.status === 'error' ? command.error : null
+  const flow = useFlow({ steps: 1, parent: '/', dirty: reason.trim() !== '' && !done, reachable: () => true })
 
   if (!summary.data) {
     return <main className="app-main">{summary.isError
@@ -71,15 +77,21 @@ export function CancelRecordFlow() {
   function confirm() {
     if (!confirmerId || !secret || !reason.trim()) return
     command.confirm({ input: { kind: s.kind, recordId, reason: reason.trim() }, confirmerId, secret }, {
-      onSuccess: async () => { setSecret(''); await qc.invalidateQueries(); setDone(true) },
+      onSuccess: async () => { setSecret(''); flow.finish(); await qc.invalidateQueries(); setDone(true) },
     })
   }
+  const ready = reason.trim() !== '' && confirmerId !== null && secret !== ''
   return (
-    <main className="app-main">
-      <header className="flow-header-row">
-        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate(-1)}>←</button>
-        <span className="muted" style={{ fontWeight: 600 }}>Anular registo</span><span style={{ width: '2.75rem' }} />
-      </header>
+    <AppScreen
+      bar={<AppBar title="Anular registo" leading="back" onLeading={flow.exit} />}
+      actions={
+        <BottomActionBar>
+          {!reason.trim() && <span className="muted" style={{ textAlign: 'center' }}>Escreva o motivo para continuar.</span>}
+          <button className="btn btn-danger btn-tall" disabled={!ready || command.status === 'pending'} onClick={confirm}>
+            {command.status === 'pending' ? 'A anular…' : err?.kind === 'network' ? 'Tentar novamente' : 'Anular registo'}
+          </button>
+        </BottomActionBar>
+      }>
       <section className="stack" style={{ gap: '1rem' }}>
         <h2>Anular este registo?</h2>
         {what}
@@ -88,21 +100,14 @@ export function CancelRecordFlow() {
           <label className="label" htmlFor="cancel-reason">Motivo (obrigatório)</label>
           <label className="field"><input id="cancel-reason" maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
         </div>
-        {reason.trim() ? (
-          <>
-            <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Confirmação necessária</h3>
-            <ConfirmerPicker permission="records.correct" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
-            <div className="lock-note"><span aria-hidden>🔒</span><span>Fica no histórico com quem anulou, quando e porquê.</span></div>
-          </>
-        ) : <p className="muted" style={{ margin: 0 }}>Escreva o motivo para continuar.</p>}
+        <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Confirmação necessária</h3>
+        <div className="lock-note"><LockIcon /><span>Fica no histórico com quem anulou, quando e porquê.</span></div>
+        <ConfirmerPicker permission="records.correct" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
+          error={err} messages={MESSAGES} />
         {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível anular. Nada mudou; tente novamente.</div>}
-        {err && err.kind !== 'network' && <div className="notice notice-error" role="alert">{(err.code && MESSAGES[err.code]) || 'Não foi possível anular este registo.'}</div>}
+        {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{(err.code && MESSAGES[err.code]) || 'Não foi possível anular este registo.'}</div>}
       </section>
-      <div className="footer">
-        <button className="btn btn-primary btn-tall" disabled={!reason.trim() || !confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
-          {command.status === 'pending' ? 'A anular…' : err?.kind === 'network' ? 'Tentar novamente' : 'Anular registo'}
-        </button>
-      </div>
-    </main>
+      <DiscardSheet open={flow.discard.open} title="Sair sem anular?" detail="O motivo escrito perde-se. Nada foi anulado." onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+    </AppScreen>
   )
 }

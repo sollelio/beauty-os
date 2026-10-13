@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
-import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { isPinError } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import { listPeople, peopleKeys } from '../../modules/org/api'
 import { listProducts, listUnitWords, stockKeys, updateStock } from '../../modules/stock/api'
@@ -24,7 +24,7 @@ import { formatTime } from '../../shared/time'
 import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { captureFailure } from '../../shared/periodLock'
-import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { useFlow, useSheet } from '../../shared/ui/navigation'
 
@@ -279,11 +279,10 @@ export function PurchaseFlow() {
               </dd></div>
               <div><dt>Onde</dt><dd>{origin?.label ?? '—'}</dd></div>
             </dl>
-            <div className="lock-note"><span aria-hidden>🔒</span><span>Fica no histórico com data, hora e quem confirmou. Entra em Dinheiro e fica no histórico dos produtos em Stock.</span></div>
-            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
-            {err?.kind === 'domain' && err.code && VERIFY_MESSAGES[err.code] && <div className="notice notice-error" role="alert">{VERIFY_MESSAGES[err.code]}</div>}
+            <div className="lock-note"><LockIcon /><span>Fica no histórico com data, hora e quem confirmou. Entra em Dinheiro e fica no histórico dos produtos em Stock.</span></div>
+            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
-            {err && err.kind !== 'network' && !(err.code && VERIFY_MESSAGES[err.code]) && <div className="notice notice-error" role="alert">{captureFailure(err, 'Não foi possível guardar esta compra.')}</div>}
+            {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{captureFailure(err, 'Não foi possível guardar esta compra.')}</div>}
           </section>
         </>
       )}

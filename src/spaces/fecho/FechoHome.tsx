@@ -88,7 +88,7 @@ export function FechoHome() {
         ? <button className="btn btn-primary btn-tall" onClick={() => navigate(to(`/privado/fecho/regra/${first.person.person_id}`))}>Decidir regra · {first.person.display_name}</button>
         : <button className="btn btn-primary btn-tall" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
     }
-    if (st === 'fechado') return <button className="link-btn" onClick={() => navigate(to('/privado/fecho/reabrir'))}>Reabrir período (autorização necessária)</button>
+    if (st === 'fechado') return <button className="btn btn-destructive" onClick={() => navigate(to('/privado/fecho/reabrir'))}>Reabrir período (autorização necessária)</button>
     return (
       <>
         {outstanding.length > 0
@@ -101,7 +101,7 @@ export function FechoHome() {
           </>
         )}
         {st === 'em_pagamento' && outstanding.length === 0 && <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ver pagamentos</button>}
-        {f.readiness.can_annul && <button className="link-btn" onClick={() => setSheet('annul')}>Voltar a rever (anula a aprovação)</button>}
+        {f.readiness.can_annul && <button className="btn btn-destructive" onClick={() => setSheet('annul')}>Voltar a rever (anula a aprovação)</button>}
       </>
     )
   })()
@@ -170,7 +170,7 @@ export function FechoHome() {
             <Boundary permission="period.decide" run={annulApproval} input={{ periodId: f.period.id, revision: f.review_revision }}
               intro="Anular a aprovação devolve o período a «Aberto». Os valores voltam a poder mudar; a aprovação anulada fica no histórico."
               lockNote="Fica no histórico com quem anulou e quando. Só é possível enquanto não houver pagamentos confirmados."
-              label="Anular aprovação" onSuccess={() => setSheet(null)} onBack={() => setSheet(null)} />
+              label="Anular aprovação" onSuccess={() => setSheet(null)} onBack={() => setSheet(null)} destructive />
           </div>
         </div>
       )}

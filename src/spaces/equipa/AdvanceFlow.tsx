@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
-import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { isPinError } from '../../modules/org/verifyMessages'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { AmountField } from '../../shared/ui/AmountField'
 import { listCapturePeople, listPaymentMethods, servicesKeys, type CapturePerson } from '../../modules/services/api'
@@ -15,7 +15,7 @@ import type { RecordAdvanceInput } from '../../modules/team/api'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
-import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { useFlow } from '../../shared/ui/navigation'
 import { PaymentFields } from '../../shared/ui/PaymentFields'
 import { effectiveChoice, type PaymentChoice } from '../../shared/payment'
@@ -82,8 +82,7 @@ export function AdvanceFlow() {
     )
   }
 
-  const verifyError = advance.status === 'error' && advance.error?.kind === 'domain' ? (advance.error.code && VERIFY_MESSAGES[advance.error.code]) : null
-  const otherDomainError = advance.status === 'error' && advance.error?.kind !== 'network' && !verifyError
+  const otherDomainError = advance.status === 'error' && advance.error?.kind !== 'network' && !isPinError(advance.error)
 
   const footer = step === 2 && person ? (
     <BottomActionBar>
@@ -163,11 +162,11 @@ export function AdvanceFlow() {
               {input.note && <div><dt>Nota</dt><dd>{input.note}</dd></div>}
             </dl>
             <div className="lock-note">
-              <span aria-hidden>🔒</span>
+              <LockIcon />
               <span>Fica no histórico com data, hora e quem confirmou. É descontado ao valor a receber no fecho do período.</span>
             </div>
-            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
-            {verifyError && <div className="notice notice-error" role="alert">{verifyError}</div>}
+            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
+              error={advance.status === 'error' ? advance.error : null} />
             {advance.status === 'error' && advance.error?.kind === 'network' && (
               <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>
             )}

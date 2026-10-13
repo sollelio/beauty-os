@@ -10,6 +10,8 @@ import {
   addUnplanned, boughtItems, buildTrip, clearTrip, isSubstituted, loadTrip, removeUnplanned, revertSubstitute, saveTrip,
   setQty, skip, substitute, toggle, tripCounts, type PickedProduct, type Trip, type TripItem,
 } from '../../modules/stock/trip'
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
+import { useSheet } from '../../shared/ui/navigation'
 
 type Sheet = null | { kind: 'options'; key: string } | { kind: 'substitute'; key: string } | { kind: 'unplanned' } | { kind: 'unplanned-qty'; pick: PickedProduct; qty: number }
 
@@ -25,6 +27,7 @@ function MarketTrip({ products }: { products: StockProduct[] }) {
   // Rebuilt from the current list on entry, keeping progress from the stored draft.
   const [trip, setTrip] = useState<Trip>(() => { const t = buildTrip(products, loadTrip(org.id)); saveTrip(org.id, t); return t })
   const [sheet, setSheet] = useState<Sheet>(null)
+  const ending = useSheet<true>()                                       // "Terminar sem compra?" — back keeps the trip
   const update = (t: Trip) => { saveTrip(org.id, t); setTrip(t) }
   const c = tripCounts(trip)
   const item = sheet && 'key' in sheet ? trip.items.find((i) => i.key === sheet.key) : undefined
@@ -63,8 +66,14 @@ function MarketTrip({ products }: { products: StockProduct[] }) {
         </span>
         {c.bought > 0
           ? <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/passagem')}>Terminar e registar compra</button>
-          : <button className="btn btn-secondary" onClick={() => { clearTrip(org.id); navigate('/stock') }}>Terminar sem compra</button>}
+          : <button className="btn btn-destructive" onClick={() => ending.open(true)}>Terminar sem compra</button>}
       </div>
+      {ending.current && (
+        <ConfirmDialog title="Terminar sem compra?" safeLabel="Continuar no mercado" destructiveLabel="Terminar sem compra"
+          onSafe={ending.close} onDestructive={() => { clearTrip(org.id); ending.leaveTo('/stock') }}>
+          O que marcou nesta ida ao mercado perde-se. A lista de compras fica como está.
+        </ConfirmDialog>
+      )}
 
       {sheet?.kind === 'options' && item && (
         <div className="sheet" role="dialog" aria-labelledby="opt-title" onClick={() => setSheet(null)}>

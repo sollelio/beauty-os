@@ -34,7 +34,7 @@ export function ReopenPage() {
         <Boundary permission="period.reopen" run={reopenPeriod} input={{ periodId: f.period.id, revision: f.review_revision, reason: trimmed }}
           intro="Um período fechado só reabre com autorização e motivo. Tudo o que foi aprovado, pago e decidido continua registado."
           lockNote="Fica no histórico quem reabriu, quando e porquê. Reabrir permite rever a decisão dos sócios e confirmar pagamentos em falta; depois, o período volta a ser fechado."
-          label="Reabrir período" onSuccess={back} onBack={back}>
+          label="Reabrir período" onSuccess={back} onBack={back} destructive>
           <KV rows={[['Período', f.period.label], ['Fechado', `${formatDayShort(f.closed.closed_at, org.timezone)} às ${formatTime(f.closed.closed_at, org.timezone)} por ${f.closed.closed_by}`]]} />
         </Boundary>
       ) : (

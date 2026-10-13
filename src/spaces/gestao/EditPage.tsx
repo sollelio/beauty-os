@@ -1,5 +1,6 @@
 // Gestão · add or edit one service or product, then Confirmação necessária (catalogue.manage, one-shot PIN). The
 // form keeps its values on any failure; the same intent retries with the same command_id (ADR-0006).
+import { LockIcon } from '../../shared/ui/AppShell'
 import { useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -7,7 +8,7 @@ import { useOrganization } from '../../modules/org/OrganizationContext'
 import { usePrivateContext } from '../../modules/org/privateContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
-import { VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
+import { isPinError, VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import {
   catalogueKeys, listManagedProducts, listManagedServices, saveProduct, saveService, type ProductInput, type ServiceInput,
 } from '../../modules/catalogue/api'
@@ -64,10 +65,11 @@ function Confirm<I>({ run, input, changes, onDone }: {
       <section className="stack" style={{ gap: '1rem' }} aria-label="Confirmação necessária">
         <h2>Confirmação necessária</h2>
         <dl className="kv-card" data-testid="changes">{changes.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
-        <div className="lock-note"><span aria-hidden>🔒</span><span>Só quem gere o catálogo pode confirmar. Fica registado quem mudou e quando.</span></div>
-        <ConfirmerPicker permission="catalogue.manage" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} />
+        <div className="lock-note"><LockIcon /><span>Só quem gere o catálogo pode confirmar. Fica registado quem mudou e quando.</span></div>
+        <ConfirmerPicker permission="catalogue.manage" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
+          error={err} messages={MESSAGES} />
         {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível ligar ao servidor. Nada mudou; tente novamente.</div>}
-        {err && err.kind !== 'network' && <div className="notice notice-error" role="alert">{(err.code && MESSAGES[err.code]) || 'Não foi possível guardar.'}</div>}
+        {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{(err.code && MESSAGES[err.code]) || 'Não foi possível guardar.'}</div>}
       </section>
       <div className="footer">
         <button className="btn btn-primary btn-tall" disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
