@@ -1,3 +1,5 @@
+-- SUPERSEDED for Salão Agradável by salao-agradavel-onboarding.sql (07 D8 update, 2026-10-13: Merce reads and confirms
+-- payments only; Fernando also catalogue.manage; Duart not onboarded). Kept for the record; do not run it there.
 -- Pilot permission assignments (Sollelio operating decision, 2026-10-07). Run in the SQL editor of the pilot project
 -- after the people exist (pilot-runbook.md §1). People are matched by their display name in the organization; check
 -- the names (and their spelling) against the real people before running. Everyone not listed holds none of these

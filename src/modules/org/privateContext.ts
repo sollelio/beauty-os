@@ -14,7 +14,7 @@ export const privateKeys = { status: ['org', 'private-status'] as const,   // ou
 
 export type PrivateStatus =
   | { active: false }
-  | { active: true; person_id: string; display_name: string; view: 'manager' | 'self'; business_health: boolean; expires_at: string }
+  | { active: true; person_id: string; display_name: string; view: 'manager' | 'self'; business_health: boolean; catalogue_manage?: boolean; expires_at: string }
 
 export async function getPrivateStatus(): Promise<PrivateStatus> {
   const { data, error } = await getSupabase().rpc('private_context_status')

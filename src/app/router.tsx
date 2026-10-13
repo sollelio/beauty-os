@@ -30,6 +30,8 @@ import { ServicesPage } from '../spaces/negocio/ServicesPage'
 import { CostsPage } from '../spaces/negocio/CostsPage'
 import { FinancePage } from '../spaces/negocio/FinancePage'
 import { InsightsPage } from '../spaces/negocio/InsightsPage'
+import { GestaoPage } from '../spaces/gestao/GestaoPage'
+import { ProductEditPage, ServiceEditPage } from '../spaces/gestao/EditPage'
 
 export const router = createBrowserRouter([
   {
@@ -75,6 +77,9 @@ export const router = createBrowserRouter([
               { path: 'negocio/custos', element: <CostsPage /> },
               { path: 'negocio/financas', element: <FinancePage /> },
               { path: 'negocio/insights', element: <InsightsPage /> },
+              { path: 'gestao', element: <GestaoPage /> },
+              { path: 'gestao/servico/:id', element: <ServiceEditPage /> },
+              { path: 'gestao/produto/:id', element: <ProductEditPage /> },
             ],
           },
         ],

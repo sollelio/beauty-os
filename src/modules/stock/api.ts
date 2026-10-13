@@ -29,7 +29,7 @@ export const STATE_LABEL: Record<StockState, string> = { ok: 'OK', baixo: 'Baixo
 export const LEVEL_LABEL: Record<StockLevel, string> = { cheio: 'Cheio', metade: 'Metade', quase_vazio: 'Quase vazio', vazio: 'Vazio' }
 
 export async function listProducts(): Promise<Product[]> {
-  const { data, error } = await getSupabase().from('products').select('id, name, unit_word').order('name')
+  const { data, error } = await getSupabase().from('products').select('id, name, unit_word').eq('active', true).order('name')
   if (error) throw toAppError(error)
   return data
 }
@@ -66,7 +66,7 @@ export async function getProductHistory(productId: string): Promise<ProductHisto
 
 /** Hoje's Atenção row: how many products are marked Comprar (names and figures stay in Stock). */
 export async function countMarkedToBuy(): Promise<number> {
-  const { count, error } = await getSupabase().from('products').select('id', { count: 'exact', head: true }).eq('state', 'comprar')
+  const { count, error } = await getSupabase().from('products').select('id', { count: 'exact', head: true }).eq('state', 'comprar').eq('active', true)
   if (error) throw toAppError(error)
   return count ?? 0
 }

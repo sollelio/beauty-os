@@ -27,6 +27,7 @@ export function EquipaPage() {
       </div>
       <button className="pick" onClick={() => navigate('/privado/fecho')}><strong>Fecho do período</strong><span aria-hidden className="muted">›</span></button>
       {ctx.business_health && <button className="pick" onClick={() => navigate('/privado/negocio')}><strong>Negócio · Visão geral</strong><span aria-hidden className="muted">›</span></button>}
+      {ctx.catalogue_manage && <button className="pick" onClick={() => navigate('/privado/gestao')}><strong>Gestão · Serviços e produtos</strong><span aria-hidden className="muted">›</span></button>}
       <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
     </main>
   )
