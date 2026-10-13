@@ -2,16 +2,19 @@
 -- Plan, open decisions and provisional values: salao-agradavel-onboarding.md. Run only after explicit approval, in the
 -- Supabase SQL editor of Beauty OS Prod (role postgres), after migration 20261013000100_catalogue_management is applied.
 -- One transaction: it creates everything or nothing. It refuses to run twice or before the Gestão migration, and it
--- checks the counts (5 people, 22 services, 15 products, 8 periods, 11 permissions) before commit: any other count raises
+-- checks the counts (6 people, 22 services, 15 products, 8 periods, 20 permissions) before commit: any other count raises
 -- and the transaction rolls back (the final commit of an aborted transaction is a rollback).
 -- NOT in this file (never in the repository): PINs, enrollment codes. Not included until decided: reserve opening
 -- balance, expense categories, ownership (see the plan, §6).
 -- Provisional values (Sollelio, 2026-10-13; Fernando corrects them in Gestão): Secar cabelo 1.000 Kz, Pedicure completo
 -- 1.500 Kz; units of Pacote de lima, Pacote de lixas, Autocolantes.
+-- TEMPORARY: "Sollelio Support" is Sollelio's own audited support identity inside this organization (person + PIN, like
+-- everyone else; organization-scoped; no service role, no RLS bypass, no platform access). It performs no services and
+-- has no rule. It is to be replaced by the future Sollelio Console / platform-support model (plan §2).
 begin;
 do $$
 declare
-  v_org uuid; v_fer uuid; v_fda uuid; v_lau uuid; v_pat uuid; v_mer uuid; v_week date; i int;
+  v_org uuid; v_fer uuid; v_fda uuid; v_lau uuid; v_pat uuid; v_mer uuid; v_sup uuid; v_week date; i int;
   n_people bigint; n_services bigint; n_products bigint; n_periods bigint; n_permissions bigint;
   c_start date := date '2026-10-12';                   -- confirmed (plan §1): first weekly period, Monday–Sunday
 begin
@@ -32,8 +35,9 @@ begin
   insert into public.people (organization_id, display_name) values (v_org, 'Laurindo') returning id into v_lau;
   insert into public.people (organization_id, display_name) values (v_org, 'Patrícia') returning id into v_pat;
   insert into public.people (organization_id, display_name) values (v_org, 'Merce') returning id into v_mer;   -- Marcelina; the salon calls her Merce
+  insert into public.people (organization_id, display_name) values (v_org, 'Sollelio Support') returning id into v_sup;   -- TEMPORARY support identity
 
-  -- service capabilities (labels; capture lists only people with at least one; Merce performs no services)
+  -- service capabilities (labels; capture lists only people with at least one; Merce and Sollelio Support perform no services)
   insert into public.person_capabilities (organization_id, person_id, label, sort_order)
   select v_org, x.p, x.label, x.n from (values
     (v_fer, 'Unhas', 1), (v_fer, 'Lavagem', 2), (v_fer, 'Esticar', 3), (v_fer, 'Secar', 4), (v_fer, 'Brexe', 5), (v_fer, 'Ativar cachos', 6),
@@ -73,12 +77,15 @@ begin
   perform private.admin_set_rule(v_fda, 'standing', 60, c_start, v_fer);
   perform private.admin_set_rule(v_lau, 'standing', 50, c_start, v_fer);
   perform private.admin_set_rule(v_pat, 'standing', 50, c_start, v_fer);
-  -- Merce: no service rule (variable monthly salary, decided by Fernando and Merce; plan §6.3)
+  -- Merce: no service rule (variable monthly salary, decided by Fernando and Merce; plan §6.3). Sollelio Support: none.
 
   -- permissions (Sollelio, 2026-10-13; plan §4). Fernanda, Laurindo, Patrícia: none (own situation with their PIN).
   perform private.admin_set_permission(v_fer, x, true) from unnest(array['catalogue.manage', 'movement.confirm', 'team.finance.read',
     'business.health.read', 'period.decide', 'period.close', 'period.reopen', 'records.correct']) x;
   perform private.admin_set_permission(v_mer, x, true) from unnest(array['team.finance.read', 'business.health.read', 'payment.confirm']) x;
+  -- Sollelio Support (TEMPORARY): every person-level permission, for support inside this organization only.
+  perform private.admin_set_permission(v_sup, x, true) from unnest(array['catalogue.manage', 'movement.confirm', 'team.finance.read',
+    'business.health.read', 'period.decide', 'period.close', 'period.reopen', 'records.correct', 'payment.confirm']) x;
 
   -- weekly periods: 8 weeks ahead (create more before they start; runbook §2)
   for i in 0..7 loop
@@ -93,19 +100,22 @@ begin
          (select count(*) from public.periods where organization_id = v_org),
          (select count(*) from private.person_permissions where organization_id = v_org)
     into n_people, n_services, n_products, n_periods, n_permissions;
-  if (n_people, n_services, n_products, n_periods, n_permissions) is distinct from (5::bigint, 22::bigint, 15::bigint, 8::bigint, 11::bigint) then
-    raise exception 'onboarding counts wrong (expected 5/22/15/8/11): people %, services %, products %, periods %, permissions %',
+  if (n_people, n_services, n_products, n_periods, n_permissions) is distinct from (6::bigint, 22::bigint, 15::bigint, 8::bigint, 20::bigint) then
+    raise exception 'onboarding counts wrong (expected 6/22/15/8/20): people %, services %, products %, periods %, permissions %',
       n_people, n_services, n_products, n_periods, n_permissions;
+  end if;
+  if exists (select 1 from public.person_capabilities where person_id = v_sup) or exists (select 1 from public.rule_versions where person_id = v_sup) then
+    raise exception 'Sollelio Support must have no service capability and no rule';
   end if;
 
   raise notice 'Salão Agradável created: organization %', v_org;
 end $$;
 
 -- Read-out only (already enforced above): what was created.
-select (select count(*) from public.people p join public.organizations o on o.id = p.organization_id where o.name = 'Salão Agradável') as people,          -- 5
+select (select count(*) from public.people p join public.organizations o on o.id = p.organization_id where o.name = 'Salão Agradável') as people,          -- 6
        (select count(*) from public.services s join public.organizations o on o.id = s.organization_id where o.name = 'Salão Agradável') as services,    -- 22
        (select count(*) from public.products s join public.organizations o on o.id = s.organization_id where o.name = 'Salão Agradável') as products,    -- 15
        (select count(*) from public.periods s join public.organizations o on o.id = s.organization_id where o.name = 'Salão Agradável') as periods;      -- 8
 select p.display_name, pp.permission from private.person_permissions pp join public.people p on p.id = pp.person_id
-  join public.organizations o on o.id = p.organization_id where o.name = 'Salão Agradável' order by 1, 2;                                              -- 11 rows
+  join public.organizations o on o.id = p.organization_id where o.name = 'Salão Agradável' order by 1, 2;                                              -- 20 rows
 commit;

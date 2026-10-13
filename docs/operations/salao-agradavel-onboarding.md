@@ -28,6 +28,17 @@ repository.
 | Patrícia | Unhas · Tranças · Puxinhos de gel · Secar · Brexe · Ativar cachos | 50% | own situation |
 | Marcelina (display name Merce) — finanças / RH, remote | none (performs no services; not in capture) | none (§6.3) | finance read + payments (§4) |
 | Duart | **not onboarded**, no access | — | — |
+| Sollelio Support — **temporary** Sollelio support identity | none (performs no services) | none | every permission (§4) |
+
+**Sollelio Support (temporary).** Until Sollelio Console exists, Sollelio needs its own audited identity inside Salão
+Agradável to give support without using Fernando's (or anyone's) PIN and without acting as a member of the salon staff. It
+is an ordinary person of this organization with its own PIN (chosen and held by Sollelio, never in the repository), under
+the same person/PIN verification as everyone else: organization-scoped, no service role, no RLS bypass, no platform-level
+access. Everything it confirms is attributed to "Sollelio Support". It has no capability and no rule, so it is not offered
+in service capture, advances or the team list and is not counted in Fecho (the script refuses to commit otherwise). It
+does appear wherever every active person or a permission holder is listed: the Área privada person list, the
+*Confirmação necessária* picker of each permission, and the contributor list of a purchase. **It is to be replaced by the
+future Sollelio Console / platform-support model**; it is not part of the salon's permission matrix (07 D8).
 
 Rules: `admin_set_rule(person, 'standing', %, '2026-10-12', Fernando)`. Capabilities are labels shown in capture and
 Fecho; they do not restrict which service can be recorded for a person (no such link in V1).
@@ -81,22 +92,23 @@ Kikolo; Fernando and Fernanda buy, about monthly, with some extra) needs no conf
 | Fernando | `catalogue.manage` · `movement.confirm` · `team.finance.read` · `business.health.read` · `period.decide` · `period.close` · `period.reopen` · `records.correct` |
 | Merce | `team.finance.read` · `business.health.read` · `payment.confirm` |
 | Fernanda · Laurindo · Patrícia | none (own situation with their PIN) |
+| Sollelio Support (temporary, §2) | `catalogue.manage` · `movement.confirm` · `team.finance.read` · `business.health.read` · `period.decide` · `period.close` · `period.reopen` · `records.correct` · `payment.confirm` — every person-level permission in the repository, for support inside this organization only |
 
 This changes the pilot matrix of 07 D8 (Merce no longer holds `movement.confirm`, `period.decide`, `records.correct`;
-Duart is not onboarded) — recorded as the 2026-10-13 update in 07 D8. Consequences: Fernando is the only person who can
-confirm advances, expenses and purchases, approve a period and cancel a record; Merce is the only one who can confirm
-payments to professionals. Fernando does not get `payment.confirm` (§6.6).
+Duart is not onboarded) — recorded as the 2026-10-13 update in 07 D8. Consequences: among the salon's people, Fernando
+is the only one who can confirm advances, expenses and purchases, approve a period and cancel a record; Merce is the only
+one who can confirm payments to professionals. Sollelio Support can do all of these, for support only. Fernando does not get `payment.confirm` (§6.6).
 
 ## 5. Production sequence (each step needs explicit approval)
 
 1. **Gestão to Prod:** apply `20261013000100_catalogue_management` through the seed-free Prod working copy
    (`supabase db push --linked --dry-run`, then `--yes`; `seeds: []`); verify history 33/33 and the schema identical to Dev.
 2. **Frontend:** fast-forward `main` to the Gestão commit; Netlify deploys; smoke as for Business Health.
-3. **Data:** run `salao-agradavel-onboarding.sql` in the Prod SQL editor; check the counts it prints (5 people, 22
-   services, 15 products, 8 periods, 11 permission rows); `commit`.
+3. **Data:** run `salao-agradavel-onboarding.sql` in the Prod SQL editor; the script enforces the counts before
+   commit (6 people, 22 services, 15 products, 8 periods, 20 permission rows) and rolls back otherwise.
 4. **PINs** (each person chooses 6 digits, given privately; never written down in the repository):
    `select private.admin_set_person_secret((select p.id from public.people p join public.organizations o on o.id = p.organization_id where o.name = 'Salão Agradável' and p.display_name = '<name>'), '<6 digits>');`
-   — for Fernando, Fernanda, Laurindo, Patrícia and Merce.
+   — for Fernando, Fernanda, Laurindo, Patrícia, Merce and Sollelio Support (set by Sollelio).
 5. **Salon phone (Android):** `select private.admin_issue_enrollment_code((select id from public.organizations where name = 'Salão Agradável'), 'Telemóvel do salão');`
    → open `https://beauty.sollelio.com` on the phone, solve the check, type the code (*Ligar dispositivo*). Valid 24 h, single use.
 6. **Merce's own phone** (if she confirms payments remotely, §6.5): a second code, label `Telemóvel da Merce`.
@@ -122,7 +134,7 @@ payments to professionals. Fernando does not get `payment.confirm` (§6.6).
    means being there; otherwise her phone must be enrolled as a second device of the salon (§5 step 6). Pilot devices are
    Android only; iOS is not validated.
 6. **Fernando and `payment.confirm`.** Not granted (07 D8 kept payment confirmation with someone other than the
-   manager who is also paid). If Merce is not available, nobody can confirm payments or close a week.
+   manager who is also paid). If Merce is not available, nobody among the salon's people can confirm payments or close a week (Sollelio Support can, for support only).
 7. **Stock starts "OK".** A new product has no "unknown" state; the Stock screen shows all 15 as OK until someone marks
    them. Fernando or Fernanda should mark what is low on day 1.
 8. **New products created during capture.** The existing Slice 03/05 flows still let the shared device create a
