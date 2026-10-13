@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { fromHoje, renderScreen } from '../../test/router'
 
 vi.mock('../../modules/services/api', async (orig) => ({
@@ -128,6 +128,53 @@ describe('RecordServiceFlow back/history contract', () => {
       expect(await screen.findByLabelText('Valor')).toBeTruthy()
       expect(valueField().value).toBe('15000')
       expect(screen.getByText('Coloração · Ana · 15.000 Kz')).toBeTruthy()
+    })
+
+    it('the service list shows the edited value on the chosen row, with the habitual price as context', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('154656')
+      await act(() => router.navigate(-1))
+      const row = await screen.findByRole('button', { name: /Coloração/ })
+      expect(row.getAttribute('aria-current')).toBe('true')
+      expect(within(row).getByText('154.656 Kz')).toBeTruthy()                  // the draft, prominent
+      expect(within(row).getByText(/Habitual: 12\.000 Kz/)).toBeTruthy()        // the catalogue price, as context
+      const other = screen.getByRole('button', { name: /Corte/ })               // other rows stay as they were
+      expect(other.textContent).toBe('Corte5.000 Kz')
+      fireEvent.click(row)                                                      // same service: the draft comes back
+      expect(valueField().value).toBe('154656')
+    })
+
+    it('a chosen service still at its habitual price keeps the normal row, only highlighted', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await act(() => router.navigate(-1))
+      const row = await screen.findByRole('button', { name: /Coloração/ })
+      expect(row.getAttribute('aria-current')).toBe('true')
+      expect(row.textContent).toBe('Coloração12.000 Kz')
+      expect(within(row).queryByText(/Habitual/)).toBeNull()
+    })
+
+    it('an edit typed back to the habitual price is shown as the normal row', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('12000')
+      await act(() => router.navigate(-1))
+      expect((await screen.findByRole('button', { name: /Coloração/ })).textContent).toBe('Coloração12.000 Kz')
+    })
+
+    it('after choosing a different service, its row shows its own price (no stale draft)', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('154656')
+      await act(() => router.navigate(-1))
+      fireEvent.click(await screen.findByRole('button', { name: /Corte/ }))
+      expect(await screen.findByText('5.000 Kz')).toBeTruthy()                  // Corte's own default on the value step
+      await act(() => router.navigate(-1))
+      const corte = await screen.findByRole('button', { name: /Corte/ })
+      expect(corte.getAttribute('aria-current')).toBe('true')
+      expect(corte.textContent).toBe('Corte5.000 Kz')
+      expect(screen.getByRole('button', { name: /Coloração/ }).textContent).toBe('Coloração12.000 Kz')
     })
 
     it('the same person and service again (back twice) keep it too', async () => {

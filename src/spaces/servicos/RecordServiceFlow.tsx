@@ -140,7 +140,8 @@ export function RecordServiceFlow() {
 
       {step === 2 && person && (
         // Re-entering the chosen service keeps its draft (an edited value survives back); another service starts from its own price.
-        <ServiceStep person={person} selectedId={service?.id ?? null} onChangePerson={() => flow.goTo(1)}
+        <ServiceStep person={person} selectedId={service?.id ?? null}
+          draftValue={typed !== null && service && typed !== service.default_price_minor ? typed : null} onChangePerson={() => flow.goTo(1)}
           onPick={(s) => { if (s.id !== service?.id) { setService(s); setEditing(false); setPriceDigits('') } flow.goTo(3) }} />
       )}
 
@@ -212,8 +213,10 @@ export function RecordServiceFlow() {
   )
 }
 
-function ServiceStep({ person, selectedId, onChangePerson, onPick }: {
-  person: CapturePerson; selectedId: string | null; onChangePerson: () => void; onPick: (s: CatalogueService) => void
+// `draftValue`: the chosen service's edited value (null when it is still the habitual price), shown on its row so a step
+// back does not look like the edit was lost.
+function ServiceStep({ person, selectedId, draftValue, onChangePerson, onPick }: {
+  person: CapturePerson; selectedId: string | null; draftValue: number | null; onChangePerson: () => void; onPick: (s: CatalogueService) => void
 }) {
   const org = useOrganization()
   const [query, setQuery] = useState('')
@@ -238,9 +241,21 @@ function ServiceStep({ person, selectedId, onChangePerson, onPick }: {
       {(catalogue.isError || frequent.isError) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
       <div className="stack">
         {list.map((s) => (
-          <button key={s.id} className="pick" aria-current={s.id === selectedId || undefined} onClick={() => onPick(s)}>
-            <span style={{ fontWeight: 600 }}>{s.name}</span>
-            <span className="num muted">{formatMoney(s.default_price_minor, org)}</span>
+          <button key={s.id} className="pick" aria-current={s.id === selectedId || undefined} onClick={() => onPick(s)}
+            style={s.id === selectedId && draftValue !== null ? { paddingTop: '0.5rem', paddingBottom: '0.5rem' } : undefined}>
+            {s.id === selectedId && draftValue !== null ? (
+              <span>
+                <span style={{ display: 'block', fontWeight: 600 }}>{s.name}</span>
+                <span className="num" style={{ display: 'block', fontSize: '0.9375rem' }}>
+                  <strong>{formatMoney(draftValue, org)}</strong><span className="muted"> · Habitual: {formatMoney(s.default_price_minor, org)}</span>
+                </span>
+              </span>
+            ) : (
+              <>
+                <span style={{ fontWeight: 600 }}>{s.name}</span>
+                <span className="num muted">{formatMoney(s.default_price_minor, org)}</span>
+              </>
+            )}
           </button>
         ))}
         {q && list.length === 0 && <span className="muted">Sem resultados para «{query.trim()}».</span>}
