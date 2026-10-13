@@ -12,7 +12,7 @@ repository.
 | Name | Salão Agradável | `organizations.name` |
 | Country / timezone | Angola · `Africa/Luanda` | `organizations.timezone` |
 | Currency | AOA · 2 minor digits · symbol `Kz` (amounts typed in whole Kz) | `organizations.currency_*` |
-| Official period | Weekly | `admin_create_period` × 8 weeks (§6.3) |
+| Official period | Weekly, Monday → Sunday — **confirmed** (Sollelio, 2026-10-13); first period 12/10–18/10 (records start 14/10) | `admin_create_period` × 8 weeks (§5 step 3) |
 | Customer payment methods | Dinheiro · Multicaixa Express | `payment_methods` (`dinheiro`, `multicaixa_express`) |
 | Purchase origin | Mercado do Kikolo | `purchase_origins` |
 | Reserve opening balance | 25.000 Kz | **not loadable as is** (§6.1) |
@@ -26,7 +26,7 @@ repository.
 | Fernanda — Colaboradora | Cabeleireira · Unhas (all services) | 60% | own situation |
 | Laurindo — mestre de unhas | Unhas | 50% | own situation |
 | Patrícia | Unhas · Tranças · Puxinhos de gel · Secar · Brexe · Ativar cachos | 50% | own situation |
-| Marcelina (display name Merce) — finanças / RH, remote | none (performs no services; not in capture) | none (§6.4) | finance read + payments (§4) |
+| Marcelina (display name Merce) — finanças / RH, remote | none (performs no services; not in capture) | none (§6.3) | finance read + payments (§4) |
 | Duart | **not onboarded**, no access | — | — |
 
 Rules: `admin_set_rule(person, 'standing', %, '2026-10-12', Fernando)`. Capabilities are labels shown in capture and
@@ -85,7 +85,7 @@ Kikolo; Fernando and Fernanda buy, about monthly, with some extra) needs no conf
 This changes the pilot matrix of 07 D8 (Merce no longer holds `movement.confirm`, `period.decide`, `records.correct`;
 Duart is not onboarded) — recorded as the 2026-10-13 update in 07 D8. Consequences: Fernando is the only person who can
 confirm advances, expenses and purchases, approve a period and cancel a record; Merce is the only one who can confirm
-payments to professionals. Fernando does not get `payment.confirm` (§6.7).
+payments to professionals. Fernando does not get `payment.confirm` (§6.6).
 
 ## 5. Production sequence (each step needs explicit approval)
 
@@ -99,7 +99,7 @@ payments to professionals. Fernando does not get `payment.confirm` (§6.7).
    — for Fernando, Fernanda, Laurindo, Patrícia and Merce.
 5. **Salon phone (Android):** `select private.admin_issue_enrollment_code((select id from public.organizations where name = 'Salão Agradável'), 'Telemóvel do salão');`
    → open `https://beauty.sollelio.com` on the phone, solve the check, type the code (*Ligar dispositivo*). Valid 24 h, single use.
-6. **Merce's own phone** (if she confirms payments remotely, §6.6): a second code, label `Telemóvel da Merce`.
+6. **Merce's own phone** (if she confirms payments remotely, §6.5): a second code, label `Telemóvel da Merce`.
 7. **First-day check with Fernando:** Hoje loads; record one real service; Área privada with his PIN → Gestão shows the
    22 services and 15 products; correct the provisional values as soon as they are known.
 
@@ -114,20 +114,18 @@ payments to professionals. Fernando does not get `payment.confirm` (§6.7).
 2. **Expense categories — needs owner input before expenses are recorded.** None were given; *Registar despesa* needs
    at least one. Proposal for Fernando to confirm: Renda · Luz · Água · Transporte · Outros (operator SQL, as in runbook §1).
    Services and purchases do not depend on this.
-3. **Week boundaries.** Draft: Monday–Sunday, first period 12/10–18/10 (records start 14/10), 8 weeks created. Confirm
-   with Fernando which day the salon's week closes.
-4. **Merce's variable monthly salary.** No service rule fits it and V1 has no salary concept. Until decided, it stays
+3. **Merce's variable monthly salary.** No service rule fits it and V1 has no salary concept. Until decided, it stays
    outside the app (or is recorded as an expense in a category such as "Salários" when paid — a product decision).
-5. **Ownership.** The brief does not say who the owners are; no `person_ownerships` row is loaded (the label *sócio*
+4. **Ownership.** The brief does not say who the owners are; no `person_ownerships` row is loaded (the label *sócio*
    and the "decisão dos sócios" wording do not depend on it).
-6. **Remote payment confirmation.** Confirming a payment needs Merce's PIN on a bound device. On the salon phone that
+5. **Remote payment confirmation.** Confirming a payment needs Merce's PIN on a bound device. On the salon phone that
    means being there; otherwise her phone must be enrolled as a second device of the salon (§5 step 6). Pilot devices are
    Android only; iOS is not validated.
-7. **Fernando and `payment.confirm`.** Not granted (07 D8 kept payment confirmation with someone other than the
+6. **Fernando and `payment.confirm`.** Not granted (07 D8 kept payment confirmation with someone other than the
    manager who is also paid). If Merce is not available, nobody can confirm payments or close a week.
-8. **Stock starts "OK".** A new product has no "unknown" state; the Stock screen shows all 15 as OK until someone marks
+7. **Stock starts "OK".** A new product has no "unknown" state; the Stock screen shows all 15 as OK until someone marks
    them. Fernando or Fernanda should mark what is low on day 1.
-9. **New products created during capture.** The existing Slice 03/05 flows still let the shared device create a
+8. **New products created during capture.** The existing Slice 03/05 flows still let the shared device create a
    product by name (unit word only, no price) while recording a purchase or preparing a list. Editing, pricing and
    deactivating are Gestão only.
 

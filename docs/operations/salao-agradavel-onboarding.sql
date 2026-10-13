@@ -13,7 +13,7 @@ do $$
 declare
   v_org uuid; v_fer uuid; v_fda uuid; v_lau uuid; v_pat uuid; v_mer uuid; v_week date; i int;
   n_people bigint; n_services bigint; n_products bigint; n_periods bigint; n_permissions bigint;
-  c_start date := date '2026-10-12';                   -- DECISION (plan §6.3): first weekly period, Monday–Sunday
+  c_start date := date '2026-10-12';                   -- confirmed (plan §1): first weekly period, Monday–Sunday
 begin
   if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261013000100') then
     raise exception 'apply migration 20261013000100_catalogue_management first';
@@ -73,7 +73,7 @@ begin
   perform private.admin_set_rule(v_fda, 'standing', 60, c_start, v_fer);
   perform private.admin_set_rule(v_lau, 'standing', 50, c_start, v_fer);
   perform private.admin_set_rule(v_pat, 'standing', 50, c_start, v_fer);
-  -- Merce: no service rule (variable monthly salary, decided by Fernando and Merce; plan §6.4)
+  -- Merce: no service rule (variable monthly salary, decided by Fernando and Merce; plan §6.3)
 
   -- permissions (Sollelio, 2026-10-13; plan §4). Fernanda, Laurindo, Patrícia: none (own situation with their PIN).
   perform private.admin_set_permission(v_fer, x, true) from unnest(array['catalogue.manage', 'movement.confirm', 'team.finance.read',
