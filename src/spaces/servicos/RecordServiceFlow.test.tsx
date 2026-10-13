@@ -11,7 +11,7 @@ vi.mock('../../modules/services/api', async (orig) => ({
 }))
 vi.mock('../../modules/catalogue/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/catalogue/api')>()),
-  listServices: vi.fn().mockResolvedValue([{ id: 's1', name: 'Coloração', default_price_minor: 1200000 }]),
+  listServices: vi.fn().mockResolvedValue([{ id: 's1', name: 'Coloração', default_price_minor: 1200000 }, { id: 's2', name: 'Corte', default_price_minor: 500000 }]),
 }))
 import { recordService } from '../../modules/services/api'
 import { RecordServiceFlow } from './RecordServiceFlow'
@@ -104,5 +104,67 @@ describe('RecordServiceFlow back/history contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
     expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
     expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  // Production bug (Android): back to "Que serviço?" and the same service again reset the edited value to the default.
+  describe('an edited value survives stepping back to the service list', () => {
+    async function editValue(digits: string) {
+      fireEvent.click(screen.getByRole('button', { name: 'Editar' }))
+      fireEvent.change(screen.getByLabelText('Valor'), { target: { value: digits } })
+    }
+    const valueField = () => screen.getByLabelText('Valor') as HTMLInputElement
+
+    it('same service again: the edited value is still there; the step-back asked nothing; the service is marked', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('15000')
+      await act(() => router.navigate(-1))                                      // Android back to the service list
+      expect(await screen.findByText('Que serviço?')).toBeTruthy()
+      expect(screen.queryByRole('dialog')).toBeNull()                           // internal step-back: no "Descartar?"
+      const row = screen.getByRole('button', { name: /Coloração/ })
+      expect(row.getAttribute('aria-current')).toBe('true')                    // the chosen service is identifiable
+      expect(screen.getByRole('button', { name: /Corte/ }).getAttribute('aria-current')).toBeNull()
+      fireEvent.click(row)                                                      // the same service again
+      expect(await screen.findByLabelText('Valor')).toBeTruthy()
+      expect(valueField().value).toBe('15000')
+      expect(screen.getByText('Coloração · Ana · 15.000 Kz')).toBeTruthy()
+    })
+
+    it('the same person and service again (back twice) keep it too', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('15000')
+      await act(() => router.navigate(-2))
+      expect(await screen.findByText('Quem fez o serviço?')).toBeTruthy()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      fireEvent.click(screen.getByText('Ana'))
+      fireEvent.click(await screen.findByRole('button', { name: /Coloração/ }))
+      expect(valueField().value).toBe('15000')
+    })
+
+    it('a different service starts from its own catalogue price', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('15000')
+      await act(() => router.navigate(-1))
+      fireEvent.click(await screen.findByRole('button', { name: /Corte/ }))
+      expect(await screen.findByText('5.000 Kz')).toBeTruthy()                  // Corte's default, shown, not edited
+      expect(screen.queryByLabelText('Valor')).toBeNull()
+      expect(screen.getByText('Corte · Ana · 5.000 Kz')).toBeTruthy()
+    })
+
+    it('leaving the flow with the edited value still asks "Descartar?"', async () => {
+      const { router } = renderFlow(fromHoje(PATH))
+      await toStep3()
+      await editValue('15000')
+      await act(() => router.navigate(-1))
+      fireEvent.click(await screen.findByRole('button', { name: /Coloração/ }))
+      await screen.findByLabelText('Valor')
+      fireEvent.click(screen.getByRole('button', { name: 'Voltar' }))           // app-bar ← to step 2 …
+      fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }))    // … and to step 1
+      fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }))    // × leaves the flow
+      expect(await screen.findByRole('dialog', { name: 'Descartar este serviço?' })).toBeTruthy()
+      expect(router.state.location.pathname).toBe(PATH)
+    })
   })
 })

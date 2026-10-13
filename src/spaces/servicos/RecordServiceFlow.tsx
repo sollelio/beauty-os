@@ -128,7 +128,8 @@ export function RecordServiceFlow() {
           {people.isError && <div className="notice notice-error" role="alert">Não foi possível carregar a equipa.</div>}
           <div className="tiles">
             {people.data?.map((p) => (
-              <button key={p.id} className="tile" onClick={() => { setPerson(p); setService(null); flow.goTo(2) }}>
+              <button key={p.id} className="tile" aria-current={p.id === person?.id || undefined}
+                onClick={() => { if (p.id !== person?.id) { setPerson(p); setService(null) } flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
                 <span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span>
               </button>
@@ -138,8 +139,9 @@ export function RecordServiceFlow() {
       )}
 
       {step === 2 && person && (
-        <ServiceStep person={person} onChangePerson={() => flow.goTo(1)}
-          onPick={(s) => { setService(s); setEditing(false); setPriceDigits(''); flow.goTo(3) }} />
+        // Re-entering the chosen service keeps its draft (an edited value survives back); another service starts from its own price.
+        <ServiceStep person={person} selectedId={service?.id ?? null} onChangePerson={() => flow.goTo(1)}
+          onPick={(s) => { if (s.id !== service?.id) { setService(s); setEditing(false); setPriceDigits('') } flow.goTo(3) }} />
       )}
 
       {step === 3 && person && service && (
@@ -210,8 +212,8 @@ export function RecordServiceFlow() {
   )
 }
 
-function ServiceStep({ person, onChangePerson, onPick }: {
-  person: CapturePerson; onChangePerson: () => void; onPick: (s: CatalogueService) => void
+function ServiceStep({ person, selectedId, onChangePerson, onPick }: {
+  person: CapturePerson; selectedId: string | null; onChangePerson: () => void; onPick: (s: CatalogueService) => void
 }) {
   const org = useOrganization()
   const [query, setQuery] = useState('')
@@ -236,7 +238,7 @@ function ServiceStep({ person, onChangePerson, onPick }: {
       {(catalogue.isError || frequent.isError) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
       <div className="stack">
         {list.map((s) => (
-          <button key={s.id} className="pick" onClick={() => onPick(s)}>
+          <button key={s.id} className="pick" aria-current={s.id === selectedId || undefined} onClick={() => onPick(s)}>
             <span style={{ fontWeight: 600 }}>{s.name}</span>
             <span className="num muted">{formatMoney(s.default_price_minor, org)}</span>
           </button>
