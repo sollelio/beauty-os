@@ -1,11 +1,9 @@
 // Slice 05 → Slice 03 handoff: P1 pre-filled from the trip draft; the draft is cleared only after the purchase is
 // recorded; a failed purchase keeps it; the human stock state is never written.
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router'
-import { OrganizationContext } from '../../modules/org/OrganizationContext'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { AppError } from '../../shared/errors'
+import { renderScreen } from '../../test/router'
 import { buildTrip, loadTrip, saveTrip, substitute, toggle } from '../../modules/stock/trip'
 import type { StockProduct } from '../../modules/stock/api'
 
@@ -37,15 +35,9 @@ function seedTrip() {
   t = toggle(t, t.items[1]!.key)                                         // Gel bought; Tinta preta not bought
   saveTrip(org.id, t)
 }
-const renderIt = () => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-    <OrganizationContext.Provider value={org}>
-      <MemoryRouter initialEntries={[{ pathname: '/dinheiro/compra', state: { fromTrip: true } }]}>
-        <Routes><Route path="/dinheiro/compra" element={<PurchaseFlow />} /><Route path="/stock/rever" element={<p>Rever</p>} /></Routes>
-      </MemoryRouter>
-    </OrganizationContext.Provider>
-  </QueryClientProvider>,
-)
+const renderIt = () => renderScreen('/dinheiro/compra', <PurchaseFlow />, {
+  entries: [{ pathname: '/dinheiro/compra', state: { fromTrip: true } }], routes: [{ path: '/stock/rever', element: <p>Rever</p> }],
+})
 async function fillAndConfirm() {
   expect(screen.getByText('Pré-preenchido pela lista de compras. Ajuste as quantidades e introduza o que pagou por cada linha.')).toBeTruthy()
   expect(screen.getByText('2 × garrafão · em vez de Shampoo 5 L')).toBeTruthy()
@@ -53,10 +45,12 @@ async function fillAndConfirm() {
   expect((screen.getByRole('button', { name: 'Continuar' }) as HTMLButtonElement).disabled).toBe(true)   // costs start empty
   for (const [name, cost] of [['Shampoo 3 L', '9000'], ['Gel para unhas', '7500']] as const) {
     fireEvent.click(screen.getByText(name))
-    fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: cost } })
+    fireEvent.change(await screen.findByLabelText('Quanto pagou por estas unidades'), { target: { value: cost } })
     fireEvent.click(screen.getByText('Guardar alteração'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   }
   fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+  await screen.findByText('Quem pagou?')
   fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Duarte' }))
   fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '135790' } })
@@ -73,7 +67,8 @@ describe('purchase from Modo mercado', () => {
     renderIt()
     await fillAndConfirm()
     expect(await screen.findByText('Compra registada com sucesso.')).toBeTruthy()
-    expect(screen.getByText('Stock actualizado: 2 produtos')).toBeTruthy()
+    expect(screen.getByText('Registada no histórico de 2 produtos')).toBeTruthy()
+    expect(screen.queryByText(/Stock actualizado/)).toBeNull()                  // a purchase never changes the stock state
     expect(screen.getByText(/O estado \(OK · Baixo · Comprar\) só muda se alguém o mudar/)).toBeTruthy()
     expect(vi.mocked(recordPurchase).mock.calls[0]![2].lines).toEqual([
       { product_id: 's3', quantity: 2, line_cost_minor: 900000 }, { product_id: 'g', quantity: 3, line_cost_minor: 750000 }])

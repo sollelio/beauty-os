@@ -1,4 +1,5 @@
 // Registar despesa (Slice 03 §4): Que despesa? → Quanto e como? → Confirmação necessária → Sucesso.
+// Steps are history entries; typed data is never dropped without "Descartar?" (useFlow, the mobile back contract).
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -15,15 +16,14 @@ import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
 import { PaymentFields, type PaymentChoice } from '../../shared/ui/PaymentFields'
 import { captureFailure } from '../../shared/periodLock'
-
-type Step = 1 | 2 | 3 | 'done'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { useFlow } from '../../shared/ui/navigation'
 
 export function ExpenseFlow() {
   const org = useOrganization()
   const navigate = useNavigate()
   const command = useVerifiedCommand<RecordExpenseInput, RecordExpenseResult>(recordExpense)
 
-  const [step, setStep] = useState<Step>(1)
   const [category, setCategory] = useState<ExpenseCategory | null>(null)
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<PaymentChoice>('numerario')
@@ -31,7 +31,6 @@ export function ExpenseFlow() {
   const [note, setNote] = useState('')
   const [confirmerId, setConfirmerId] = useState<string | null>(null)
   const [secret, setSecret] = useState('')
-  const [discarding, setDiscarding] = useState(false)
 
   const categories = useQuery({ queryKey: moneyKeys.categories, queryFn: listExpenseCategories })
   const methods = useQuery({ queryKey: servicesKeys.paymentMethods, queryFn: listPaymentMethods })
@@ -56,20 +55,28 @@ export function ExpenseFlow() {
     if (payments) input = { categoryId: category.id, amountMinor, payments, note: note.trim() || null }
   }
 
-  function leaveNow() { command.reset(); setSecret(''); navigate('/') }
-  function requestLeave() { if (hasData) setDiscarding(true); else leaveNow() }
+  const flow = useFlow({ steps: 3, parent: '/', dirty: hasData, reachable: (n) => (n === 2 ? category !== null : input !== null) })
+  const step = flow.step
+
+  function leaveNow() { command.reset(); setSecret(''); flow.leaveTo('/') }
   function confirm() {
     if (!input || !confirmerId || !secret) return
-    command.confirm({ input, confirmerId, secret }, { onSuccess: () => { setSecret(''); setStep('done') } })
+    command.confirm({ input, confirmerId, secret }, { onSuccess: () => { setSecret(''); flow.finish() } })
   }
   function startOver() {
     command.reset()
-    setStep(1); setCategory(null); setAmount(''); setMethod('numerario'); setMixed(['', '']); setNote(''); setConfirmerId(null); setSecret('')
+    setCategory(null); setAmount(''); setMethod('numerario'); setMixed(['', '']); setNote(''); setConfirmerId(null); setSecret('')
+    flow.restart()
   }
 
-  if (step === 'done' && category && command.result && amountMinor) {
+  if (flow.completed && category && command.result && amountMinor) {
     return (
-      <main className="app-main">
+      <AppScreen actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>
+          <button className="btn btn-secondary" onClick={startOver}>Registar outra despesa</button>
+        </BottomActionBar>
+      }>
         <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
           <span aria-hidden className="success-mark">✓</span>
           <h2>Despesa registada com sucesso.</h2>
@@ -77,35 +84,44 @@ export function ExpenseFlow() {
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(command.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/expense/${command.result!.expense_id}`)}>Corrigir este registo</button>
         </div>
-        <div className="footer">
-          <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>
-          <button className="btn btn-secondary" onClick={startOver}>Registar outra despesa</button>
-        </div>
-      </main>
+      </AppScreen>
     )
   }
 
-  const stepNo = step === 'done' ? 3 : step
   const err = command.status === 'error' ? command.error : null
+  const footer = step === 2 && category ? (
+    <BottomActionBar>
+      <span className="muted num" style={{ textAlign: 'center' }}>
+        {amountMinor ? `${category.label} · ${formatMoney(amountMinor, org)} · ${methodText}` : 'Indique o valor para continuar.'}
+      </span>
+      <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
+    </BottomActionBar>
+  ) : step === 3 && category && input ? (
+    <BottomActionBar>
+      {err?.kind === 'network' ? (
+        <>
+          <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
+          <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
+        </>
+      ) : (
+        <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!confirmerId || !secret || command.status === 'pending'}>
+          {command.status === 'pending' ? 'A confirmar…' : 'Confirmar despesa'}
+        </button>
+      )}
+    </BottomActionBar>
+  ) : undefined
+
   return (
-    <main className="app-main">
-      <header className="flow-header">
-        <div className="flow-header-row">
-          {stepNo === 1
-            ? <button className="icon-btn" aria-label="Fechar" onClick={requestLeave}>×</button>
-            : <button className="icon-btn" aria-label="Voltar" onClick={() => setStep((stepNo - 1) as Step)}>←</button>}
-          <span className="muted" style={{ fontWeight: 600 }}>Despesa</span>
-          <span className="label num" style={{ width: '2.75rem', textAlign: 'right' }}>{stepNo} / 3</span>
-        </div>
-        <div className="progress" aria-hidden>{[1, 2, 3].map((n) => <span key={n} className={n <= stepNo ? 'on' : ''} />)}</div>
-      </header>
+    <AppScreen
+      bar={<AppBar title="Despesa" leading={step === 1 ? 'close' : 'back'} onLeading={step === 1 ? flow.exit : () => flow.goTo(step - 1)} step={{ current: step, total: 3 }} />}
+      actions={footer}>
 
       {step === 1 && (
         <section className="stack">
           <h2>Que despesa?</h2>
           <div className="tiles">
             {categories.data?.map((c) => (
-              <button key={c.id} className="tile" style={{ minHeight: '6.5rem' }} onClick={() => { setCategory(c); setStep(2) }}>
+              <button key={c.id} className="tile" style={{ minHeight: '6.5rem' }} onClick={() => { setCategory(c); flow.goTo(2) }}>
                 <strong>{c.label}</strong>
                 {c.hint && <span className="muted" style={{ fontSize: '0.875rem' }}>{c.hint}</span>}
               </button>
@@ -118,7 +134,7 @@ export function ExpenseFlow() {
         <>
           <section className="stack" style={{ gap: '1rem' }}>
             <h2>Quanto e como?</h2>
-            <div><button className="chip" onClick={() => setStep(1)} aria-label={`Mudar despesa: ${category.label}`}>{category.label} ✎</button></div>
+            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar despesa: ${category.label}`}>{category.label} ✎</button></div>
             <div className="stack" style={{ gap: '0.375rem' }}>
               <span className="label">Valor pago</span>
               <AmountField label="Valor pago" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
@@ -130,12 +146,6 @@ export function ExpenseFlow() {
               <label className="field"><input aria-label="Nota (opcional)" maxLength={60} value={note} onChange={(e) => setNote(e.target.value)} /></label>
             </div>
           </section>
-          <div className="footer">
-            <span className="muted num" style={{ textAlign: 'center' }}>
-              {amountMinor ? `${category.label} · ${formatMoney(amountMinor, org)} · ${methodText}` : 'Indique o valor para continuar.'}
-            </span>
-            <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => setStep(3)}>Continuar</button>
-          </div>
         </>
       )}
 
@@ -156,22 +166,10 @@ export function ExpenseFlow() {
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
             {err && err.kind !== 'network' && !(err.code && VERIFY_MESSAGES[err.code]) && <div className="notice notice-error" role="alert">{captureFailure(err, 'Não foi possível guardar esta despesa.')}</div>}
           </section>
-          <div className="footer">
-            {err?.kind === 'network' ? (
-              <>
-                <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
-                <button className="btn btn-secondary" onClick={() => setDiscarding(true)}>Sair sem guardar</button>
-              </>
-            ) : (
-              <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!confirmerId || !secret || command.status === 'pending'}>
-                {command.status === 'pending' ? 'A confirmar…' : 'Confirmar despesa'}
-              </button>
-            )}
-          </div>
         </>
       )}
 
-      {discarding && <DiscardSheet title="Descartar esta despesa?" onDiscard={leaveNow} onKeep={() => setDiscarding(false)} />}
-    </main>
+      <DiscardSheet open={flow.discard.open} title="Descartar esta despesa?" onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+    </AppScreen>
   )
 }

@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router'
-import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import { AppError } from '../../shared/errors'
+import { fromHoje, renderScreen } from '../../test/router'
 
 vi.mock('../../modules/services/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/services/api')>()),
@@ -20,12 +19,8 @@ import { verifyPerson } from '../../modules/org/api'
 import { recordAdvance } from '../../modules/team/api'
 import { AdvanceFlow } from './AdvanceFlow'
 
-const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
-const renderFlow = () => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-    <OrganizationContext.Provider value={org}><MemoryRouter><AdvanceFlow /></MemoryRouter></OrganizationContext.Provider>
-  </QueryClientProvider>,
-)
+const PATH = '/equipa/adiantamento'
+const renderFlow = (opts?: Parameters<typeof renderScreen>[2]) => renderScreen(PATH, <AdvanceFlow />, opts)
 
 describe('AdvanceFlow', () => {
   it('blocks Continuar until an amount is entered (E1)', async () => {
@@ -73,6 +68,46 @@ describe('AdvanceFlow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
     await waitFor(() => expect(screen.getByText('Descartar este adiantamento?')).toBeTruthy())
     expect(screen.getByText('Nada foi registado.')).toBeTruthy()
+  })
+
+  it('Android back keeps the typed data: step 2 → 1 and forward again, nothing lost', async () => {
+    const { router } = renderFlow(fromHoje(PATH))
+    fireEvent.click(await screen.findByText('Ana'))
+    fireEvent.change(screen.getByLabelText('Valor entregue'), { target: { value: '5000' } })
+    fireEvent.change(screen.getByLabelText('Nota (opcional)'), { target: { value: 'táxi' } })
+    await act(() => router.navigate(-1))
+    expect(await screen.findByText('Adiantamento para quem?')).toBeTruthy()
+    await act(() => router.navigate(1))
+    expect((await screen.findByLabelText('Valor entregue') as HTMLInputElement).value).toBe('5.000')
+    expect((screen.getByLabelText('Nota (opcional)') as HTMLInputElement).value).toBe('táxi')
+  })
+
+  it('Android back out of the flow with typed data asks first; Continuar a editar stays, Descartar leaves', async () => {
+    const { router } = renderFlow(fromHoje(PATH))
+    fireEvent.click(await screen.findByText('Ana'))
+    fireEvent.change(screen.getByLabelText('Valor entregue'), { target: { value: '5000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
+    expect(await screen.findByText('Confirmação necessária')).toBeTruthy()
+    await act(() => router.navigate(-3))                                    // straight out of the flow, from step 3
+    const sheet = await screen.findByRole('dialog', { name: 'Descartar este adiantamento?' })
+    expect(sheet.getAttribute('aria-modal')).toBe('true')
+    expect(document.activeElement?.textContent).toBe('Continuar a editar')  // the safe action has focus
+    expect(router.state.location.pathname).toBe(PATH)
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar a editar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByText('Confirmação necessária')).toBeTruthy()          // still on step 3, data intact
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }))  // app-bar × on step 1
+    fireEvent.click(await screen.findByRole('button', { name: 'Descartar' }))
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
+  })
+
+  it('leaving without typed data does not ask', async () => {
+    renderFlow(fromHoje(PATH))
+    await screen.findByText('Ana')
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
   })
 })
 

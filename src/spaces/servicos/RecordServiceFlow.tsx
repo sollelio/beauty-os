@@ -1,4 +1,5 @@
 // Registar serviço (Slice 01 §4): Quem fez o serviço? → Que serviço? → Valor e pagamento → Sucesso.
+// Steps are history entries and a typed value is never dropped silently (useFlow, the mobile back contract).
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -13,8 +14,10 @@ import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { useFlow } from '../../shared/ui/navigation'
 
-type Step = 1 | 2 | 3 | 'done'
 type Method = 'numerario' | 'transferencia' | 'mixed'
 
 export function RecordServiceFlow() {
@@ -22,7 +25,6 @@ export function RecordServiceFlow() {
   const navigate = useNavigate()
   const record = useRecordService()
 
-  const [step, setStep] = useState<Step>(1)
   const [person, setPerson] = useState<CapturePerson | null>(null)
   const [service, setService] = useState<CatalogueService | null>(null)
   const [editing, setEditing] = useState(false)
@@ -56,26 +58,37 @@ export function RecordServiceFlow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [person, service, valueMinor, check.valid, method, mixed[0], mixed[1], methods.data])
 
+  // a typed value or mixed amounts are worth a "discard?"; picking a person or a service alone is not
+  const dirty = (editing && priceDigits !== '') || mixed[0] !== '' || mixed[1] !== ''
+  const flow = useFlow({ steps: 3, parent: '/', dirty, reachable: (n) => (n === 2 ? person !== null : person !== null && service !== null) })
+  const step = flow.step
+
   function confirm() {
     if (!input) return
-    record.submit(input, { onSuccess: () => setStep('done') })
+    record.submit(input, { onSuccess: () => flow.finish() })
   }
 
   function startOver() {
     record.reset()
-    setStep(1); setPerson(null); setService(null); setEditing(false); setPriceDigits('')
+    setPerson(null); setService(null); setEditing(false); setPriceDigits('')
     setMethod('numerario'); setMixed(['', ''])
+    flow.restart()
   }
 
   function leave() {
     record.reset()
-    navigate('/')
+    flow.leaveTo('/')
   }
 
-  if (step === 'done' && person && service && record.result) {
+  if (flow.completed && person && service && record.result) {
     const methodText = method === 'mixed' ? 'Misto' : methods.data?.find((m) => m.code === method)?.label
     return (
-      <main className="app-main">
+      <AppScreen actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>
+          <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
+        </BottomActionBar>
+      }>
         <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
           <span aria-hidden className="success-mark">✓</span>
           <h2>Serviço registado com sucesso.</h2>
@@ -83,27 +96,31 @@ export function RecordServiceFlow() {
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/service/${record.result!.record_id}`)}>Corrigir este registo</button>
         </div>
-        <div className="footer">
-          <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>
-          <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
-        </div>
-      </main>
+      </AppScreen>
     )
   }
 
-  const stepNo = step === 'done' ? 3 : step
+  const footer = step === 3 && person && service && (
+    <BottomActionBar>
+      <span className="muted num" style={{ textAlign: 'center' }}>
+        {service.name} · {person.display_name} · {valueMinor !== null ? formatMoney(valueMinor, org) : '—'}
+      </span>
+      {record.status === 'error' ? (
+        <>
+          <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input}>Tentar novamente</button>
+          <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
+        </>
+      ) : (
+        <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input || record.status === 'pending'}>
+          {record.status === 'pending' ? 'A guardar…' : 'Confirmar serviço'}
+        </button>
+      )}
+    </BottomActionBar>
+  )
   return (
-    <main className="app-main">
-      <header className="flow-header">
-        <div className="flow-header-row">
-          {stepNo === 1
-            ? <button className="icon-btn" aria-label="Fechar" onClick={leave}>×</button>
-            : <button className="icon-btn" aria-label="Voltar" onClick={() => setStep((stepNo - 1) as Step)}>←</button>}
-          <span className="muted" style={{ fontWeight: 600 }}>Registar serviço</span>
-          <span className="label num" style={{ width: '2.75rem', textAlign: 'right' }}>{stepNo} / 3</span>
-        </div>
-        <div className="progress" aria-hidden>{[1, 2, 3].map((n) => <span key={n} className={n <= stepNo ? 'on' : ''} />)}</div>
-      </header>
+    <AppScreen
+      bar={<AppBar title="Registar serviço" leading={step === 1 ? 'close' : 'back'} onLeading={step === 1 ? flow.exit : () => flow.goTo(step - 1)} step={{ current: step, total: 3 }} />}
+      actions={footer || undefined}>
 
       {step === 1 && (
         <section className="stack">
@@ -111,7 +128,7 @@ export function RecordServiceFlow() {
           {people.isError && <div className="notice notice-error" role="alert">Não foi possível carregar a equipa.</div>}
           <div className="tiles">
             {people.data?.map((p) => (
-              <button key={p.id} className="tile" onClick={() => { setPerson(p); setService(null); setStep(2) }}>
+              <button key={p.id} className="tile" onClick={() => { setPerson(p); setService(null); flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
                 <span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span>
               </button>
@@ -121,8 +138,8 @@ export function RecordServiceFlow() {
       )}
 
       {step === 2 && person && (
-        <ServiceStep person={person} onChangePerson={() => setStep(1)}
-          onPick={(s) => { setService(s); setEditing(false); setPriceDigits(''); setStep(3) }} />
+        <ServiceStep person={person} onChangePerson={() => flow.goTo(1)}
+          onPick={(s) => { setService(s); setEditing(false); setPriceDigits(''); flow.goTo(3) }} />
       )}
 
       {step === 3 && person && service && (
@@ -186,25 +203,10 @@ export function RecordServiceFlow() {
                 : captureFailure(record.error, 'Não foi possível guardar este registo.')}
             </div>
           )}
-
-          <div className="footer">
-            <span className="muted num" style={{ textAlign: 'center' }}>
-              {service.name} · {person.display_name} · {valueMinor !== null ? formatMoney(valueMinor, org) : '—'}
-            </span>
-            {record.status === 'error' ? (
-              <>
-                <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input}>Tentar novamente</button>
-                <button className="btn btn-secondary" onClick={leave}>Sair sem guardar</button>
-              </>
-            ) : (
-              <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input || record.status === 'pending'}>
-                {record.status === 'pending' ? 'A guardar…' : 'Confirmar serviço'}
-              </button>
-            )}
-          </div>
         </>
       )}
-    </main>
+      <DiscardSheet open={flow.discard.open} title="Descartar este serviço?" onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+    </AppScreen>
   )
 }
 

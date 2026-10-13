@@ -1,9 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router'
-import { OrganizationContext } from '../../modules/org/OrganizationContext'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { AppError } from '../../shared/errors'
+import { fromHoje, renderScreen } from '../../test/router'
 
 vi.mock('../../modules/services/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/services/api')>()),
@@ -36,12 +34,9 @@ import { recordPurchase } from '../../modules/purchasing/api'
 import { ExpenseFlow } from './ExpenseFlow'
 import { PurchaseFlow } from './PurchaseFlow'
 
-const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
-const renderIt = (el: React.ReactNode) => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-    <OrganizationContext.Provider value={org}><MemoryRouter>{el}</MemoryRouter></OrganizationContext.Provider>
-  </QueryClientProvider>,
-)
+const EXPENSE = '/dinheiro/despesa', PURCHASE = '/dinheiro/compra'
+const renderExpense = (opts?: Parameters<typeof renderScreen>[2]) => renderScreen(EXPENSE, <ExpenseFlow />, opts)
+const renderPurchase = (opts?: Parameters<typeof renderScreen>[2]) => renderScreen(PURCHASE, <PurchaseFlow />, opts)
 const button = (name: string) => screen.getByRole('button', { name }) as HTMLButtonElement
 async function confirmWith() {
   fireEvent.click(await screen.findByRole('button', { name: 'Duarte' }))
@@ -52,7 +47,7 @@ beforeEach(() => { vi.mocked(verifyPerson).mockClear() })
 
 describe('ExpenseFlow', () => {
   it('blocks Continuar without a value (E1) and while Misto does not add up (E6)', async () => {
-    renderIt(<ExpenseFlow />)
+    renderExpense()
     fireEvent.click(await screen.findByText('Electricidade'))
     expect(button('Continuar').disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
@@ -70,7 +65,7 @@ describe('ExpenseFlow', () => {
     vi.mocked(recordExpense).mockReset()
       .mockRejectedValueOnce(new AppError('network', 'Failed to fetch'))
       .mockResolvedValueOnce({ expense_id: 'e1', occurred_at: new Date().toISOString(), confirmed_by_person_id: 'c1' })
-    renderIt(<ExpenseFlow />)
+    renderExpense()
     fireEvent.click(await screen.findByText('Electricidade'))
     fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
     fireEvent.click(button('Continuar'))
@@ -100,7 +95,7 @@ describe('PurchaseFlow', () => {
   }
 
   it('blocks Continuar with no products (E2), then sums lines', async () => {
-    renderIt(<PurchaseFlow />)
+    renderPurchase()
     expect(button('Continuar').disabled).toBe(true)
     await addShampoo('14000')
     expect(screen.getByText('Total 14.000 Kz')).toBeTruthy()
@@ -112,7 +107,7 @@ describe('PurchaseFlow', () => {
     vi.mocked(recordPurchase).mockReset()
       .mockRejectedValueOnce(new AppError('network', 'Failed to fetch'))
       .mockResolvedValueOnce({ purchase_id: 'pu1', occurred_at: new Date().toISOString(), total_minor: 1400000, line_count: 1, new_product_count: 0, salon_amount_minor: 0, contributors: [{ person_id: 'n1', display_name: 'Nádia', amount_minor: 1400000 }], confirmed_by_person_id: 'c1' })
-    renderIt(<PurchaseFlow />)
+    renderPurchase()
     await addShampoo('14000')
     fireEvent.click(button('Continuar'))
     expect(screen.getByText('o resto, automático')).toBeTruthy()
@@ -132,7 +127,8 @@ describe('PurchaseFlow', () => {
     fireEvent.click(button('Tentar novamente'))
     await screen.findByText('Compra registada com sucesso.')
     expect(screen.getByRole('button', { name: 'Corrigir este registo' })).toBeTruthy()
-    expect(screen.getByText('Stock actualizado: 1 produto')).toBeTruthy()
+    expect(screen.getByText('Registada no histórico de 1 produto')).toBeTruthy()
+    expect(screen.queryByText(/Stock actualizado/)).toBeNull()
     expect(screen.getByText(/pago por Nádia/)).toBeTruthy()
     const calls = vi.mocked(recordPurchase).mock.calls
     expect(calls[0]![0]).toBe(calls[1]![0])
@@ -144,10 +140,179 @@ describe('PurchaseFlow', () => {
   })
 })
 
+describe('ExpenseFlow back/history contract', () => {
+  it('Android back with a typed amount asks before leaving; Continuar a editar keeps the amount', async () => {
+    const { router } = renderExpense(fromHoje(EXPENSE))
+    fireEvent.click(await screen.findByText('Electricidade'))
+    fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
+    await act(() => router.navigate(-1))                                     // step 2 → 1: no question, data kept
+    expect(await screen.findByText('Que despesa?')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await act(() => router.navigate(-1))                                     // out of the flow
+    expect(await screen.findByRole('dialog', { name: 'Descartar esta despesa?' })).toBeTruthy()
+    fireEvent.click(button('Continuar a editar'))
+    await act(() => router.navigate(1))
+    expect((await screen.findByLabelText('Valor pago') as HTMLInputElement).value).toBe('9.000')
+  })
+
+  it('opened by a deep link: × with no data falls back to Hoje by replacement', async () => {
+    const { router } = renderExpense()
+    await screen.findByText('Electricidade')
+    fireEvent.click(button('Fechar'))
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
+    expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('after saving, back does not reopen the submitted form', async () => {
+    vi.mocked(recordExpense).mockReset().mockResolvedValueOnce({ expense_id: 'e1', occurred_at: new Date().toISOString(), confirmed_by_person_id: 'c1' })
+    const { router } = renderExpense(fromHoje(EXPENSE))
+    fireEvent.click(await screen.findByText('Electricidade'))
+    fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
+    fireEvent.click(button('Continuar'))
+    await confirmWith()
+    fireEvent.click(button('Confirmar despesa'))
+    await screen.findByText('Despesa registada com sucesso.')
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+    fireEvent.click(button('Voltar a Hoje'))                                 // pops back to the Hoje entry
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
+    expect(router.state.historyAction).toBe('POP')
+    await act(() => router.navigate(1))                                      // even forward lands on a fresh flow
+    expect(await screen.findByText('Que despesa?')).toBeTruthy()
+    expect(screen.queryByText('Confirmação necessária')).toBeNull()
+  })
+})
+
+describe('PurchaseFlow back/history contract', () => {
+  async function addLine(cost: string) {
+    fireEvent.click(button('+ Produto'))
+    fireEvent.click(await screen.findByText('Shampoo 5 L'))
+    fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: cost } })
+    fireEvent.click(button('Adicionar à compra'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  }
+
+  it('Android back closes the open sheet first and stays on the purchase', async () => {
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    fireEvent.click(await screen.findByRole('button', { name: '+ Produto' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Adicionar produto' })
+    expect(sheet.getAttribute('aria-modal')).toBe('true')
+    expect(document.activeElement).toBe(screen.getByLabelText('Procurar ou escrever produto'))
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe(PURCHASE)
+    expect(screen.getByText('O que comprou?')).toBeTruthy()
+  })
+
+  // Line sheet (J4): a half-typed line is a draft — back never drops it silently, and never leaves Compra.
+  async function openShampooLine() {
+    fireEvent.click(await screen.findByRole('button', { name: '+ Produto' }))
+    fireEvent.click(await screen.findByText('Shampoo 5 L'))
+    return screen.findByRole('dialog', { name: 'Shampoo 5 L' })
+  }
+  const cost = () => (screen.getByLabelText('Quanto pagou por estas unidades') as HTMLInputElement).value
+
+  it('line sheet, nothing typed: back closes it normally and stays on Compra', async () => {
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    await openShampooLine()
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe(PURCHASE)
+    expect(screen.getByText('O que comprou?')).toBeTruthy()
+  })
+
+  it('line sheet with a typed draft: back asks; Continuar a editar keeps the draft; backdrop and Escape do nothing', async () => {
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    await openShampooLine()
+    fireEvent.click(button('Mais'))
+    fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: '7000' } })
+    fireEvent.click(document.querySelector('.sheet') as HTMLElement)               // backdrop: not dismissed
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Shampoo 5 L' }), { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: 'Shampoo 5 L' })).toBeTruthy()
+    await act(() => router.navigate(-1))                                            // Android back
+    const ask = await screen.findByRole('dialog', { name: 'Descartar este produto?' })
+    expect(within(ask).getByText('Não é adicionado à compra.')).toBeTruthy()
+    expect(document.activeElement?.textContent).toBe('Continuar a editar')
+    expect(router.state.location.pathname).toBe(PURCHASE)
+    expect(screen.queryByRole('dialog', { name: 'Descartar esta compra?' })).toBeNull()
+    fireEvent.click(button('Continuar a editar'))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Descartar este produto?' })).toBeNull())
+    expect(screen.getByRole('dialog', { name: 'Shampoo 5 L' })).toBeTruthy()       // the line sheet is still the active layer
+    expect(cost()).toBe('7.000')
+    expect(screen.getByText('2 garrafão')).toBeTruthy()
+    fireEvent.click(button('Adicionar à compra'))                                   // saving is not a discard: no question
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByText('Total 7.000 Kz')).toBeTruthy()
+  })
+
+  it('Descartar drops only that unsaved line: the sheet closes, already-added lines and the flow stay', async () => {
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    await addLine('7000')                                                           // one line already in the purchase
+    fireEvent.click(screen.getByText('Shampoo 5 L'))                                // edit it…
+    fireEvent.change(await screen.findByLabelText('Quanto pagou por estas unidades'), { target: { value: '9900' } })
+    await act(() => router.navigate(-1))
+    expect(await screen.findByRole('dialog', { name: 'Descartar as alterações?' })).toBeTruthy()
+    fireEvent.click(button('Descartar'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe(PURCHASE)                           // still in Compra, step 1
+    expect(screen.getByText('O que comprou?')).toBeTruthy()
+    expect(screen.getByText('Total 7.000 Kz')).toBeTruthy()                          // the line as it was, not 9.900
+  })
+
+  it('the line sheet ← with a typed draft asks the same question; Descartar returns to the search', async () => {
+    renderPurchase(fromHoje(PURCHASE))
+    await openShampooLine()
+    fireEvent.change(screen.getByLabelText('Quanto pagou por estas unidades'), { target: { value: '7000' } })
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Shampoo 5 L' })).getByRole('button', { name: 'Voltar' }))
+    expect(await screen.findByRole('dialog', { name: 'Descartar este produto?' })).toBeTruthy()
+    fireEvent.click(button('Continuar a editar'))
+    expect(cost()).toBe('7.000')
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Shampoo 5 L' })).getByRole('button', { name: 'Voltar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Descartar' }))
+    expect(await screen.findByRole('dialog', { name: 'Adicionar produto' })).toBeTruthy()
+    expect(screen.getByText('Ainda não há produtos nesta compra.')).toBeTruthy()
+  })
+
+  it('lines survive step-back; leaving with lines asks first (Descartar is the destructive choice)', async () => {
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    await addLine('7000')
+    fireEvent.click(button('Continuar'))
+    expect(await screen.findByText('Quem pagou?')).toBeTruthy()
+    await act(() => router.navigate(-1))
+    expect(await screen.findByText('O que comprou?')).toBeTruthy()
+    expect(screen.getByText('Total 7.000 Kz')).toBeTruthy()
+    fireEvent.click(button('Fechar'))
+    expect(await screen.findByRole('dialog', { name: 'Descartar esta compra?' })).toBeTruthy()
+    expect(button('Descartar').className).toContain('btn-destructive')
+    fireEvent.click(button('Continuar a editar'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByText('Total 7.000 Kz')).toBeTruthy()
+    await act(() => router.navigate(-1))
+    fireEvent.click(await screen.findByRole('button', { name: 'Descartar' }))
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
+  })
+
+  it('after saving, the step entries are gone: back from success goes to Hoje', async () => {
+    vi.mocked(recordPurchase).mockReset().mockResolvedValueOnce({ purchase_id: 'pu1', occurred_at: new Date().toISOString(), total_minor: 700000, line_count: 1, new_product_count: 0, salon_amount_minor: 700000, contributors: [], confirmed_by_person_id: 'c1' })
+    const { router } = renderPurchase(fromHoje(PURCHASE))
+    await addLine('7000')
+    fireEvent.click(button('Continuar'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continuar' }))
+    await confirmWith()
+    fireEvent.click(button('Confirmar compra'))
+    await screen.findByText('Compra registada com sucesso.')
+    expect(screen.queryByText(/Stock actualizado/)).toBeNull()
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+    await act(() => router.navigate(-1))
+    expect(await screen.findByText('Ecrã Hoje')).toBeTruthy()
+  })
+})
+
 describe('period locks (Slice 06 decisions)', () => {
   it('an expense in an approved period is refused with the reason, not a generic error', async () => {
     vi.mocked(recordExpense).mockReset().mockRejectedValue(new AppError('domain', 'PERIOD_APPROVED', 'PERIOD_APPROVED'))
-    renderIt(<ExpenseFlow />)
+    renderExpense()
     fireEvent.click(await screen.findByText('Electricidade'))
     fireEvent.change(screen.getByLabelText('Valor pago'), { target: { value: '9000' } })
     fireEvent.click(button('Continuar'))

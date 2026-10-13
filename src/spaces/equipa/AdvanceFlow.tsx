@@ -1,5 +1,6 @@
 // Adiantamento (Slice 02 §4): para quem? → Quanto e como? → Confirmação necessária → Sucesso.
 // Only the movement's own facts are shown; no earned value, payable or balance (05 §4).
+// Steps are history entries; typed data is never dropped without "Descartar?" (useFlow, the mobile back contract).
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -14,8 +15,9 @@ import type { RecordAdvanceInput } from '../../modules/team/api'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
 import { formatTime } from '../../shared/time'
 import { captureFailure } from '../../shared/periodLock'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { useFlow } from '../../shared/ui/navigation'
 
-type Step = 1 | 2 | 3 | 'done'
 type Method = 'numerario' | 'transferencia'
 
 export function AdvanceFlow() {
@@ -23,14 +25,12 @@ export function AdvanceFlow() {
   const navigate = useNavigate()
   const advance = useRecordAdvance()
 
-  const [step, setStep] = useState<Step>(1)
   const [person, setPerson] = useState<CapturePerson | null>(null)
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<Method>('numerario')
   const [note, setNote] = useState('')
   const [confirmerId, setConfirmerId] = useState<string | null>(null)
   const [secret, setSecret] = useState('')
-  const [discarding, setDiscarding] = useState(false)
 
   const people = useQuery({ queryKey: servicesKeys.people, queryFn: listCapturePeople })
   const methods = useQuery({ queryKey: servicesKeys.paymentMethods, queryFn: listPaymentMethods })
@@ -44,26 +44,31 @@ export function AdvanceFlow() {
       ? { personId: person.id, amountMinor, paymentMethodId: methodRow.id, note: note.trim() || null }
       : null
 
+  const flow = useFlow({ steps: 3, parent: '/', dirty: hasData, reachable: (n) => (n === 2 ? person !== null : input !== null) })
+  const step = flow.step
+
   function leaveNow() {
     advance.reset(); setSecret('')
-    navigate('/')
-  }
-  function requestLeave() {
-    if (hasData) setDiscarding(true)
-    else leaveNow()
+    flow.leaveTo('/')
   }
   function confirm() {
     if (!input || !confirmerId || !secret) return
-    advance.confirm({ input, confirmerId, secret }, { onSuccess: () => { setSecret(''); setStep('done') } })
+    advance.confirm({ input, confirmerId, secret }, { onSuccess: () => { setSecret(''); flow.finish() } })
   }
   function startOver() {
     advance.reset()
-    setStep(1); setPerson(null); setAmount(''); setMethod('numerario'); setNote(''); setConfirmerId(null); setSecret('')
+    setPerson(null); setAmount(''); setMethod('numerario'); setNote(''); setConfirmerId(null); setSecret('')
+    flow.restart()
   }
 
-  if (step === 'done' && person && advance.result && amountMinor) {
+  if (flow.completed && person && advance.result && amountMinor) {
     return (
-      <main className="app-main">
+      <AppScreen actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>
+          <button className="btn btn-secondary" onClick={startOver}>Registar outro adiantamento</button>
+        </BottomActionBar>
+      }>
         <div className="stack center" style={{ marginTop: '3rem', gap: '0.75rem' }}>
           <span aria-hidden className="success-mark">✓</span>
           <h2>Adiantamento registado com sucesso.</h2>
@@ -71,37 +76,46 @@ export function AdvanceFlow() {
           <p className="muted num" style={{ margin: 0 }}>Hoje às {formatTime(advance.result.occurred_at, org.timezone)}</p>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/advance/${advance.result!.advance_id}`)}>Corrigir este registo</button>
         </div>
-        <div className="footer">
-          <button className="btn btn-primary btn-tall" onClick={leaveNow}>Voltar a Hoje</button>
-          <button className="btn btn-secondary" onClick={startOver}>Registar outro adiantamento</button>
-        </div>
-      </main>
+      </AppScreen>
     )
   }
 
-  const stepNo = step === 'done' ? 3 : step
   const verifyError = advance.status === 'error' && advance.error?.kind === 'domain' ? (advance.error.code && VERIFY_MESSAGES[advance.error.code]) : null
   const otherDomainError = advance.status === 'error' && advance.error?.kind !== 'network' && !verifyError
 
+  const footer = step === 2 && person ? (
+    <BottomActionBar>
+      <span className="muted num" style={{ textAlign: 'center' }}>
+        {amountMinor ? `Para ${person.display_name} · ${formatMoney(amountMinor, org)} · ${methodRow?.label ?? ''}` : 'Indique o valor para continuar.'}
+      </span>
+      <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
+    </BottomActionBar>
+  ) : step === 3 && input ? (
+    <BottomActionBar>
+      {advance.status === 'error' && advance.error?.kind === 'network' ? (
+        <>
+          <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
+          <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
+        </>
+      ) : (
+        <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!confirmerId || !secret || advance.status === 'pending'}>
+          {advance.status === 'pending' ? 'A confirmar…' : 'Confirmar adiantamento'}
+        </button>
+      )}
+    </BottomActionBar>
+  ) : undefined
+
   return (
-    <main className="app-main">
-      <header className="flow-header">
-        <div className="flow-header-row">
-          {stepNo === 1
-            ? <button className="icon-btn" aria-label="Fechar" onClick={requestLeave}>×</button>
-            : <button className="icon-btn" aria-label="Voltar" onClick={() => setStep((stepNo - 1) as Step)}>←</button>}
-          <span className="muted" style={{ fontWeight: 600 }}>Adiantamento</span>
-          <span className="label num" style={{ width: '2.75rem', textAlign: 'right' }}>{stepNo} / 3</span>
-        </div>
-        <div className="progress" aria-hidden>{[1, 2, 3].map((n) => <span key={n} className={n <= stepNo ? 'on' : ''} />)}</div>
-      </header>
+    <AppScreen
+      bar={<AppBar title="Adiantamento" leading={step === 1 ? 'close' : 'back'} onLeading={step === 1 ? flow.exit : () => flow.goTo(step - 1)} step={{ current: step, total: 3 }} />}
+      actions={footer}>
 
       {step === 1 && (
         <section className="stack">
           <h2>Adiantamento para quem?</h2>
           <div className="tiles">
             {people.data?.map((p) => (
-              <button key={p.id} className="tile" onClick={() => { setPerson(p); setStep(2) }}>
+              <button key={p.id} className="tile" onClick={() => { setPerson(p); flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
                 <span className="muted" style={{ fontSize: '0.875rem' }}>{p.capabilities.join(' · ')}</span>
               </button>
@@ -117,7 +131,7 @@ export function AdvanceFlow() {
         <>
           <section className="stack" style={{ gap: '1rem' }}>
             <h2>Quanto e como?</h2>
-            <div><button className="chip" onClick={() => setStep(1)} aria-label={`Mudar pessoa: ${person.display_name}`}>{person.display_name} ✎</button></div>
+            <div><button className="chip" onClick={() => flow.goTo(1)} aria-label={`Mudar pessoa: ${person.display_name}`}>{person.display_name} ✎</button></div>
             <div className="stack" style={{ gap: '0.375rem' }}>
               <span className="label">Valor entregue</span>
               <AmountField label="Valor entregue" value={amount} onChange={setAmount} symbol={org.currency_symbol} />
@@ -138,12 +152,6 @@ export function AdvanceFlow() {
               </label>
             </div>
           </section>
-          <div className="footer">
-            <span className="muted num" style={{ textAlign: 'center' }}>
-              {amountMinor ? `Para ${person.display_name} · ${formatMoney(amountMinor, org)} · ${methodRow?.label ?? ''}` : 'Indique o valor para continuar.'}
-            </span>
-            <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => setStep(3)}>Continuar</button>
-          </div>
         </>
       )}
 
@@ -169,22 +177,10 @@ export function AdvanceFlow() {
             )}
             {otherDomainError && <div className="notice notice-error" role="alert">{captureFailure(advance.error, 'Não foi possível guardar este adiantamento.')}</div>}
           </section>
-          <div className="footer">
-            {advance.status === 'error' && advance.error?.kind === 'network' ? (
-              <>
-                <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
-                <button className="btn btn-secondary" onClick={() => setDiscarding(true)}>Sair sem guardar</button>
-              </>
-            ) : (
-              <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!confirmerId || !secret || advance.status === 'pending'}>
-                {advance.status === 'pending' ? 'A confirmar…' : 'Confirmar adiantamento'}
-              </button>
-            )}
-          </div>
         </>
       )}
 
-      {discarding && <DiscardSheet title="Descartar este adiantamento?" onDiscard={leaveNow} onKeep={() => setDiscarding(false)} />}
-    </main>
+      <DiscardSheet open={flow.discard.open} title="Descartar este adiantamento?" onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+    </AppScreen>
   )
 }

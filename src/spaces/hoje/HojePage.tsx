@@ -1,13 +1,18 @@
 // Hoje (Slice 01 §3): primary action, salon-level count line, recent records. No money totals, no per-person totals.
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
 import { countMarkedToBuy, stockKeys } from '../../modules/stock/api'
 import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
 import { formatTime, formatToday } from '../../shared/time'
+import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { useSheet } from '../../shared/ui/navigation'
+
+// Capture flows opened from here go back here (history) when they finish or close (useFlow.leaveTo).
+const FROM_HOJE = { from: '/' }
 
 // Small stroke icons for the Hoje actions (no icon library in the app; currentColor, decorative only).
 const icon = (paths: ReactNode) => (
@@ -38,8 +43,7 @@ export function HojePage() {
   const org = useOrganization()
   const summary = useQuery({ queryKey: servicesKeys.hoje, queryFn: getHojeSummary })
   const toBuy = useQuery({ queryKey: stockKeys.toBuy, queryFn: countMarkedToBuy })
-  const [choosing, setChoosing] = useState(false)
-  const navigate = useNavigate()
+  const chooser = useSheet<true>()
 
   return (
     <main className="app-main">
@@ -48,12 +52,12 @@ export function HojePage() {
         <h1>Hoje</h1>
       </header>
 
-      <Link to="/servicos/registar" className="btn btn-primary hoje-cta">
+      <Link to="/servicos/registar" state={FROM_HOJE} className="btn btn-primary hoje-cta">
         {icons.plus}Registar serviço
       </Link>
       <nav className="action-card" aria-label="Outras ações">
-        <Link to="/equipa/adiantamento" className="action-row"><ActionContent glyph={icons.advance} label="Adiantamento" /></Link>
-        <button className="action-row" onClick={() => setChoosing(true)}><ActionContent glyph={icons.expense} label="Despesa ou compra" /></button>
+        <Link to="/equipa/adiantamento" state={FROM_HOJE} className="action-row"><ActionContent glyph={icons.advance} label="Adiantamento" /></Link>
+        <button className="action-row" onClick={() => chooser.open(true)}><ActionContent glyph={icons.expense} label="Despesa ou compra" /></button>
         <Link to="/stock" className="action-row"><ActionContent glyph={icons.stock} label="Stock" /></Link>
       </nav>
 
@@ -105,19 +109,18 @@ export function HojePage() {
           )}
         </>
       )}
-      {choosing && (
-        <div className="sheet" role="dialog" aria-labelledby="chooser-title" onClick={() => setChoosing(false)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <h2 id="chooser-title" style={{ fontSize: '1.25rem' }}>O que quer registar?</h2>
-            <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => navigate('/dinheiro/despesa')}>
-              <span><strong style={{ display: 'block' }}>Registar despesa</strong><span className="muted">Contas e gastos do salão — não entra no stock</span></span>
-            </button>
-            <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => navigate('/dinheiro/compra')}>
-              <span><strong style={{ display: 'block' }}>Registar compra</strong><span className="muted">Produtos que usamos nos serviços e ficam no stock</span></span>
-            </button>
-            <button className="btn btn-secondary" onClick={() => setChoosing(false)}>Cancelar</button>
-          </div>
-        </div>
+      {chooser.current && (
+        // choosing replaces the sheet's history entry with the flow, so back from the flow returns to Hoje
+        <BottomSheet labelledBy="chooser-title" onDismiss={chooser.close}>
+          <h2 id="chooser-title" className="sheet-title">O que quer registar?</h2>
+          <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => chooser.leaveTo('/dinheiro/despesa', FROM_HOJE)}>
+            <span><strong style={{ display: 'block' }}>Registar despesa</strong><span className="muted">Contas e gastos do salão — não entra no stock</span></span>
+          </button>
+          <button className="pick" style={{ minHeight: '4.5rem' }} onClick={() => chooser.leaveTo('/dinheiro/compra', FROM_HOJE)}>
+            <span><strong style={{ display: 'block' }}>Registar compra</strong><span className="muted">Produtos que usamos nos serviços e ficam no stock</span></span>
+          </button>
+          <button className="btn btn-secondary" onClick={chooser.close}>Cancelar</button>
+        </BottomSheet>
       )}
     </main>
   )

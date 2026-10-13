@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
+import { renderScreen } from '../../test/router'
 
 vi.mock('../../modules/services/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/services/api')>()),
@@ -44,6 +45,22 @@ describe('Hoje', () => {
     expect(within(sheet).getByRole('button', { name: /Registar despesa/ })).toBeTruthy()
     expect(within(sheet).getByRole('button', { name: /Registar compra/ })).toBeTruthy()
     fireEvent.click(within(sheet).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('the chooser closes with Android back; choosing replaces it, so back from the flow returns to Hoje', async () => {
+    const { router } = renderScreen('/inicio', <HojePage />, { routes: [{ path: '/dinheiro/despesa', element: <p>Despesa</p> }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Despesa ou compra' }))
+    await screen.findByRole('dialog', { name: 'O que quer registar?' })
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/inicio')
+    fireEvent.click(screen.getByRole('button', { name: 'Despesa ou compra' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Registar despesa/ }))
+    expect(await screen.findByText('Despesa')).toBeTruthy()
+    expect(router.state.location.state).toEqual({ from: '/' })
+    await act(() => router.navigate(-1))
+    expect(await screen.findByRole('button', { name: 'Despesa ou compra' })).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
