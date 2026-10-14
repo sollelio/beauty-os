@@ -247,6 +247,7 @@ Changes that cannot alter results (e.g. a catalogue default price, a person's ca
 - **Reuse** of a `command_id` with a different type, principal, organization or fingerprint is rejected with `IDEMPOTENCY_CONFLICT`.
 - **Concurrent duplicates** (the same `command_id` in flight twice) resolve through the journal's uniqueness: one commits; the other then observes the recorded outcome and returns it.
 - **Ambiguous network result** (committed, response lost): the client retries with the same `command_id` (Product D5: data preserved, retry) and receives the original result. This is the reason the journal is written atomically with the effects.
+- **Delayed replay (Offline V1, [ADR-0010](adr/0010-offline-capture-and-sync.md)):** a service captured offline keeps the `command_id` generated at capture and its captured `occurred_at` (part of the fingerprint); it is replayed by the same device principal until acknowledged. A replay under a different principal is never attempted blindly (review).
 - **Rejected commands are not journaled** (their transaction rolls back), so a retry re-evaluates against current state. The UI does not blind-retry domain rejections (§17).
 - **Replay does not bypass authorization:** a replay is answered only to the same principal and organization, and returns only what the original response contained.
 - Journal retention and whether it doubles as provenance are **Deferred**; it is not the business history (§14).
@@ -267,7 +268,9 @@ Changes that cannot alter results (e.g. a catalogue default price, a person's ca
 | **Verification (elevation)** | none → granted (scope, expiry) → used / expired / revoked | **Defined** — ADR-0009. |
 | **Device binding** | enrolled → revoked | **Defined** — ADR-0009. |
 | **Stock product** | OK · Baixo · Comprar — human-set only; list membership independent | **Product** (Slice 05). |
-| **Command attempt** (client) | editing → submitting → succeeded · rejected (domain) · failed (network; data kept, retry with same `command_id`) | **Product** D5 + §12. |
+| **Command attempt** (client) | editing → submitting → succeeded · rejected (domain) · failed (network; data kept, retry with same `command_id`) | **Product** D5 + §12 (online-only flows). |
+| **Offline outbox entry** (client, Registar serviço) | local → syncing → synced · failed (transient, retried) · conflict (domain / security rejection; human review; discarded only explicitly) | **Defined** — [ADR-0010](adr/0010-offline-capture-and-sync.md). |
+| **Offline movement draft** (client) | draft → confirmed online with PIN (becomes a normal command) · conflict · discarded (explicit) | **Defined** — [ADR-0010](adr/0010-offline-capture-and-sync.md); never a financial record while offline. |
 | **Market trip** (client draft) | planned → in progress → handed to purchase capture | **Defined:** client-local draft, not a business record (§15). |
 
 ## 14. Historical financial stability / audit model
@@ -302,9 +305,10 @@ This is not an accounting ledger, double entry or event sourcing: inputs stay no
 - **State:** server state in the query cache; flow state local to the flow; a small app context for organization, principal and private-context status.
 - **Private context on the shared device:** sensitive queries run only while the verified context is active; when it ends (explicit exit, expiry, revocation) all sensitive query caches are **removed**, not just hidden. This is defence in depth; RLS is the boundary.
 - **Calculations:** none authoritative (§10).
-- **Market-trip draft (Slice 05):** held on the device as a draft, never synced as a record; becomes a business record only through *Registar compra*. Fits D5 (no offline sync engine) and the market's uncertain connectivity. Whether to persist it across reloads is an implementation detail.
-- **Errors:** network failure → keep entered data, offer retry with the same `command_id` (D5); domain rejection → show the stable error's message; no blind retry.
-- **Not used in V1:** PWA/offline sync (D5), i18n framework (**Deferred**, 07 X2), notifications (**Deferred**).
+- **Market-trip draft (Slice 05):** held on the device as a draft, never synced as a record; becomes a business record only through *Registar compra*. Fits the market's uncertain connectivity; under [ADR-0010](adr/0010-offline-capture-and-sync.md) it is the Offline V1 *local operational draft* (from an approved cached snapshot) and may stay in localStorage for now.
+- **Errors:** network failure → keep entered data, offer retry with the same `command_id` (D5, online-only flows); domain rejection → show the stable error's message; no blind retry.
+- **Offline V1 ([ADR-0010](adr/0010-offline-capture-and-sync.md)):** Registar serviço fully offline (IndexedDB outbox, foreground sync); Adiantamento / Despesa / Compra as device drafts confirmed online with the PIN; Hoje and Stock overview read-only from a dated snapshot; everything private, Fecho, Negócio, Gestão and Anular online-only. IndexedDB holds the outbox, drafts, capture snapshot and metadata, partitioned by organization and device principal; Cache Storage holds the static shell only (service worker); API / RPC responses are never runtime-cached; no Background Sync.
+- **Not used in V1:** ~~PWA/offline sync (D5)~~ *(superseded by [ADR-0010](adr/0010-offline-capture-and-sync.md): installable PWA and the Offline V1 scope above)*, i18n framework (**Deferred**, 07 X2), notifications (**Deferred**).
 
 ## 16. Backend interaction boundaries
 
@@ -407,7 +411,7 @@ No horizontal infrastructure phase beyond step 3.
 | Dedicated definer-owner role with forced RLS | Implementation (§9 S-7) |
 | Module-boundary lint tooling | First violation |
 | Remote-person sign-in method (email, magic link, phone OTP) | Deferred (ADR-0009); before remote payment confirmation is implemented |
-| PWA / offline sync | After pilot evidence (D5) |
+| PWA / offline sync | ~~After pilot evidence (D5)~~ **Decided** — [ADR-0010](adr/0010-offline-capture-and-sync.md) (Offline V1); offline Stock edits, fully offline movements and Background Sync remain deferred there |
 
 ## 22. Architecture risks
 
@@ -423,6 +427,9 @@ No horizontal infrastructure phase beyond step 3.
 | Calculation changes alter closed periods | Close statements + calculation version (§14) |
 | Undecided product cases leak into implementation as accidental behaviour | Explicit **Open product** markers; commands for those cases are not built until decided |
 | Market connectivity breaks shopping | Client-local trip draft; only *Registar compra* needs the network |
+| Offline work lost with device storage (eviction, reset) | `navigator.storage.persist()` requested but not relied on; foreground sync as soon as connectivity returns; hardening in Offline 8 ([ADR-0010](adr/0010-offline-capture-and-sync.md)) |
+| A silent device holds unsynced records for a period | Server-side block: approve / close fail until every active offline-capable device has checked in after the period end with nothing pending ([ADR-0010](adr/0010-offline-capture-and-sync.md)) |
+| Client clock or late arrivals misplace records | Server bounds on `occurred_at` (≤ 48 h old, ≤ 5 min ahead); period rules still reject approved / closed periods; never re-attributed ([ADR-0010](adr/0010-offline-capture-and-sync.md)) |
 
 ## 23. Device / elevation spike specification
 

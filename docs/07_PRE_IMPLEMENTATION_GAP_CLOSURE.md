@@ -22,7 +22,7 @@
 | G8 | Domain conflations | CLAUDE.md #9–#10 · 00 §5 · 01 §2 | §6 — no contradiction in money semantics; two wording findings |
 | G9 | Equations, signs, double counting | Slices 02–06 | §7 — robustness rule for the excess **Decided** (D6); the cash-check candidate stays unapproved (incomplete) |
 | G10 | Authorization boundaries the architecture must support | 05 §3–§4 · Slices 02–06 | §8 |
-| G11 | Offline / connectivity | 05 §2 | **Closed** — D5 (online-required saving with retry; no offline engine) |
+| G11 | Offline / connectivity | 05 §2 | **Closed** — D5 (online-required saving with retry; no offline engine) — **D5 superseded in part by [ADR-0010](architecture/adr/0010-offline-capture-and-sync.md) (2026-10-15)**: Offline V1 |
 
 ### 1.1 Entry-point and navigation audit
 
@@ -116,6 +116,8 @@ From 03 §3 and Slices 04/06: in V1 a person's remuneration rule is a **percenta
 Earned = rule % × production, per person per period. The hair collaborator's purchase-cost share is **not** part of the rule. It is a purchase contribution recorded per purchase (Slice 03), à parte, with settlement open (03 §5). No other rule shapes (fixed amounts, tiers, per-service rates) are in V1. When a change to a standing rule takes effect is open (§5 I6).
 
 ### D5 — Connectivity (A1): saving requires a network connection
+
+> **Superseded in part (Sollelio, 2026-10-15) by [ADR-0010](architecture/adr/0010-offline-capture-and-sync.md) — Offline capture and foreground synchronization.** D5 was right for the pilot-readiness phase; Beauty OS has since become mobile-first and installable, and operational evidence shows a temporary loss of connectivity can stop salon work. Offline support now enters deliberately: **Registar serviço** fully offline; **Adiantamento, Despesa, Compra** as device drafts confirmed online with the PIN; the Mercado trip as a local draft; Hoje and Stock overview read-only from a dated snapshot; **everything else stays online-only** and keeps D5's rule below (failed save keeps the data, retry with the same `command_id`). The original decision is kept unchanged below for traceability.
 
 - Saving any record requires a network connection in V1.
 - On a recoverable network or save failure, everything entered is preserved on screen and the person can retry (the "Erro ao guardar" states of Slices 01–03).
@@ -235,11 +237,11 @@ Deduplicated across 00–06 and Slices 01–06. Each question is in exactly one 
 
 ### 5.1 `BLOCKS ARCHITECTURE`
 
-**None remain.** The only item, A1 (connectivity), was decided on 2026-10-06 (D5). Kept below for traceability.
+**None remain.** The only item, A1 (connectivity), was decided on 2026-10-06 (D5) and revisited on 2026-10-15 ([ADR-0010](architecture/adr/0010-offline-capture-and-sync.md), Offline V1). Kept below for traceability.
 
 | ID | Question | Sources | Why it blocked | Resolution |
 |---|---|---|---|---|
-| **A1** | **Connectivity / offline.** Must capture on the shared smartphone work without network (queue and sync later), or is V1 online-required? | 05 §2 (PWA/offline neither designed nor decided) | Offline-first vs online-required is a foundational architectural choice (data ownership on the device, sync, conflicts, identity of a queued confirmation). It cannot be retrofitted safely. | `Decided` (D5): saving requires a network connection; recoverable failures preserve the data and allow retry; no offline queue, persistence/sync engine or conflict resolution in V1; revisit after pilot evidence. |
+| **A1** | **Connectivity / offline.** Must capture on the shared smartphone work without network (queue and sync later), or is V1 online-required? | 05 §2 (PWA/offline neither designed nor decided) | Offline-first vs online-required is a foundational architectural choice (data ownership on the device, sync, conflicts, identity of a queued confirmation). It cannot be retrofitted safely. | `Decided` (D5): saving requires a network connection; recoverable failures preserve the data and allow retry; no offline queue, persistence/sync engine or conflict resolution in V1; revisit after pilot evidence. **Superseded in part on 2026-10-15 by [ADR-0010](architecture/adr/0010-offline-capture-and-sync.md)** (Offline V1). |
 
 ### 5.2 `BLOCKS IMPLEMENTATION OF A SPECIFIC SLICE`
 
@@ -387,7 +389,7 @@ Cross-cutting requirements:
 
 **READY FOR ARCHITECTURE** (2026-10-06).
 
-- **No architecture blocker remains.** A1 (connectivity) is decided (D5).
+- **No architecture blocker remains.** A1 (connectivity) is decided (D5; superseded in part by [ADR-0010](architecture/adr/0010-offline-capture-and-sync.md) on 2026-10-15).
 - **The money model is decided:** reserve (D1), retained amounts (D2), owner distribution (D3), rule shape (D4), payable and excess (D6). The authorization requirements are approved (§8).
 - **Coverage:** every MUST capability is covered or deliberately open (§4).
 - **Consistency:** no domain contradiction remains (§6), and the financial model is consistent (§7).
@@ -412,4 +414,4 @@ From canon and the approved slices, so the questions in §5.2–§5.3 can stay o
 9. **Multiple payments per person per period** must be representable even if V1 forbids some cases (I2); remaining payable and the excess follow D6, and the excess is stored or derived as a review condition, never as a receivable or credit.
 10. **Reserve** per D1: allocations and uses as records, use linked to an expense or purchase, balance derived, use ≤ balance.
 11. **Shared-device model** per 05 §3–§4 and §8: device context, current operator, individually attributed sensitive confirmation, private context that does not carry over.
-12. **Connectivity** per D5: online-required saving; recoverable failures keep entered data and allow retry; no offline queue, local persistence/sync engine or conflict resolution.
+12. **Connectivity** per D5: online-required saving; recoverable failures keep entered data and allow retry; no offline queue, local persistence/sync engine or conflict resolution. **Superseded in part by [ADR-0010](architecture/adr/0010-offline-capture-and-sync.md) (2026-10-15):** the Offline V1 scope, capture-time, draft, storage, sync, conflict and period-safety contracts there apply; D5 still holds for every online-only flow.

@@ -1,7 +1,7 @@
 # ADR-0006 — Command idempotency with `command_id`
 
 **Status:** Accepted (Architecture Definition checkpoint, 2026-10-06)
-**Related:** [Architecture Definition §12](../architecture-definition.md#12-idempotency-model) · 07 D5
+**Related:** [Architecture Definition §12](../architecture-definition.md#12-idempotency-model) · 07 D5 · [ADR-0010](0010-offline-capture-and-sync.md) (delayed replay of offline-captured commands relies on this journal; D5 superseded in part)
 
 ## Context
 
