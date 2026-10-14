@@ -1,7 +1,7 @@
 // PWA installability (platform slice): the installed identity, its icons and metadata — and the absence of anything that
 // could cache or serve data offline (no service worker in this slice: nothing is cached, the app needs the network).
-// Icons are temporary: the master Sollelio avatar (sollelio-brand-assets), rendered from public/icons/*.svg, until the
-// Beauty OS product accent is chosen (00 §1, Open).
+// Icons and favicons are the Sollelio Beauty OS brand package v0.1 (Precision Violet; manifest-colours.json): the dark
+// app icon as supplied (192/512), and for maskable / Apple the same artwork full-bleed (public/icons/icon-maskable.svg).
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, resolve } from 'path'
@@ -37,10 +37,10 @@ describe('web app manifest', () => {
     expect(manifest.id).toBe('/')
     expect(JSON.stringify(manifest)).not.toMatch(/https?:\/\//)
   })
-  it('theme and background are the app ground (Warm Off-white), as index.html says too', () => {
-    expect(manifest.theme_color).toBe('#F7F4EE')
+  it('theme Midnight Indigo and background Warm Off-white, as the brand package says, and index.html too', () => {
+    expect(manifest.theme_color).toBe('#11152D')
     expect(manifest.background_color).toBe('#F7F4EE')
-    expect(html).toContain('<meta name="theme-color" content="#F7F4EE" />')
+    expect(html).toContain('<meta name="theme-color" content="#11152D" />')
   })
   it('192 and 512 icons, regular and maskable, each file present with its declared size', () => {
     const want = [['192x192', 'any'], ['512x512', 'any'], ['192x192', 'maskable'], ['512x512', 'maskable']]
@@ -54,23 +54,41 @@ describe('web app manifest', () => {
 })
 
 describe('index.html install metadata', () => {
-  it('links the manifest, the favicon and the Apple touch icon (each file present), with the mobile app metas', () => {
+  it('links the manifest, the favicons and the Apple touch icon (each file present), with the mobile app metas', () => {
     expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />')
+    expect(html).toContain('<link rel="icon" href="/favicon.ico" sizes="32x32 64x64" />')
     expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml" />')
+    expect(html).toContain('<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />')
+    expect(html).toContain('<link rel="icon" href="/favicon-64.png" type="image/png" sizes="64x64" />')
     expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />')
     expect(pngSize(pub('icons/apple-touch-icon.png'))).toBe('180x180')
-    expect(existsSync(pub('favicon.svg'))).toBe(true)
+    expect(pngSize(pub('favicon-32.png'))).toBe('32x32')
+    expect(pngSize(pub('favicon-64.png'))).toBe('64x64')
+    for (const f of ['favicon.ico', 'favicon.svg']) expect(existsSync(pub(f)), f).toBe(true)
     for (const m of ['mobile-web-app-capable', 'apple-mobile-web-app-capable']) expect(html).toContain(`<meta name="${m}" content="yes" />`)
     expect(html).toContain('<meta name="apple-mobile-web-app-title" content="Beauty OS" />')
     expect(html).toContain('viewport-fit=cover')                                  // safe areas: the shell pads with env(safe-area-inset-*)
   })
-  it('the icons are the approved master symbol, unchanged (not a new mark)', () => {
-    const brand = readFileSync(join(root, 'sollelio-brand-assets/sollelio-symbol-color.svg'), 'utf8')
-    expect(readFileSync(pub('favicon.svg'), 'utf8')).toBe(brand)
-    const paths = (svg: string) => svg.match(/<path [^>]*\/>/g)
-    const avatar = readFileSync(join(root, 'sollelio-brand-assets/sollelio-avatar.svg'), 'utf8')
-    expect(paths(readFileSync(pub('icons/icon.svg'), 'utf8'))).toEqual(paths(avatar))
-    expect(paths(readFileSync(pub('icons/icon-maskable.svg'), 'utf8'))).toEqual(paths(avatar))
+  it('the Beauty OS artwork: the unchanged Sollelio symbol with the Beauty OS accent plane; no masterbrand placeholder left', () => {
+    const paths = (svg: string) => (svg.match(/ d="[^"]+"/g) ?? [])
+    const master = readFileSync(join(root, 'sollelio-brand-assets/sollelio-symbol-color.svg'), 'utf8')
+    const favicon = readFileSync(pub('favicon.svg'), 'utf8')
+    const maskable = readFileSync(pub('icons/icon-maskable.svg'), 'utf8')
+    expect(paths(favicon)).toEqual(paths(master))                                   // the symbol is never redrawn
+    expect(paths(maskable)).toEqual(paths(master))
+    expect(favicon).toContain('#7657D6')                                             // Precision Violet
+    expect(maskable).toContain('#9A7CF0')                                            // violet on dark
+    expect(maskable).toContain('<rect width="1024" height="1024" fill="#11152D"/>')  // full bleed: the platform masks it
+    expect(existsSync(pub('icons/icon.svg'))).toBe(false)
+    for (const f of walk(join(root, 'public')).filter((p) => p.endsWith('.svg') || p.endsWith('.webmanifest'))) {
+      expect(readFileSync(f, 'utf8'), f).not.toContain('#2457F5')                  // the masterbrand accent (the temporary icon)
+    }
+  })
+  it('regular icons are the dark tile as supplied (rounded, transparent corners); maskable and Apple are opaque edge to edge', () => {
+    const corner = (p: string) => { const b = readFileSync(p); return b.readUInt8(25) }   // PNG colour type: 6 = RGBA, 2 = RGB
+    expect(corner(pub('icons/icon-192.png'))).toBe(6)
+    expect(corner(pub('icons/icon-512.png'))).toBe(6)
+    for (const f of ['icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']) expect(corner(pub(f)), f).toBe(2)
   })
 })
 
