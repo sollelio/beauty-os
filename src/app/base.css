@@ -30,7 +30,7 @@ html, body { margin: 0; }
 body { background: var(--ground); color: var(--ink); font-family: system-ui, -apple-system, sans-serif; font-size: var(--t-body); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; cursor: pointer; }
-.app-main { width: 100%; max-width: 40rem; margin: 0 auto; padding: var(--s-4) 1.25rem var(--s-6); min-height: 100dvh; display: flex; flex-direction: column; gap: 1.25rem; }
+.app-main { width: 100%; max-width: 40rem; margin: 0 auto; padding: calc(var(--s-4) + env(safe-area-inset-top)) 1.25rem calc(var(--s-6) + env(safe-area-inset-bottom)); min-height: 100dvh; display: flex; flex-direction: column; gap: 1.25rem; }   /* installed app: clear of a notch / home indicator (0 in a browser tab) */
 
 /* ---------- type ---------- */
 h1 { font-size: var(--t-title-lg); line-height: 1.15; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
