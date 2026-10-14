@@ -276,7 +276,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .app-bar-btn { width: 3rem; height: 3rem; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--ink); -webkit-tap-highlight-color: transparent; }
 .app-bar-btn:active { background: var(--line); }
 .app-bar-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-.app-bar-title { flex: 1; min-width: 0; font-size: 1.0625rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-bar-title { flex: 1; min-width: 0; font-size: 1.0625rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* a long section name wraps to two lines, never cut mid-label (follow-up: review bar height in the final visual refinement) */
 .app-bar-step { padding: 0 0.75rem; color: var(--muted); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.06em; }
 .app-bar-progress { padding: 0 0.75rem 0.625rem; }
 .bottom-bar { position: sticky; bottom: 0; z-index: 20; display: flex; flex-direction: column; gap: 0.625rem; padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom)); background: var(--ground); border-top: 1px solid var(--line); }
@@ -352,3 +352,21 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .kv-row .row-title { font-weight: 500; font-size: var(--t-body); color: var(--muted); }
 .kv-row .row-trailing { flex: 0 1 auto; max-width: 62%; }
 .kv-value { white-space: normal; text-align: right; overflow-wrap: anywhere; color: var(--ink); }
+
+/* Negócio (UX slice 8): the period choice is the device's own picker inside a field; insights are rows with a sheet. */
+.field select { flex: 1; min-width: 0; min-height: 2.75rem; padding: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: var(--t-headline); font-weight: 600; color: var(--ink); -webkit-appearance: none; appearance: none; }
+.field:has(select) .field-affix { pointer-events: none; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.section-head .label { margin: 0; }
+.value-list { margin: 0; }
+.value-row { justify-content: space-between; }
+.value-row dt { flex: 1 1 auto; min-width: 0; color: var(--muted); overflow-wrap: anywhere; hyphens: auto; }
+.value-row dd { flex: 0 1 auto; max-width: 62%; margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.value-row dd .muted { font-weight: 500; }
+.value-list-lead .value-row { min-height: 3.75rem; }
+.value-list-lead dt { color: var(--ink); font-weight: 600; }
+.value-list-lead dd { font-size: 1.1875rem; font-weight: 700; letter-spacing: -0.01em; }
+.value-list-lead dd .muted { display: block; font-size: var(--t-support); font-weight: 500; letter-spacing: 0; }
+.section-head h2.label { font-size: var(--t-overline); line-height: 1.25; letter-spacing: 0.06em; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.insight-head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }

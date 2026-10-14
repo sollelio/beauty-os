@@ -3,29 +3,33 @@
 // privacy-redacted reads as the other Negócio pages: a figure hidden there (07 D9 · B11) is never an input here. Open
 // situations are read as of now; the analysis follows the selected period. Nothing is stored: a resolved situation
 // simply disappears (no resolution history in V1).
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+// On the mobile shell (UX slice 8): the counts and a severity filter (chips), then the open situations and the
+// period analysis as insight rows (each opens its explanation in a sheet), and the recent periods as chips.
+import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { clearPrivateData, usePrivateContext } from '../../modules/org/privateContext'
+import { usePrivateContext } from '../../modules/org/privateContext'
 import { businessKeys, getBusinessCosts, getBusinessHealth, getBusinessServices, getBusinessTeam, listBusinessPeriods } from '../../modules/business/api'
 import { buildInsightHub, COMPARISON_UNAVAILABLE, SEVERITY_LABEL, SEVERITY_ORDER, type Insight, type Severity } from '../../modules/business/insights'
-import { InsightCard } from './InsightCard'
-import { hiddenWhy } from './hidden'
-import { STATE_LABEL } from '../../modules/period/api'
-import { toAppError } from '../../shared/errors'
 import { formatMoney } from '../../shared/money'
-import { formatDayShort } from '../../shared/time'
+import { AppScreen } from '../../shared/ui/AppShell'
+import { useAppBack } from '../../shared/ui/navigation'
+import { EmptyState } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
+import { InsightList } from './InsightCard'
+import { hiddenWhy } from './hidden'
+import { NegocioState, PeriodContext, SectionHead, ValueList } from './shell'
+import { useLostContext, useNegocioPeriod } from './useNegocio'
 
 type Filter = 'all' | Severity
 
 export function InsightsPage() {
   const org = useOrganization()
   const ctx = usePrivateContext()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const [sp, setSp] = useSearchParams()
-  const p = sp.get('p')
+  const [, setSp] = useSearchParams()
+  const { p, overview } = useNegocioPeriod()
+  const back = useAppBack(overview)
   const [filter, setFilter] = useState<Filter>('all')
   // the selected period's reads (its analysis) …
   const health = useQuery({ queryKey: businessKeys.health(p), queryFn: () => getBusinessHealth(p) })
@@ -36,31 +40,10 @@ export function InsightsPage() {
   const nowHealth = useQuery({ queryKey: businessKeys.health(null), queryFn: () => getBusinessHealth(null) })
   const nowCosts = useQuery({ queryKey: businessKeys.costs(null), queryFn: () => getBusinessCosts(null) })
   const periods = useQuery({ queryKey: businessKeys.periods, queryFn: listBusinessPeriods })
-  const lost = [health.error, nowHealth.error, periods.error].some((e) => e && toAppError(e).code === 'VERIFICATION_REQUIRED')
-  useEffect(() => { if (lost) clearPrivateData(qc) }, [lost, qc])
-  const back = () => navigate(p ? `/privado/negocio?p=${p}` : '/privado/negocio')
+  useLostContext([health.error, nowHealth.error, periods.error])
   const m = (n: number) => formatMoney(n, org)
-
-  const header = (
-    <header className="flow-header-row">
-      <button className="icon-btn" aria-label="Voltar" onClick={back}>←</button>
-      <span className="muted" style={{ fontWeight: 600 }}>Negócio · Insights</span>
-      <span className="priv">Privado</span>
-    </header>
-  )
-  const error = health.error ?? nowHealth.error
-  if (error) {
-    const code = toAppError(error).code
-    return (
-      <main className="app-main">{header}
-        <div className="notice notice-error" role="alert">
-          {code === 'NOT_AUTHORIZED' ? 'Esta área é só para quem acompanha o negócio.' : 'Não foi possível mostrar os insights.'}
-        </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/')}>Voltar</button>
-      </main>
-    )
-  }
-  if (!health.data || !nowHealth.data) return <main className="app-main">{header}<p className="muted">A carregar…</p></main>
+  const bar = <PrivateBar title="Negócio · Insights" onBack={back} />
+  if (!health.data || !nowHealth.data) return <NegocioState bar={bar} error={health.error ?? nowHealth.error} what="os insights" onBack={back} />
 
   const h = health.data, now = nowHealth.data
   const c = h.current
@@ -74,31 +57,14 @@ export function InsightsPage() {
   const total = hub.active.length + hub.period.length
 
   return (
-    <main className="app-main">
-      {header}
+    <AppScreen bar={bar}>
+      <PeriodContext period={c.period} periods={periods.data} />
 
-      <section className="stack" style={{ gap: '0.5rem' }} data-testid="period-context">
-        <h2 style={{ margin: 0 }}>{c.period.label}</h2>
-        <span className="muted">
-          {formatDayShort(c.period.starts_on, org.timezone)} – {formatDayShort(c.period.ends_on, org.timezone)} · {STATE_LABEL[c.period.state]}
-          {c.period.is_complete ? '' : ' · a decorrer'}
-        </span>
-        {periods.data && periods.data.length > 1 && (
-          <label className="field">
-            <select aria-label="Período" value={c.period.id} onChange={(e) => setSp({ p: e.target.value }, { replace: true })}>
-              {periods.data.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
-            </select>
-          </label>
-        )}
-      </section>
-
-      <section className="stack" style={{ gap: '0.5rem' }} aria-label="Resumo">
-        <dl className="kv-card" data-testid="severity-counts">
-          {SEVERITY_ORDER.map((s) => <div key={s}><dt>{SEVERITY_LABEL[s]}</dt><dd className="num">{hub.counts[s]}</dd></div>)}
-        </dl>
-        <div role="group" aria-label="Filtrar" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+      <section className="stack" aria-label="Resumo">
+        <ValueList testId="severity-counts" rows={SEVERITY_ORDER.map((s) => [SEVERITY_LABEL[s], hub.counts[s]])} />
+        <div className="filter-chips" role="group" aria-label="Filtrar">
           {(['all', ...SEVERITY_ORDER] as Filter[]).map((f) => (
-            <button key={f} className={`btn ${filter === f ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+            <button key={f} type="button" className="chip chip-outline" aria-pressed={filter === f} onClick={() => setFilter(f)}>
               {f === 'all' ? 'Todos' : SEVERITY_LABEL[f]}
             </button>
           ))}
@@ -106,34 +72,34 @@ export function InsightsPage() {
       </section>
 
       <section className="stack" aria-labelledby="agora" data-testid="active">
-        <h3 id="agora" className="label">Por resolver agora</h3>
-        {active.length === 0 ? <p className="muted" style={{ margin: 0 }}>{hub.active.length === 0 ? 'Nada por resolver.' : 'Nada com este filtro.'}</p>
-          : active.map((i) => <InsightCard key={i.id} insight={i} finance={finance} hub />)}
-        {now.open_periods.some((x) => x.unpaid_private) && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="active-private">{hiddenWhy(['unpaid_team_minor'])}</span>}
-        <span className="muted" style={{ fontSize: '0.875rem' }}>Situações em aberto hoje{isNow ? '' : `, seja qual for o período escolhido`}; desaparecem quando ficam resolvidas.</span>
+        <SectionHead id="agora">Por resolver agora</SectionHead>
+        {active.length === 0 ? <EmptyState icon="check" title={hub.active.length === 0 ? 'Nada por resolver.' : 'Nada com este filtro.'} />
+          : <InsightList insights={active} finance={finance} hub />}
+        {now.open_periods.some((x) => x.unpaid_private) && <span className="support" data-testid="active-private">{hiddenWhy(['unpaid_team_minor'])}</span>}
+        <span className="support">Situações em aberto hoje{isNow ? '' : `, seja qual for o período escolhido`}; desaparecem quando ficam resolvidas.</span>
       </section>
 
       <section className="stack" aria-labelledby="analise" data-testid="analysis">
-        <h3 id="analise" className="label">Em {c.period.label}</h3>
-        {analysis.length === 0 ? <p className="muted" style={{ margin: 0 }}>{hub.period.length === 0 ? 'Nada a assinalar neste período.' : 'Nada com este filtro.'}</p>
-          : analysis.map((i) => <InsightCard key={i.id} insight={i} finance={finance} hub />)}
-        {!prevMeta.available && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="insufficient">Sem comparação com o período anterior: {COMPARISON_UNAVAILABLE[prevMeta.reason ?? 'no_previous_period']}</span>}
-        {c.private_fields.length > 0 && <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="analysis-private">{hiddenWhy(c.private_fields)} Nenhum insight usa esses valores.</span>}
+        <SectionHead id="analise">Em {c.period.label}</SectionHead>
+        {analysis.length === 0 ? <EmptyState icon="check" title={hub.period.length === 0 ? 'Nada a assinalar neste período.' : 'Nada com este filtro.'} />
+          : <InsightList insights={analysis} finance={finance} hub />}
+        {!prevMeta.available && <span className="support" data-testid="insufficient">Sem comparação com o período anterior: {COMPARISON_UNAVAILABLE[prevMeta.reason ?? 'no_previous_period']}</span>}
+        {c.private_fields.length > 0 && <span className="support" data-testid="analysis-private">{hiddenWhy(c.private_fields)} Nenhum insight usa esses valores.</span>}
       </section>
 
       {h.trend.length > 1 && (
         <section className="stack" aria-labelledby="historico">
-          <h3 id="historico" className="label">Períodos recentes</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }} data-testid="history">
+          <SectionHead id="historico">Períodos recentes</SectionHead>
+          <div className="filter-chips" role="group" aria-label="Períodos recentes" data-testid="history">
             {[...h.trend].reverse().map((t) => (
-              <button key={t.id} className={`btn ${t.id === c.period.id ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={t.id === c.period.id}
+              <button key={t.id} type="button" className="chip chip-outline" aria-pressed={t.id === c.period.id}
                 onClick={() => setSp({ p: t.id }, { replace: true })}>{t.label}</button>
             ))}
           </div>
         </section>
       )}
 
-      {total === 0 && <span className="muted" data-testid="none">Os insights aparecem quando há dados suficientes; sem dados suficientes não há conclusões.</span>}
-    </main>
+      {total === 0 && <p className="note support" data-testid="none">Os insights aparecem quando há dados suficientes; sem dados suficientes não há conclusões.</p>}
+    </AppScreen>
   )
 }

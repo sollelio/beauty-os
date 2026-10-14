@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import type { BusinessCosts, BusinessFinance, BusinessHealth, BusinessServices, FinanceMetric, BusinessTeam, Change, MetricKey, PeriodMetrics, ServiceRow } from '../../modules/business/api'
 
@@ -229,11 +229,11 @@ describe('Negócio · Visão geral', () => {
     // attention ordered by money at stake (Slice 06 priority): the category excess before the result drop here
     expect(cards.map((c) => c.dataset.kind)).toEqual(['payments_pending', 'expense_category_high', 'production_up_result_down'])
     fireEvent.click(within(cards[2]!).getByRole('button'))
-    const d = within(cards[2]!).getByTestId('insight-detail').textContent!
+    const d = within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent!
     expect(d).toContain('Semana 5 comparado com Semana 4 (fechado).')
     expect(d).toContain('não indica que tenham sido a causa')
     fireEvent.click(within(cards[0]!).getByRole('button'))
-    expect(within(cards[0]!).getByRole('button', { name: 'Ver pagamentos' })).toBeTruthy()          // a team-finance holder
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Ver pagamentos' })).toBeTruthy()          // a team-finance holder
   })
 
   it('business access without team finance: overview yes, no finance links', async () => {
@@ -241,7 +241,7 @@ describe('Negócio · Visão geral', () => {
     renderAt()
     const cards = await screen.findAllByTestId('insight')
     fireEvent.click(within(cards[0]!).getByRole('button'))
-    expect(within(cards[0]!).queryByRole('button', { name: 'Ver pagamentos' })).toBeNull()
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Ver pagamentos' })).toBeNull()
     expect(screen.queryByText('Fecho do período')).toBeNull()
   })
 
@@ -315,10 +315,10 @@ describe('Negócio → Equipa', () => {
     expect(screen.queryAllByTestId('member-change')).toEqual([])
   })
 
-  it('a team-finance reader gets "Ver situação completa" into the existing situation view', async () => {
+  it('a team-finance reader opens the existing situation view from the whole professional row', async () => {
     serve(base, status(), team)
     renderAt('/privado/negocio/equipa')
-    const buttons = await screen.findAllByRole('button', { name: 'Ver situação completa' })
+    const buttons = (await screen.findAllByTestId('member')).map((x) => within(x).getByRole('button'))
     expect(buttons).toHaveLength(4)
     fireEvent.click(buttons[0]!)
     expect(await screen.findByText('Situação')).toBeTruthy()
@@ -351,8 +351,8 @@ describe('Negócio → Serviços', () => {
     renderAt('/privado/negocio/servicos')
     const sum = (await screen.findByTestId('services-summary')).textContent!
     for (const x of ['391.000', 'Serviços realizados59', '6.627,12', 'Serviços diferentes6']) expect(sum).toContain(x)
-    expect(screen.getByTestId('top-revenue').textContent).toBe('Mais receitaCorte · 150.000 KzCor · 80.000 KzAlongamento · 60.000 Kz')
-    expect(screen.getByTestId('top-count').textContent).toBe('Mais realizadosCorte · 30Pedicure · 9Alongamento · 6')
+    expect(screen.getByTestId('top-revenue').textContent).toBe('Mais receitaCorte150.000 KzCor80.000 KzAlongamento60.000 Kz')
+    expect(screen.getByTestId('top-count').textContent).toBe('Mais realizadosCorte30Pedicure9Alongamento6')
     const cards = screen.getAllByTestId('service')
     expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Corte', 'Cor', 'Alongamento', 'Pedicure'])
     expect(cards[0]!.textContent).toContain('38,4%')
@@ -370,7 +370,7 @@ describe('Negócio → Serviços', () => {
     expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Alongamento caiu pelo segundo período consecutivo.',
       'Um serviço representa 38% da produção.', 'Pedicure cresce pelo segundo período consecutivo.'])
     fireEvent.click(within(cards[0]!).getByRole('button'))
-    const d = within(cards[0]!).getByTestId('insight-detail').textContent!
+    const d = within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent!
     expect(d).toContain('Alongamento: 10 → 8 → 6')
     expect(d).toContain('Vale investigar procura, disponibilidade, preço ou promoção')
   })
@@ -419,7 +419,9 @@ describe('Negócio → Custos & Stock', () => {
     expect(pur).toContain('Só conta a parte paga pelo salão.')
     const st = screen.getByTestId('stock').textContent!
     expect(st).toContain('Agora: 1 comprar · 1 baixo · 1 urgente · 1 na lista')
-    expect(st).toContain('Acetona · Comprar · urgente')
+    const acetona = within(screen.getByRole('group', { name: 'Produtos marcados' }) as HTMLElement).getByText('Acetona').closest('.row') as HTMLElement
+    expect(within(acetona).getByText('Comprar').className).toBe('status-chip status-warning')    // the state as Stock shows it
+    expect(within(acetona).getByText('urgente')).toBeTruthy()
     expect(screen.getByTestId('stock-activity').textContent).toContain('Acetona4 compras · 3 marcações')
     expect(document.body.textContent).not.toMatch(/Profissional|contribui|unidades restantes|consumo de/i)
   })
@@ -433,7 +435,7 @@ describe('Negócio → Custos & Stock', () => {
     expect(cards.map((c) => within(c).getByRole('strong').textContent)).toEqual(['Acetona merece atenção: 4 compras e 3 marcações como baixo ou para comprar nos últimos 30 dias.',
       'As compras suportadas pelo salão aumentaram 130%.', 'Materiais: 64% acima da média dos últimos 3 períodos.'])
     fireEvent.click(within(cards[0]!).getByRole('button'))
-    expect(within(cards[0]!).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
+    expect(within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent).toContain('Vale rever a quantidade habitual de compra ou o padrão de utilização')
   })
 
   it('a salon-funded figure that would give one person\'s contribution is "Não mostrado", with the reason; no purchases-up insight', async () => {
@@ -486,7 +488,7 @@ describe('Negócio · Finanças', () => {
   it('not a business.health.read holder: the area says so', async () => {
     serve(base, status(), even, quietSv, quietCs, { error: 'NOT_AUTHORIZED' })
     renderAt('/privado/negocio/financas')
-    expect((await screen.findByRole('alert')).textContent).toBe('Esta área é só para quem acompanha o negócio.')
+    expect((await screen.findByRole('alert')).textContent).toContain('Esta área é só para quem acompanha o negócio.')
   })
 
   it('summary, decomposition, indicators with the plain-language sentence', async () => {
@@ -540,7 +542,7 @@ describe('Negócio · Finanças', () => {
     const cards = await screen.findAllByTestId('insight')
     expect(cards.map((x) => x.dataset.kind)).toEqual(['payments_pending', 'production_up_result_down'])   // no product_attention here
     fireEvent.click(within(cards[1]!).getByRole('button'))
-    expect(within(cards[1]!).getByTestId('insight-detail').textContent).toContain('Compras (parte do salão)')
+    expect(within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent).toContain('Compras (parte do salão)')
   })
 
   it('B11: hidden figures say so; nothing compared, ratioed, trended or driven from them', async () => {
@@ -619,12 +621,13 @@ describe('Negócio → Insights', () => {
     await screen.findByTestId('active')
     const card = screen.getAllByTestId('insight').find((c) => c.dataset.kind === 'team_concentration')!
     expect(card.textContent).toContain('68% da produção está concentrada em dois profissionais.')
-    expect(card.textContent).toContain('Atenção · Equipa · Semana 5 · Ver detalhe')
+    expect(card.textContent).toContain('Equipa · Semana 5')
+    expect(within(card).getByText('Atenção').className).toBe('status-chip status-caution')
     fireEvent.click(within(card).getByRole('button'))
-    const d = within(card).getByTestId('insight-detail').textContent!
+    const d = within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent!
     expect(d).toContain('Períodos')
     expect(d).toContain('não avalia ninguém')
-    fireEvent.click(within(card).getByRole('button', { name: 'Investigar em Equipa' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Investigar em Equipa' }))
     expect(await screen.findByText('Negócio · Equipa')).toBeTruthy()
   })
 
@@ -634,9 +637,10 @@ describe('Negócio → Insights', () => {
       renderAt('/privado/negocio/insights')
       const card = (await screen.findAllByTestId('insight')).find((c) => c.dataset.kind === 'payments_pending')!
       fireEvent.click(within(card).getByRole('button'))
-      expect(!!within(card).queryByRole('button', { name: 'Ver pagamentos' }), view).toBe(view === 'manager')
-      expect(within(card).getByRole('button', { name: 'Investigar em Finanças' })).toBeTruthy()
-      document.body.innerHTML = ''
+      const sheet = screen.getByRole('dialog')
+      expect(!!within(sheet).queryByRole('button', { name: 'Ver pagamentos' }), view).toBe(view === 'manager')
+      expect(within(sheet).getByRole('button', { name: 'Investigar em Finanças' })).toBeTruthy()
+      cleanup()                                                       // unmounts the tree and its sheets (portals)
     }
   })
 
@@ -687,5 +691,153 @@ describe('Negócio → Insights', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ver todos os insights' }))
     expect(await screen.findByText('Negócio · Insights')).toBeTruthy()
     expect(await screen.findByTestId('severity-counts')).toBeTruthy()
+  })
+})
+
+// UX slice 8: Negócio on the mobile shell. A data router (history can be driven: router.navigate(-1) is Android back).
+function renderRouter(entries: string[]) {
+  const router = createMemoryRouter([
+    { path: '/', element: <p>Hoje</p> },
+    { path: '/privado/entrar', element: <p>Entrada privada</p> },
+    { path: '/privado', element: <PrivateGate />, children: [
+      { index: true, element: <PrivateHome /> },
+      { path: 'equipa', element: <p>Equipa privada</p> },
+      { path: 'negocio', element: <OverviewPage /> },
+      { path: 'negocio/equipa', element: <TeamPage /> },
+      { path: 'negocio/financas', element: <FinancePage /> },
+      { path: 'negocio/insights', element: <InsightsPage /> },
+      { path: 'fecho/pagamentos', element: <p>Pagamentos</p> },
+    ] },
+  ], { initialEntries: entries, initialIndex: entries.length - 1 })
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <OrganizationContext.Provider value={org}><RouterProvider router={router} /></OrganizationContext.Provider>
+    </QueryClientProvider>,
+  )
+  return router
+}
+const bar = () => within(screen.getByRole('banner'))
+const ended = () => rpc.mock.calls.some(([fn]) => fn === 'end_private_context')
+
+describe('Negócio · private navigation (mobile shell)', () => {
+  it('business-only holder: Visão geral is the private root — × is the explicit exit; it ends the context and lands on Hoje', async () => {
+    serve(base, status({ view: 'self' }), aggregate)
+    const router = renderRouter(['/', '/privado'])
+    await screen.findByTestId('overview')
+    expect(document.querySelector('.app-bar')!.textContent).toContain('Área privada · Fernando')
+    expect(bar().queryByRole('button', { name: 'Voltar' })).toBeNull()
+    fireEvent.click(bar().getByRole('button', { name: 'Sair da área privada' }))
+    expect(await screen.findByText('Hoje')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/')
+    await waitFor(() => expect(ended()).toBe(true))
+  })
+  it('manager: ← from Visão geral goes back to Equipa inside the private area, not to Hoje', async () => {
+    serve(base)
+    const router = renderRouter(['/', '/privado/equipa', '/privado/negocio'])
+    await screen.findByTestId('overview')
+    fireEvent.click(bar().getByRole('button', { name: 'Voltar' }))
+    expect(await screen.findByText('Equipa privada')).toBeTruthy()
+    expect(router.state.historyAction).toBe('POP')
+    expect(ended()).toBe(false)
+  })
+  it('a Negócio page goes back to Visão geral (history, keeping ?p=); opened by a deep link it falls back to it', async () => {
+    serve(base)
+    const router = renderRouter(['/privado/negocio?p=e5', '/privado/negocio/equipa?p=e5'])
+    await screen.findByTestId('team-summary')
+    fireEvent.click(bar().getByRole('button', { name: 'Voltar' }))
+    await screen.findByTestId('overview')
+    expect(router.state.location.pathname + router.state.location.search).toBe('/privado/negocio?p=e5')
+    expect(router.state.historyAction).toBe('POP')
+    cleanup()
+    const deep = renderRouter(['/privado/negocio/financas?p=e5'])
+    await screen.findByTestId('finance-summary')
+    fireEvent.click(bar().getByRole('button', { name: 'Voltar' }))
+    await screen.findByTestId('overview')
+    expect(deep.state.location.pathname + deep.state.location.search).toBe('/privado/negocio?p=e5')
+  })
+  it('an error screen offers a way back that stays in the private area (never straight to Hoje)', async () => {
+    serve({ error: 'boom' })
+    const router = renderRouter(['/privado/negocio/insights'])
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Não foi possível mostrar os insights.')
+    fireEvent.click(within(alert).getByRole('button', { name: 'Voltar' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/privado/negocio'))
+  })
+})
+
+describe('Negócio · states, hierarchy, sheets', () => {
+  it('loading is a skeleton (never the empty or error text); then the summary', async () => {
+    let resolve!: (v: { data: BusinessHealth; error: null }) => void
+    serve(base)
+    const inner = rpc.getMockImplementation()!
+    rpc.mockImplementation((fn: string, args?: unknown) => fn === 'business_health' ? new Promise((r) => { resolve = r }) : inner(fn, args))
+    renderRouter(['/privado/negocio'])
+    await waitFor(() => expect(rpc.mock.calls.some(([fn]) => fn === 'business_health')).toBe(true))   // past the gate: Negócio is loading
+    await waitFor(() => expect(screen.getByRole('banner').textContent).toContain('Negócio'))
+    expect(screen.getByRole('status', { name: 'A carregar' })).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText('Nada a assinalar neste período.')).toBeNull()
+    await act(async () => { resolve({ data: base, error: null }) })
+    expect(await screen.findByTestId('overview')).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'A carregar' })).toBeNull()
+  })
+  it('hierarchy: summary, then what needs attention, then what changed, the areas and the recent periods', async () => {
+    serve(base)
+    renderRouter(['/privado/negocio'])
+    await screen.findByTestId('overview')
+    const heads = [...document.querySelectorAll('.app-screen-body .section-head h2')].map((h) => h.textContent)
+    expect(heads).toEqual(['Como estamos?', 'Precisa da tua atenção', 'O que mudou?', 'Em detalhe', 'Últimos períodos'])
+    for (const b of screen.getAllByRole('button')) expect(b.textContent ?? '').not.toMatch(/[←›▾×]/)
+    expect(document.body.textContent).not.toMatch(/previs|forecast|pontuação|score|risco|probabilidade/i)   // no forecast or score
+  })
+  it('an insight opens its explanation in a sheet; Android back closes the sheet and stays on the page', async () => {
+    serve(base)
+    const router = renderRouter(['/privado/equipa', '/privado/negocio'])
+    const row = (await screen.findAllByTestId('insight'))[0]!
+    fireEvent.click(within(row).getByRole('button'))
+    expect(within(await screen.findByRole('dialog')).getByTestId('insight-detail')).toBeTruthy()
+    await act(() => router.navigate(-1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/privado/negocio')
+    expect(screen.getByTestId('overview')).toBeTruthy()
+  })
+  it('an action from the sheet replaces the sheet entry: back from it returns to the page, not to the sheet', async () => {
+    serve(base)
+    const router = renderRouter(['/privado/equipa', '/privado/negocio'])
+    const pay = (await screen.findAllByTestId('insight')).find((c) => c.dataset.kind === 'payments_pending')!
+    fireEvent.click(within(pay).getByRole('button'))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Ver pagamentos' }))
+    expect(await screen.findByText('Pagamentos')).toBeTruthy()
+    await act(() => router.navigate(-1))
+    expect(await screen.findByTestId('overview')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('Negócio · privacy on the mobile shell (07 D9 · B11)', () => {
+  it('business-only viewer, hidden figures: no hidden amount anywhere — page, rows or any opened explanation sheet', async () => {
+    const H = ['team_earnings_minor', 'operating_costs_minor', 'operating_result_minor', 'retention_pct', 'free_minor', 'unpaid_team_minor'] as const
+    const none = { delta_minor: null, percent: null }
+    serve({ ...base,
+      current: { ...cur, team_earnings_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null, unpaid_team_minor: null, private_fields: [...H] },
+      previous: { ...prev, team_earnings_minor: null, operating_costs_minor: null, operating_result_minor: null, retention_pct: null, free_minor: null, private_fields: [...H.slice(0, 5)] },
+      changes: { previous: { ...base.changes.previous!, team_earnings_minor: none, operating_costs_minor: none, operating_result_minor: none, free_minor: none }, average_3: null },
+      open_periods: [{ ...base.open_periods[0]!, unpaid_team_minor: null, unpaid_private: true }],
+      trend: base.trend.map((t) => ({ ...t, operating_result_minor: null, result_private: true })) }, status({ view: 'self' }), aggregate, sv, cs)
+    renderRouter(['/privado/negocio'])
+    await screen.findByTestId('overview')
+    for (const row of screen.queryAllByTestId('insight')) {
+      fireEvent.click(within(row).getByRole('button'))
+      await screen.findByRole('dialog')
+      for (const v of ['38.500', '48.000', '81.500', '52.000', '30.000 Kz']) expect(document.body.textContent, v).not.toContain(v)
+    }
+    for (const v of ['38.500', '48.000', '81.500', '52.000', '30.000 Kz', 'Profissional']) expect(document.body.textContent, v).not.toContain(v)
+  })
+  it('business.health.read alone: Equipa shows the team as a whole only, no named rows to open', async () => {
+    serve(base, status({ view: 'self' }), aggregate)
+    renderRouter(['/privado/negocio/equipa'])
+    await screen.findByTestId('team-summary')
+    expect(screen.queryAllByTestId('member')).toEqual([])
+    expect(document.body.textContent).not.toMatch(/Profissional \d|70\.000|66\.000|35%·|33%/)
   })
 })
