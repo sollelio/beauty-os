@@ -1,8 +1,11 @@
 // Gestão · add or edit one service or product, then Confirmação necessária (catalogue.manage, one-shot PIN). The
 // form keeps its values on any failure; the same intent retries with the same command_id (ADR-0006).
-import { LockIcon } from '../../shared/ui/AppShell'
+// On the mobile shell (UX slice 9): the form and the Confirmação are two history entries (back from Confirmação
+// returns to the form with everything typed); leaving with unsaved changes asks first; after a save the editor is
+// unwound back to the list, so back never reopens it. Deactivating is the same update command (active: false) — an
+// explicit destructive action ending in "Desativar"; nothing is deleted, and a deactivated entry can be reactivated.
 import { useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { usePrivateContext } from '../../modules/org/privateContext'
@@ -13,9 +16,16 @@ import {
   catalogueKeys, listManagedProducts, listManagedServices, saveProduct, saveService, type ProductInput, type ServiceInput,
 } from '../../modules/catalogue/api'
 import { listUnitWords, stockKeys } from '../../modules/stock/api'
-import { AmountField } from '../../shared/ui/AmountField'
 import { formatMoney, minorToWholeUnits, wholeUnitsToMinor } from '../../shared/money'
-import { GestaoHeader, NotManager } from './GestaoPage'
+import { AmountField } from '../../shared/ui/AmountField'
+import { AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
+import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { Field } from '../../shared/ui/Field'
+import { useFlow, type Flow } from '../../shared/ui/navigation'
+import { StatusChip } from '../../shared/ui/StatusChip'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
+import { NotManager } from './GestaoPage'
 import { HISTORY_NOTE } from './copy'
 
 const MESSAGES: Record<string, string> = {
@@ -26,21 +36,31 @@ const MESSAGES: Record<string, string> = {
   CROSS_TENANT_REFERENCE: 'Este item já não existe.',
 }
 
-function ActiveToggle({ active, onChange }: { active: boolean; onChange: (a: boolean) => void }) {
-  return (
-    <section className="stack" style={{ gap: '0.375rem' }}>
-      <span className="label">Estado</span>
-      <div role="group" aria-label="Estado" style={{ display: 'flex', gap: '0.5rem' }}>
-        <button className="seg" aria-pressed={active} onClick={() => onChange(true)}>Ativo</button>
-        <button className="seg" aria-pressed={!active} onClick={() => onChange(false)}>Desativado</button>
-      </div>
-      {!active && <span className="muted" style={{ fontSize: '0.875rem' }}>Deixa de aparecer nas escolhas novas. Os registos anteriores continuam iguais.</span>}
+/** What the Confirmação records: the edits as they are, or the same edits with the entry deactivated / reactivated. */
+type Intent = 'save' | 'deactivate' | 'reactivate'
+const FINAL: Record<Intent, { label: string; cls: string }> = {
+  save: { label: 'Guardar', cls: 'btn-primary' }, deactivate: { label: 'Desativar', cls: 'btn-danger' }, reactivate: { label: 'Reativar', cls: 'btn-primary' },
+}
+const arrow = (before: string, after: string) => before === after ? after : `${before} → ${after}`
+
+/** Desativar (destructive, apart at the end) or Reativar; both lead to the same Confirmação as an edit. */
+function StateAction({ active, kind, disabled, onIntent }: { active: boolean; kind: 'serviço' | 'produto'; disabled: boolean; onIntent: (i: Intent) => void }) {
+  return active ? (
+    <section className="exceptional">
+      <button type="button" className="btn btn-destructive" disabled={disabled} onClick={() => onIntent('deactivate')}>Desativar {kind}</button>
+      <span className="support">Deixa de aparecer nas escolhas novas. Nada é apagado: os registos anteriores continuam iguais.</span>
+    </section>
+  ) : (
+    <section className="exceptional">
+      <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => onIntent('reactivate')}>Reativar {kind}</button>
+      <span className="support">Volta a aparecer nas escolhas novas.</span>
     </section>
   )
 }
 
-function Confirm<I>({ run, input, changes, onDone }: {
-  run: (commandId: string, grantId: string, input: I) => Promise<unknown>; input: I; changes: [string, ReactNode][]; onDone: () => void
+function ConfirmStep<I>({ bar, run, input, intent, changes, onDone }: {
+  bar: ReactNode; run: (commandId: string, grantId: string, input: I) => Promise<unknown>; input: I; intent: Intent
+  changes: [string, ReactNode][]; onDone: () => void
 }) {
   const ctx = usePrivateContext()
   const qc = useQueryClient()
@@ -60,135 +80,163 @@ function Confirm<I>({ run, input, changes, onDone }: {
       },
     })
   }
+  const final = FINAL[intent]
   return (
-    <>
-      <section className="stack" style={{ gap: '1rem' }} aria-label="Confirmação necessária">
+    <AppScreen bar={bar}
+      actions={
+        <BottomActionBar>
+          <button className={`btn ${final.cls} btn-tall`} disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
+            {command.status === 'pending' ? 'A guardar…' : err?.kind === 'network' ? 'Tentar novamente' : final.label}
+          </button>
+        </BottomActionBar>
+      }>
+      <section className="stack stack-loose" aria-label="Confirmação necessária">
         <h2>Confirmação necessária</h2>
-        <dl className="kv-card" data-testid="changes">{changes.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
+        <dl className="row-group value-list" data-testid="changes">
+          {changes.map(([k, v]) => <div key={k} className="row value-row"><dt>{k}</dt><dd className="num">{v}</dd></div>)}
+        </dl>
         <div className="lock-note"><LockIcon /><span>Só quem gere o catálogo pode confirmar. Fica registado quem mudou e quando.</span></div>
         <ConfirmerPicker permission="catalogue.manage" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
           error={err} messages={MESSAGES} />
         {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível ligar ao servidor. Nada mudou; tente novamente.</div>}
         {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{(err.code && MESSAGES[err.code]) || 'Não foi possível guardar.'}</div>}
       </section>
-      <div className="footer">
-        <button className="btn btn-primary btn-tall" disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
-          {command.status === 'pending' ? 'A guardar…' : err?.kind === 'network' ? 'Tentar novamente' : 'Guardar'}
-        </button>
-      </div>
-    </>
+    </AppScreen>
   )
 }
 
-const arrow = (before: string, after: string) => before === after ? after : `${before} → ${after}`
+/** The loading / not-found screen of an editor, inside the private bar. */
+function EditorState({ title, loading, error, what, onBack, onRetry }: { title: string; loading: boolean; error: boolean; what: string; onBack: () => void; onRetry: () => void }) {
+  return (
+    <AppScreen bar={<PrivateBar title={title} onBack={onBack} exit={false} />}>
+      {loading ? <Skeleton rows={3} />
+        : error ? <ErrorState onRetry={onRetry} action={<button type="button" className="link-btn" onClick={onBack}>Voltar</button>}>Não foi possível carregar o catálogo.</ErrorState>
+        : <EmptyState icon="alert" title={`Este ${what} não existe.`} action={<button type="button" className="btn btn-secondary btn-fit" onClick={onBack}>Voltar à Gestão</button>} />}
+    </AppScreen>
+  )
+}
+
+function Discard({ flow }: { flow: Flow }) {
+  return <DiscardSheet open={flow.discard.open} title="Sair sem guardar?" detail="As alterações perdem-se. Nada mudou no catálogo." onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+}
 
 export function ServiceEditPage() {
   const ctx = usePrivateContext()
   const org = useOrganization()
-  const navigate = useNavigate()
   const { id = 'novo' } = useParams()
   const isNew = id === 'novo'
   const services = useQuery({ queryKey: catalogueKeys.managedServices, queryFn: listManagedServices, enabled: !!ctx.catalogue_manage })
   const current = services.data?.find((s) => s.id === id)
-  const [form, setForm] = useState<{ name: string; price: string; active: boolean } | null>(null)
-  const [step, setStep] = useState<'edit' | 'confirm'>('edit')
-  if (!ctx.catalogue_manage) return <NotManager />
-  const back = () => navigate('/privado/gestao')
-  if (!isNew && !current) return <main className="app-main"><GestaoHeader title="Serviço" back={back} /><p className="muted">{services.isPending ? 'A carregar…' : 'Este serviço não existe.'}</p></main>
-
-  const f = form ?? (current ? { name: current.name, price: String(minorToWholeUnits(current.default_price_minor, org)), active: current.active } : { name: '', price: '', active: true })
-  const set = (patch: Partial<typeof f>) => { setForm({ ...f, ...patch }); setStep('edit') }
+  const [form, setForm] = useState<{ name: string; price: string } | null>(null)
+  const [intent, setIntent] = useState<Intent>('save')
+  const parent = '/privado/gestao'
+  const base = current ? { name: current.name, price: String(minorToWholeUnits(current.default_price_minor, org)) } : { name: '', price: '' }
+  const f = form ?? base
   const price = wholeUnitsToMinor(f.price, org)
   const name = f.name.trim()
-  const valid = name.length >= 2 && price !== null && (isNew || name !== current!.name || price !== current!.default_price_minor || f.active !== current!.active)
-  const input: ServiceInput = { id: isNew ? null : id, name, price_minor: price ?? 0, active: f.active }
+  const edited = isNew ? name !== '' || f.price !== '' : !!current && (name !== current.name || price !== current.default_price_minor)
+  const formOk = name.length >= 2 && price !== null
+  const flow = useFlow({ steps: 2, parent, dirty: edited, reachable: () => formOk && (isNew || !!current) })
+  if (!ctx.catalogue_manage) return <NotManager />
+  const title = isNew ? 'Adicionar serviço' : 'Editar serviço'
+  if (!isNew && !current) return <EditorState title={title} loading={services.isPending} error={services.isError} what="serviço" onBack={flow.exit} onRetry={() => services.refetch()} />
+
+  const active = intent === 'deactivate' ? false : intent === 'reactivate' ? true : (current?.active ?? true)
+  const input: ServiceInput = { id: isNew ? null : id, name, price_minor: price ?? 0, active }
   const m = (n: number) => formatMoney(n, org)
   const changes: [string, ReactNode][] = isNew
     ? [['Serviço novo', name], ['Preço', m(input.price_minor)]]
     : [['Nome', arrow(current!.name, name)], ['Preço', arrow(m(current!.default_price_minor), m(input.price_minor))],
-       ['Estado', arrow(current!.active ? 'Ativo' : 'Desativado', f.active ? 'Ativo' : 'Desativado')]]
+       ['Estado', arrow(current!.active ? 'Ativo' : 'Desativado', active ? 'Ativo' : 'Desativado')]]
+  const go = (i: Intent) => { setIntent(i); flow.goTo(2) }
+  const bar = <PrivateBar title={title} onBack={flow.step === 2 ? () => flow.goTo(1) : flow.exit} step={{ current: flow.step, total: 2 }} exit={false} />
 
+  if (flow.step === 2) {
+    return <><ConfirmStep bar={bar} run={saveService} input={input} intent={intent} changes={changes} onDone={() => flow.finishTo(parent)} /><Discard flow={flow} /></>
+  }
   return (
-    <main className="app-main">
-      <GestaoHeader title={isNew ? 'Adicionar serviço' : 'Editar serviço'} back={back} />
-      <section className="stack" style={{ gap: '0.375rem' }}>
-        <label className="label" htmlFor="svc-name">Nome</label>
-        <label className="field"><input id="svc-name" maxLength={80} value={f.name} onChange={(e) => set({ name: e.target.value })} /></label>
-        {!isNew && name !== current!.name && <span className="muted" style={{ fontSize: '0.875rem' }}>O nome novo aparece também nos registos anteriores deste serviço. Para um serviço diferente, adicione um novo.</span>}
-      </section>
-      <section className="stack" style={{ gap: '0.375rem' }}>
-        <span className="label">Preço atual</span>
-        <AmountField label="Preço atual" value={f.price} onChange={(d) => set({ price: d })} symbol={org.currency_symbol} />
-        <span className="muted" style={{ fontSize: '0.875rem' }}>{HISTORY_NOTE}</span>
-      </section>
-      {!isNew && <ActiveToggle active={f.active} onChange={(a) => set({ active: a })} />}
-      {step === 'edit'
-        ? <div className="footer"><button className="btn btn-primary btn-tall" disabled={!valid} onClick={() => setStep('confirm')}>Continuar</button></div>
-        : <Confirm run={saveService} input={input} changes={changes} onDone={back} />}
-    </main>
+    <AppScreen bar={bar}
+      actions={<BottomActionBar><button className="btn btn-primary btn-tall" disabled={!formOk || !edited} onClick={() => go('save')}>Continuar</button></BottomActionBar>}>
+      {current && !current.active && <span className="self-start"><StatusChip>Desativado</StatusChip></span>}
+      <Field label="Nome" error={form && name.length > 0 && name.length < 2 ? 'Escreva pelo menos 2 letras.' : undefined}
+        hint={!isNew && name !== current!.name ? 'O nome novo aparece também nos registos anteriores deste serviço. Para um serviço diferente, adicione um novo.' : undefined}>
+        <input maxLength={80} value={f.name} onChange={(e) => setForm({ ...f, name: e.target.value })} />
+      </Field>
+      <AmountField label="Preço atual" value={f.price} onChange={(d) => setForm({ ...f, price: d })} symbol={org.currency_symbol} hint={HISTORY_NOTE} />
+      {current && <StateAction active={current.active} kind="serviço" disabled={!formOk} onIntent={go} />}
+      <Discard flow={flow} />
+    </AppScreen>
   )
 }
 
 export function ProductEditPage() {
   const ctx = usePrivateContext()
   const org = useOrganization()
-  const navigate = useNavigate()
   const { id = 'novo' } = useParams()
   const isNew = id === 'novo'
   const products = useQuery({ queryKey: catalogueKeys.managedProducts, queryFn: listManagedProducts, enabled: !!ctx.catalogue_manage })
   const units = useQuery({ queryKey: stockKeys.unitWords, queryFn: listUnitWords, enabled: !!ctx.catalogue_manage })
   const current = products.data?.find((p) => p.id === id)
-  const [form, setForm] = useState<{ name: string; unit: string; price: string; active: boolean } | null>(null)
+  const [form, setForm] = useState<{ name: string; unit: string; price: string } | null>(null)
   const [otherUnit, setOtherUnit] = useState(false)
-  const [step, setStep] = useState<'edit' | 'confirm'>('edit')
-  if (!ctx.catalogue_manage) return <NotManager />
-  const back = () => navigate('/privado/gestao?t=produtos')
-  if (!isNew && !current) return <main className="app-main"><GestaoHeader title="Produto" back={back} /><p className="muted">{products.isPending ? 'A carregar…' : 'Este produto não existe.'}</p></main>
-
-  const f = form ?? (current
-    ? { name: current.name, unit: current.unit_word, price: current.reference_price_minor === null ? '' : String(minorToWholeUnits(current.reference_price_minor, org)), active: current.active }
-    : { name: '', unit: '', price: '', active: true })
-  const set = (patch: Partial<typeof f>) => { setForm({ ...f, ...patch }); setStep('edit') }
+  const [intent, setIntent] = useState<Intent>('save')
+  const parent = '/privado/gestao?t=produtos'
+  const base = current
+    ? { name: current.name, unit: current.unit_word, price: current.reference_price_minor === null ? '' : String(minorToWholeUnits(current.reference_price_minor, org)) }
+    : { name: '', unit: '', price: '' }
+  const f = form ?? base
   const name = f.name.trim(), unit = f.unit.trim()
   const price = wholeUnitsToMinor(f.price, org)
-  const valid = name.length >= 2 && unit.length >= 1 && (isNew || name !== current!.name || unit !== current!.unit_word
-    || price !== current!.reference_price_minor || f.active !== current!.active)
-  const input: ProductInput = { id: isNew ? null : id, name, unit_word: unit, reference_price_minor: price, active: f.active }
+  const edited = isNew ? name !== '' || unit !== '' || f.price !== ''
+    : !!current && (name !== current.name || unit !== current.unit_word || price !== current.reference_price_minor)
+  const formOk = name.length >= 2 && unit.length >= 1
+  const flow = useFlow({ steps: 2, parent, dirty: edited, reachable: () => formOk && (isNew || !!current) })
+  if (!ctx.catalogue_manage) return <NotManager />
+  const title = isNew ? 'Adicionar produto' : 'Editar produto'
+  if (!isNew && !current) return <EditorState title={title} loading={products.isPending} error={products.isError} what="produto" onBack={flow.exit} onRetry={() => products.refetch()} />
+
+  const active = intent === 'deactivate' ? false : intent === 'reactivate' ? true : (current?.active ?? true)
+  const input: ProductInput = { id: isNew ? null : id, name, unit_word: unit, reference_price_minor: price, active }
   const m = (n: number | null) => n === null ? '—' : formatMoney(n, org)
   const changes: [string, ReactNode][] = isNew
     ? [['Produto novo', name], ['Unidade', unit], ['Preço de referência', m(price)]]
     : [['Nome', arrow(current!.name, name)], ['Unidade', arrow(current!.unit_word, unit)],
        ['Preço de referência', arrow(m(current!.reference_price_minor), m(price))],
-       ['Estado', arrow(current!.active ? 'Ativo' : 'Desativado', f.active ? 'Ativo' : 'Desativado')]]
+       ['Estado', arrow(current!.active ? 'Ativo' : 'Desativado', active ? 'Ativo' : 'Desativado')]]
   const words = units.data ?? []
+  const custom = otherUnit || (!!unit && !words.includes(unit))
+  const go = (i: Intent) => { setIntent(i); flow.goTo(2) }
+  const bar = <PrivateBar title={title} onBack={flow.step === 2 ? () => flow.goTo(1) : flow.exit} step={{ current: flow.step, total: 2 }} exit={false} />
 
+  if (flow.step === 2) {
+    return <><ConfirmStep bar={bar} run={saveProduct} input={input} intent={intent} changes={changes} onDone={() => flow.finishTo(parent)} /><Discard flow={flow} /></>
+  }
   return (
-    <main className="app-main">
-      <GestaoHeader title={isNew ? 'Adicionar produto' : 'Editar produto'} back={back} />
-      <section className="stack" style={{ gap: '0.375rem' }}>
-        <label className="label" htmlFor="prd-name">Nome</label>
-        <label className="field"><input id="prd-name" maxLength={80} value={f.name} onChange={(e) => set({ name: e.target.value })} /></label>
-      </section>
-      <section className="stack" style={{ gap: '0.375rem' }}>
-        <span className="label">Unidade de compra</span>
-        <div role="group" aria-label="Unidade de compra" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {words.map((w) => <button key={w} className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={!otherUnit && unit === w} onClick={() => { setOtherUnit(false); set({ unit: w }) }}>{w}</button>)}
-          <button className="seg" style={{ flex: '0 0 auto', padding: '0 1rem' }} aria-pressed={otherUnit || (!!unit && !words.includes(unit))} onClick={() => { setOtherUnit(true); set({ unit: '' }) }}>Outra…</button>
-        </div>
-        {(otherUnit || (!!unit && !words.includes(unit))) && (
-          <label className="field"><input aria-label="Outra unidade" maxLength={30} placeholder="ex.: pacote" value={f.unit} onChange={(e) => set({ unit: e.target.value })} /></label>
+    <AppScreen bar={bar}
+      actions={<BottomActionBar><button className="btn btn-primary btn-tall" disabled={!formOk || !edited} onClick={() => go('save')}>Continuar</button></BottomActionBar>}>
+      {current && !current.active && <span className="self-start"><StatusChip>Desativado</StatusChip></span>}
+      <Field label="Nome" error={form && name.length > 0 && name.length < 2 ? 'Escreva pelo menos 2 letras.' : undefined}>
+        <input maxLength={80} value={f.name} onChange={(e) => setForm({ ...f, name: e.target.value })} />
+      </Field>
+      <section className="stack">
+        <span className="label" id="unit-label">Unidade de compra</span>
+        {units.isPending ? <Skeleton rows={1} /> : units.isError ? <ErrorState onRetry={() => units.refetch()}>Não foi possível carregar as unidades.</ErrorState> : (
+          <div className="wrap" role="group" aria-labelledby="unit-label">
+            {words.map((w) => <button key={w} type="button" className="chip chip-outline" aria-pressed={!custom && unit === w} onClick={() => { setOtherUnit(false); setForm({ ...f, unit: w }) }}>{w}</button>)}
+            <button type="button" className="chip chip-outline" aria-pressed={custom} onClick={() => { setOtherUnit(true); setForm({ ...f, unit: '' }) }}>Outra…</button>
+          </div>
         )}
-        <span className="muted" style={{ fontSize: '0.875rem' }}>As compras anteriores guardam a unidade com que foram registadas.</span>
+        {custom && (
+          <Field label="Outra unidade" hideLabel>
+            <input maxLength={30} placeholder="ex.: pacote" value={f.unit} onChange={(e) => setForm({ ...f, unit: e.target.value })} />
+          </Field>
+        )}
+        <span className="support">As compras anteriores guardam a unidade com que foram registadas.</span>
       </section>
-      <section className="stack" style={{ gap: '0.375rem' }}>
-        <span className="label">Preço de referência (opcional)</span>
-        <AmountField label="Preço de referência" value={f.price} onChange={(d) => set({ price: d })} symbol={org.currency_symbol} />
-        <span className="muted" style={{ fontSize: '0.875rem' }}>Só informação. O custo real é o que se regista em cada compra.</span>
-      </section>
-      {!isNew && <ActiveToggle active={f.active} onChange={(a) => set({ active: a })} />}
-      {step === 'edit'
-        ? <div className="footer"><button className="btn btn-primary btn-tall" disabled={!valid} onClick={() => setStep('confirm')}>Continuar</button></div>
-        : <Confirm run={saveProduct} input={input} changes={changes} onDone={back} />}
-    </main>
+      <AmountField label="Preço de referência" value={f.price} onChange={(d) => setForm({ ...f, price: d })} symbol={org.currency_symbol}
+        hint="Opcional. Só informação: o custo real é o que se regista em cada compra; as compras anteriores não mudam." />
+      {current && <StateAction active={current.active} kind="produto" disabled={!formOk} onIntent={go} />}
+      <Discard flow={flow} />
+    </AppScreen>
   )
 }
