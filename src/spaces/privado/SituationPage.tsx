@@ -1,11 +1,21 @@
 // Situação do profissional / A minha situação (Slice 04). Every figure is read from the database read model; this
 // screen only arranges and words them. Manager view (B4) shows attributions; the self view (B3) never does.
+// On the mobile shell (UX slice 7): the private bar — for a manager ← back to Equipa inside the private area, for the
+// person's own view × as the explicit exit (it is the root) — whole rows, both sheets as history entries, history rows
+// grouped by day; a correction opens inside the private area (/privado/anular/…) and comes back here.
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ErrorState, Skeleton } from '../../shared/ui/states'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { clearPrivateData, exitPrivateContext } from '../../modules/org/privateContext'
+import { clearPrivateData } from '../../modules/org/privateContext'
+import { AppScreen } from '../../shared/ui/AppShell'
+import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack, useSheet } from '../../shared/ui/navigation'
+import { SegmentedControl } from '../../shared/ui/SegmentedControl'
+import { PrivateBar } from './PrivateBar'
 import {
   getHistory, getSituation, listPeriods, situationKeys,
   type HistoryKind, type HistoryRow, type PeriodState, type Situation,
@@ -27,13 +37,14 @@ const FILTERS: { kind: HistoryKind | null; label: string }[] = [
 export function SituationPage() {
   const { personId = '' } = useParams()
   const org = useOrganization()
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const [sp] = useSearchParams()
+  const back = useAppBack('/privado/equipa')
   const [periodId, setPeriodId] = useState<string | null>(sp.get('p'))
   const [tab, setTab] = useState<'resumo' | 'hist'>('resumo')
   const [filter, setFilter] = useState<HistoryKind | null>(null)
-  const [sheet, setSheet] = useState<null | 'explain' | 'period'>(null)
+  const sheets = useSheet<'explain' | 'period'>()
+  const sheet = sheets.current
 
   const situation = useQuery({ queryKey: situationKeys.situation(personId, periodId), queryFn: () => getSituation(personId, periodId) })
   const history = useQuery({ queryKey: situationKeys.history(personId, periodId, filter), queryFn: () => getHistory(personId, periodId, filter), enabled: tab === 'hist',
@@ -44,71 +55,69 @@ export function SituationPage() {
   const lost = [situation.error, history.error, periods.error].some((e) => e && toAppError(e).code === 'VERIFICATION_REQUIRED')
   useEffect(() => { if (lost) clearPrivateData(qc) }, [lost, qc])
 
-  if (situation.isPending) return <main className="app-main"><p className="muted">A carregar…</p></main>
+  // The bar is known before the situation is: the root (own view) or a manager's screen inside the private area.
+  const own = situation.data ? situation.data.view !== 'manager' : false
+  const bar = <PrivateBar title={own ? 'A minha situação' : 'Situação'} root={own} onBack={back} />
+  if (situation.isPending) return <AppScreen bar={bar}><Skeleton rows={4} headline /></AppScreen>
   if (situation.isError) {
     return (
-      <main className="app-main">
-        <div className="notice notice-error" role="alert">Não foi possível mostrar esta situação.</div>
-        <button className="btn btn-secondary" onClick={() => navigate('/privado')}>Voltar</button>
-      </main>
+      <AppScreen bar={bar}>
+        <ErrorState onRetry={() => situation.refetch()} action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>Não foi possível mostrar esta situação.</ErrorState>
+      </AppScreen>
     )
   }
 
   const s = situation.data
-  const manager = s.view === 'manager'
   const goHist = (k: HistoryKind | null) => { setFilter(k); setTab('hist') }
-  const back = () => (manager ? navigate('/privado/equipa') : navigate('/'))
 
   return (
-    <main className="app-main">
-      <header className="stack" style={{ gap: '0.75rem' }}>
-        <div className="flow-header-row">
-          <button className="icon-btn" aria-label={manager ? 'Voltar à Equipa' : 'Voltar'} onClick={back}>←</button>
-          <span className="muted" style={{ fontWeight: 600 }}>{manager ? 'Situação do profissional' : 'A minha situação'}</span>
-          <span className="priv">Privado</span>
+    <AppScreen bar={bar}>
+      <section className="stack">
+        <div className="row-between">
+          <span className="row-between" style={{ justifyContent: 'flex-start' }}>
+            <span className="avatar" aria-hidden>{s.person.display_name.slice(0, 1)}</span>
+            <span className="stack stack-tight">
+              <h1>{s.person.display_name}</h1>
+              {s.person.capabilities.length > 0 && <span className="support">{s.person.capabilities.join(' · ')}</span>}
+            </span>
+          </span>
+          <button className="chip chip-outline" aria-label={`Período: ${s.period.label}`} onClick={() => sheets.open('period')}>{s.period.label}<Icon name="chevronDown" size={18} /></button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className="avatar" aria-hidden>{s.person.display_name.slice(0, 1)}</span>
-          <div className="grow">
-            <h1 style={{ fontSize: '1.5rem' }}>{s.person.display_name}</h1>
-            <span className="muted" style={{ fontSize: '0.875rem' }}>{s.person.capabilities.join(' · ')}</span>
-          </div>
-          <button className="chip chip-outline" aria-label={`Período: ${s.period.label}`} onClick={() => setSheet('period')}>{s.period.label} ▾</button>
-        </div>
-        <div className="segmented" role="group" aria-label="Secção">
-          <button className="seg" aria-pressed={tab === 'resumo'} onClick={() => setTab('resumo')}>Resumo</button>
-          <button className="seg" aria-pressed={tab === 'hist'} onClick={() => goHist(null)}>Histórico</button>
-        </div>
-      </header>
+        <SegmentedControl label="Secção" hideLabel value={tab} onChange={(t) => (t === 'hist' ? goHist(null) : setTab('resumo'))}
+          options={[{ id: 'resumo', label: 'Resumo' }, { id: 'hist', label: 'Histórico' }]} />
+      </section>
 
       {tab === 'resumo'
-        ? <Summary s={s} onExplain={() => setSheet('explain')} onHistory={goHist} />
+        ? <Summary s={s} onExplain={() => sheets.open('explain')} onHistory={goHist} />
         : <HistoryView s={s} filter={filter} onFilter={setFilter} rows={history.data?.rows} total={history.data?.total_count}
             loading={history.isPending} error={history.isError && !lost} stale={history.isPlaceholderData} onRetry={() => history.refetch()} />}
 
-      <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await exitPrivateContext(qc); navigate('/') }}>Sair da área privada</button>
-
-      {sheet === 'explain' && <ExplainSheet s={s} onClose={() => setSheet(null)} />}
+      {sheet === 'explain' && <ExplainSheet s={s} onClose={sheets.close} />}
       {sheet === 'period' && (
-        <div className="sheet" role="dialog" aria-labelledby="pe-title" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <div className="flow-header-row"><h2 id="pe-title" style={{ fontSize: '1.25rem' }}>Período</h2><button className="icon-btn" aria-label="Fechar" onClick={() => setSheet(null)}>×</button></div>
-            {periods.data?.map((p) => {
-              const on = p.id === s.period.id
-              return (
-                <button key={p.id} className="pick" aria-current={on} style={on ? { borderColor: 'var(--accent)', borderWidth: '1.5px' } : undefined}
-                  onClick={() => { setPeriodId(p.id); setSheet(null) }}>
-                  <span><strong style={{ display: 'block' }}>{p.label}</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{STATE_LABEL[p.state]}</span></span>
-                  {on ? <span aria-hidden style={{ color: 'var(--accent)', fontWeight: 700 }}>✓</span>
-                    : p.payments_total_minor > 0 && <span className="num muted" style={{ fontWeight: 600 }}>{formatMoney(p.payments_total_minor, org)}</span>}
-                </button>
-              )
-            })}
-            <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Períodos fechados só se alteram por reabertura autorizada no Fecho.</p>
+        <BottomSheet labelledBy="pe-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <h2 id="pe-title" className="sheet-title">Período</h2>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
           </div>
-        </div>
+          {periods.isPending && <Skeleton rows={3} />}
+          {periods.isError && <ErrorState onRetry={() => periods.refetch()}>Não foi possível carregar os períodos.</ErrorState>}
+          {periods.data && (
+            <ListGroup>
+              {periods.data.map((p) => {
+                const on = p.id === s.period.id
+                return (
+                  <ListRow key={p.id} as="button" current={on} onClick={() => { setPeriodId(p.id); sheets.close() }} title={p.label}
+                    subtitle={STATE_LABEL[p.state]}
+                    trailing={on ? <span className="row-accent row-chevron"><Icon name="check" /></span>
+                      : p.payments_total_minor > 0 ? <span className="row-value num muted">{formatMoney(p.payments_total_minor, org)}</span> : undefined} />
+                )
+              })}
+            </ListGroup>
+          )}
+          <p className="note support">Períodos fechados só se alteram por reabertura autorizada no Fecho.</p>
+        </BottomSheet>
       )}
-    </main>
+    </AppScreen>
   )
 }
 
@@ -131,17 +140,18 @@ function Summary({ s, onExplain, onHistory }: { s: Situation; onExplain: () => v
   return (
     <>
       {determinate ? (
-        <button className="headline" onClick={onExplain}>
+        <button className="money-headline row-tappable" onClick={onExplain}>
           <span className="label">Falta receber · {state}</span>
-          <span className="num headline-value" data-testid="remaining">{m(s.remaining_minor ?? 0)}</span>
-          <span className="num muted" data-testid="derivation">{excess ? `${derivation} = ${g(s.difference_minor ?? 0)}` : `= ${derivation}`}</span>
-          <span className="headline-link">Como se chega a este valor? ›</span>
+          <span className="amount" data-testid="remaining">{m(s.remaining_minor ?? 0)}</span>
+          <span className="num support" data-testid="derivation">{excess ? `${derivation} = ${g(s.difference_minor ?? 0)}` : `= ${derivation}`}</span>
+          <span className="money-link">Como se chega a este valor?<Icon name="chevronRight" size={18} /></span>
         </button>
       ) : (
-        <button className="headline" onClick={onExplain}>
+        <button className="money-headline row-tappable" onClick={onExplain}>
           <span className="label">Falta receber · {state}</span>
-          <span className="headline-value muted" data-testid="remaining">—</span>
-          <span className="muted">Por determinar: a regra deste período ainda não foi definida.</span>
+          <span className="amount muted" data-testid="remaining">—</span>
+          <span className="support">Por determinar: a regra deste período ainda não foi definida.</span>
+          <span className="money-link">Porque não há valor?<Icon name="chevronRight" size={18} /></span>
         </button>
       )}
       {determinate && excess && (
@@ -151,7 +161,7 @@ function Summary({ s, onExplain, onHistory }: { s: Situation; onExplain: () => v
         <div className="notice notice-warning" role="status">Até a regra ser definida não há valor ganho nem valor a receber. A produção e os adiantamentos ficam registados e entram no cálculo nessa altura.</div>
       )}
 
-      <section className="breakdown">
+      <ListGroup aria-label="Composição">
         <Row title="Produção" sub={count(s.production.count, 'serviço registado', 'serviços registados')} value={m(s.production.total_minor)} onOpen={() => onHistory('service')} />
         {determinate && rule ? (
           <Row title="Regra deste período" value={pct(rule.percent)} onOpen={onExplain}
@@ -167,20 +177,20 @@ function Summary({ s, onExplain, onHistory }: { s: Situation; onExplain: () => v
           tone={s.advances.count === 0 ? 'muted' : undefined} onOpen={() => onHistory('advance')} />
         <Row title="Pagamentos" sub={paymentsSub} value={s.payments.count === 0 ? '—' : m(-s.payments.total_minor)}
           tone={s.payments.count === 0 ? 'muted' : undefined} onOpen={() => onHistory('payment')} />
-      </section>
+      </ListGroup>
 
       {s.contributions.count > 0 && (
         <section className="stack">
           <span className="label">À parte</span>
-          <button className="pick" onClick={() => onHistory('contribution')}>
-            <span><strong style={{ display: 'block' }}>Contribuições em compras</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{count(s.contributions.count, 'compra', 'compras')} neste período</span></span>
-            <span className="num" style={{ fontWeight: 600 }}>{m(s.contributions.total_minor)}</span>
-          </button>
-          <span className="muted" style={{ fontSize: '0.875rem' }}>Registado à parte. Não é descontado nem somado ao valor a receber.</span>
+          <ListGroup>
+            <ListRow as="button" onClick={() => onHistory('contribution')} title="Contribuições em compras" chevron
+              subtitle={`${count(s.contributions.count, 'compra', 'compras')} neste período`} trailing={<span className="row-value num">{m(s.contributions.total_minor)}</span>} />
+          </ListGroup>
+          <span className="support">Registado à parte. Não é descontado nem somado ao valor a receber.</span>
         </section>
       )}
 
-      <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>
+      <p className="note support">
         {!manager ? 'Vê apenas os seus registos. Se algum valor não bater certo, fale com a gestão.'
           : `${determinate && rule?.set_by ? `Regra definida por ${rule.set_by} em ${formatDayShort(rule.set_at, org.timezone)}. ` : determinate ? '' : 'A regra deste período ainda não foi definida. '}Correcções a registos ficam no histórico com quem as fez.`}
       </p>
@@ -189,14 +199,8 @@ function Summary({ s, onExplain, onHistory }: { s: Situation; onExplain: () => v
 }
 
 function Row({ title, sub, value, onOpen, tone }: { title: string; sub: string; value: string; onOpen?: () => void; tone?: 'muted' | 'warning' }) {
-  const body = (
-    <>
-      <span className="grow"><strong style={{ display: 'block' }}>{title}</strong><span className="muted num" style={{ fontSize: '0.875rem' }}>{sub}</span></span>
-      <span className={`num brow-value${tone ? ` tone-${tone}` : ''}`}>{value}</span>
-      <span aria-hidden className="muted" style={{ width: '1rem' }}>{onOpen ? '›' : ''}</span>
-    </>
-  )
-  return onOpen ? <button className="brow" onClick={onOpen}>{body}</button> : <div className="brow">{body}</div>
+  const slots = { title, subtitle: <span className="num">{sub}</span>, trailing: <span className={`row-value num${tone ? ` tone-${tone}` : ''}`}>{value}</span> }
+  return onOpen ? <ListRow as="button" onClick={onOpen} chevron {...slots} /> : <ListRow {...slots} />
 }
 
 function ExplainSheet({ s, onClose }: { s: Situation; onClose: () => void }) {
@@ -224,17 +228,18 @@ function ExplainSheet({ s, onClose }: { s: Situation; onClose: () => void }) {
   ]
   const title = !determinate ? 'Porque não há valor a receber?' : excess ? `Porque mostra ${m(0)}?` : `Como se chega a ${m(s.remaining_minor ?? 0)}?`
   return (
-    <div className="sheet" role="dialog" aria-labelledby="ex-title" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="flow-header-row"><h2 id="ex-title" style={{ fontSize: '1.25rem' }}>{title}</h2><button className="icon-btn" aria-label="Fechar" onClick={onClose}>×</button></div>
-        <ol className="explain" data-testid="explanation">
-          {steps.map(([h, b]) => <li key={h}><strong>{h}</strong><br /><span className="muted num">{b}</span></li>)}
-        </ol>
-        {determinate && s.contributions.count > 0 && (
-          <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Contribuições em compras ({m(s.contributions.total_minor)}) ficam à parte e não entram neste cálculo.</p>
-        )}
+    <BottomSheet labelledBy="ex-title" onDismiss={onClose}>
+      <div className="row-between">
+        <h2 id="ex-title" className="sheet-title">{title}</h2>
+        <button className="icon-btn" aria-label="Fechar" onClick={onClose}><Icon name="close" /></button>
       </div>
-    </div>
+      <ol className="explain" data-testid="explanation">
+        {steps.map(([h, b]) => <li key={h}><strong>{h}</strong><br /><span className="muted num">{b}</span></li>)}
+      </ol>
+      {determinate && s.contributions.count > 0 && (
+        <p className="note support">Contribuições em compras ({m(s.contributions.total_minor)}) ficam à parte e não entram neste cálculo.</p>
+      )}
+    </BottomSheet>
   )
 }
 
@@ -273,7 +278,7 @@ function HistoryView({ s, filter, onFilter, rows, total, loading, error, stale, 
   const signed = (r: HistoryRow) => (r.kind === 'advance' || r.kind === 'payment' ? m(-r.amount_minor) : m(r.amount_minor))
 
   return (
-    <section className="stack" style={{ gap: '0.875rem' }}>
+    <section className="stack stack-loose">
       <div className="filter-chips" role="group" aria-label="Filtro">
         {FILTERS.map((f) => <button key={f.label} className="chip chip-outline" aria-pressed={filter === f.kind} onClick={() => onFilter(f.kind)}>{f.label}</button>)}
       </div>
@@ -281,36 +286,38 @@ function HistoryView({ s, filter, onFilter, rows, total, loading, error, stale, 
       {error && <ErrorState onRetry={onRetry}>Não foi possível carregar o histórico.</ErrorState>}
       <div className={stale ? 'stack busy' : 'stack'} aria-busy={stale || undefined} data-testid="history-list">
       {rows && total !== undefined && total > 0 && (
-        <span className="muted" style={{ fontSize: '0.875rem' }} data-testid="history-count">
+        <span className="support" data-testid="history-count">
           {total > rows.length ? `${total} registos neste período · mostra os ${rows.length} mais recentes` : `${count(total, 'registo', 'registos')} neste período`}
           {sumLine && <><br /><strong className="num">{sumLine}</strong></>}
         </span>
       )}
-      {rows && rows.length === 0 && <p className="muted" style={{ margin: 0 }}>{empty}</p>}
+      {rows && rows.length === 0 && <EmptyState icon="receipt" title={empty} />}
       {days.map((d) => (
-        <div key={d.key} className="list">
-          <span className="label" style={{ padding: '0.375rem 0' }}>{formatDayShort(d.key, org.timezone)}</span>
-          {d.rows.map((r, i) => (
-            <div key={`${r.occurred_at}-${i}`} className="list-row">
-              <span className="num muted" style={{ width: '2.75rem', fontSize: '0.875rem' }}>{formatTime(r.occurred_at, org.timezone)}</span>
-              <span className="grow"><strong style={{ display: 'block' }}>{r.title}</strong><span className="muted" style={{ fontSize: '0.8125rem' }}>{sub(r)}</span></span>
-              <span className={`num${r.kind === 'contribution' ? ' muted' : ''}`} style={{ fontWeight: 600 }}>{signed(r)}</span>
-              {manager && (r.kind === 'service' || r.kind === 'advance') && s.period.state === 'aberto' && (
-                <button className="icon-btn" aria-label={`Opções: ${r.title} · corrigir`} onClick={() => navigate(`/registos/anular/${r.kind}/${r.record_id}`)}>⋯</button>
-              )}
-            </div>
-          ))}
-        </div>
+        <section key={d.key} className="stack">
+          <span className="label">{formatDayShort(d.key, org.timezone)}</span>
+          <ListGroup>
+            {d.rows.map((r, i) => {
+              const item = <ListRow leading={<span className="row-time">{formatTime(r.occurred_at, org.timezone)}</span>} title={r.title} subtitle={sub(r) || undefined}
+                trailing={<span className={`row-value num${r.kind === 'contribution' ? ' muted' : ''}`}>{signed(r)}</span>} />
+              return manager && (r.kind === 'service' || r.kind === 'advance') && s.period.state === 'aberto' ? (
+                <div key={`${r.occurred_at}-${i}`} className="row-line">
+                  {item}
+                  <button className="icon-btn" aria-label={`Opções: ${r.title} · corrigir`} onClick={() => navigate(`/privado/anular/${r.kind}/${r.record_id}`)}><Icon name="more" /></button>
+                </div>
+              ) : <div key={`${r.occurred_at}-${i}`} className="row-line">{item}</div>
+            })}
+          </ListGroup>
+        </section>
       ))}
       </div>
-      {filter === 'advance' && <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Adiantamentos são dinheiro recebido antes, por conta do que há a receber neste período. Entram no cálculo de «Falta receber».</p>}
+      {filter === 'advance' && <p className="note support">Adiantamentos são dinheiro recebido antes, por conta do que há a receber neste período. Entram no cálculo de «Falta receber».</p>}
       {filter === 'contribution' && s.contributions.count > 0 && (
         <>
-          <dl className="kv-card">
-            <div><dt>Contribuído em compras</dt><dd className="num">{m(s.contributions.total_minor)}</dd></div>
-            <div><dt>Entra em «Falta receber»?</dt><dd>Não</dd></div>
-          </dl>
-          <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>
+          <ListGroup>
+            <ListRow title="Contribuído em compras" trailing={<span className="row-value num">{m(s.contributions.total_minor)}</span>} />
+            <ListRow title="Entra em «Falta receber»?" trailing={<span className="row-value">Não</span>} />
+          </ListGroup>
+          <p className="note support">
             Dinheiro que {manager ? s.person.display_name : 'pôs'}{manager ? ' pôs' : ''} em compras do salão. Fica registado à parte, com a compra, e não entra no cálculo do que falta receber.
           </p>
         </>

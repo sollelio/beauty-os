@@ -71,6 +71,9 @@ export const router = createBrowserRouter([
               { path: 'fecho/fechar', element: <ClosePage /> },
               { path: 'fecho/historico', element: <HistoryPage /> },
               { path: 'fecho/reabrir', element: <ReopenPage /> },
+              // Anular opened from the private area (Fecho → Dinheiro, Situação): the same correction, inside the gate,
+              // so the private context is not ended by it and back returns to the private screen it came from.
+              { path: 'anular/:kind/:recordId', element: <CancelRecordFlow area="private" /> },
               { path: 'negocio', element: <OverviewPage /> },
               { path: 'negocio/equipa', element: <TeamPage /> },
               { path: 'negocio/servicos', element: <ServicesPage /> },

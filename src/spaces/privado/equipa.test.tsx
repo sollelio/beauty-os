@@ -14,7 +14,7 @@ import { EquipaPage } from './EquipaPage'
 const ctx = { active: true, person_id: 'm1', display_name: 'Mercy', view: 'manager', business_health: false, catalogue_manage: false, expires_at: '2099-01-01T00:00:00Z' }
 const renderIt = () => renderScreen('/x', <p />, {
   entries: ['/privado/equipa'],
-  routes: [{ path: '/privado', element: <Outlet context={ctx} />, children: [{ path: 'equipa', element: <EquipaPage /> }] }],
+  routes: [{ path: '/privado', element: <Outlet context={ctx} />, children: [{ path: 'equipa', element: <EquipaPage /> }, { path: 'situacao/:id', element: <p>Situação</p> }] }],
 })
 function deferred<T>() {
   let resolve!: (v: T) => void
@@ -50,5 +50,15 @@ describe('Equipa states', () => {
     expect(await screen.findByText('Ainda sem equipa')).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByRole('button', { name: /Fecho do período/ })).toBeTruthy()
+  })
+  it('a person is one whole row (no glyph chevron) that opens their situation inside the private area', async () => {
+    vi.mocked(listTeamPeople).mockResolvedValueOnce([{ id: 'n', display_name: 'Nádia', capabilities: ['Cabelo', 'Unhas'] }])
+    const { router } = renderIt()
+    const row = (await screen.findByText('Nádia')).closest('button')!
+    expect(row.className).toContain('row-tappable')
+    expect(row.textContent).toBe('NNádiaCabelo · Unhas')
+    fireEvent.click(row)
+    expect(await screen.findByText('Situação')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/privado/situacao/n')
   })
 })

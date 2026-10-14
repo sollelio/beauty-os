@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import { AppError } from '../../shared/errors'
 import type { ApprovalLine, Fecho, PersonFigures, RulePreview } from '../../modules/period/api'
@@ -73,26 +73,25 @@ const approved = (lines: ApprovalLine[], state: Fecho['period']['state'] = 'pron
       cases: [], lines, paid_minor: lines.reduce((s, l) => s + l.paid_minor, 0), outstanding_minor: outstanding, payments_count: 0 },
     readiness: { can_approve: false, can_annul: false, can_pay: outstanding > 0, can_close: outstanding === 0, unpaid_minor: outstanding } }
 }
-function renderAt(path: string) {
+// A data router (the back contract's useBlocker needs one), with the Fecho routes; returns it so tests can drive back.
+function renderAt(path: string, entries?: string[]) {
+  const router = createMemoryRouter([
+    { path: '/privado/fecho', element: <FechoHome /> },
+    { path: '/privado/fecho/profissionais', element: <ProfessionalsPage /> },
+    { path: '/privado/fecho/aprovar', element: <ApprovePage /> },
+    { path: '/privado/fecho/pagamentos', element: <PaymentsPage /> },
+    { path: '/privado/fecho/fechar', element: <ClosePage /> },
+    { path: '/privado/fecho/historico', element: <HistoryPage /> },
+    { path: '/privado/fecho/reabrir', element: <ReopenPage /> },
+    { path: '/privado/fecho/regra/:personId', element: <RuleFlow /> },
+    { path: '*', element: <p>Outro ecrã</p> },
+  ], { initialEntries: entries ?? [path], initialIndex: entries ? entries.length - 1 : 0 })
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
-      <OrganizationContext.Provider value={org}>
-        <MemoryRouter initialEntries={[path]}>
-          <Routes>
-            <Route path="/privado/fecho" element={<FechoHome />} />
-            <Route path="/privado/fecho/profissionais" element={<ProfessionalsPage />} />
-            <Route path="/privado/fecho/aprovar" element={<ApprovePage />} />
-            <Route path="/privado/fecho/pagamentos" element={<PaymentsPage />} />
-            <Route path="/privado/fecho/fechar" element={<ClosePage />} />
-            <Route path="/privado/fecho/historico" element={<HistoryPage />} />
-            <Route path="/privado/fecho/reabrir" element={<ReopenPage />} />
-            <Route path="/privado/fecho/regra/:personId" element={<RuleFlow />} />
-            <Route path="*" element={<p>Outro ecrã</p>} />
-          </Routes>
-        </MemoryRouter>
-      </OrganizationContext.Provider>
+      <OrganizationContext.Provider value={org}><RouterProvider router={router} /></OrganizationContext.Provider>
     </QueryClientProvider>,
   )
+  return router
 }
 async function confirmAs() {
   fireEvent.click(await screen.findByRole('button', { name: 'Mercy' }))

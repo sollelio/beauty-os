@@ -41,7 +41,11 @@ function renderAt(qc = new QueryClient({ defaultOptions: { queries: { retry: fal
       <OrganizationContext.Provider value={org}>
         <MemoryRouter initialEntries={['/privado/situacao/n1']}>
           <Routes>
-            <Route path="/privado" element={<PrivateGate />}><Route path="situacao/:personId" element={<SituationPage />} /></Route>
+            <Route path="/privado" element={<PrivateGate />}>
+              <Route path="situacao/:personId" element={<SituationPage />} />
+              <Route path="equipa" element={<p>Equipa privada</p>} />
+              <Route path="anular/:kind/:recordId" element={<p>Anular privado</p>} />
+            </Route>
             <Route path="/privado/entrar" element={<p>Entrada privada</p>} />
             <Route path="/" element={<p>Hoje</p>} />
           </Routes>
@@ -63,7 +67,7 @@ describe('SituationPage', () => {
     expect(screen.getByText('70% para Nádia · 30% para o salão · definida em 1 out')).toBeTruthy()
     expect(screen.getByText('70% × 100.000')).toBeTruthy()
     expect(screen.getByText('−25.000 Kz')).toBeTruthy()
-    fireEvent.click(screen.getByText('Como se chega a este valor? ›'))
+    fireEvent.click(screen.getByText('Como se chega a este valor?'))
     const steps = within(screen.getByTestId('explanation')).getAllByRole('listitem').map((li) => li.textContent)
     expect(steps).toEqual([
       'Produção do período15 serviços registados = 100.000 Kz',
@@ -159,7 +163,7 @@ describe('private data lifetime', () => {
     serve(base)
     const qc = renderAt()
     await screen.findByTestId('remaining')
-    fireEvent.click(screen.getByText('Sair da área privada'))
+    fireEvent.click(screen.getByRole('button', { name: 'Sair da área privada' }))
     await screen.findByText('Hoje')
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('end_private_context'))
     expect(cached(qc)).toBe(0)
@@ -215,5 +219,48 @@ describe('Situação · Histórico states', () => {
     await act(async () => { second({ data: { total_count: 0, rows: [] }, error: null }) })
     expect(await screen.findByText('Nenhum adiantamento neste período.')).toBeTruthy()
     expect(screen.getByTestId('history-list').getAttribute('aria-busy')).toBeNull()
+  })
+})
+
+describe('Situação stays in the private area', () => {
+  const row: HistoryRow = { kind: 'service', record_id: 'r1', occurred_at: '2026-10-05T10:00:00Z', title: 'Corte', method_label: 'Numerário', confirmed_by: null, note: null, amount_minor: K(3500), purchase: null }
+  it('manager view: ← goes to Equipa inside the private area, never to Hoje; the context is not ended', async () => {
+    serve(base)
+    renderAt()
+    await screen.findByTestId('remaining')
+    expect(document.querySelector('.app-bar')!.textContent).toContain('Área privada · Mercy')
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Voltar' }))
+    expect(await screen.findByText('Equipa privada')).toBeTruthy()
+    expect(rpc).not.toHaveBeenCalledWith('end_private_context')
+  })
+  it('own view: it is the root — × is the explicit exit', async () => {
+    serve({ ...base, view: 'self' })
+    renderAt()
+    await screen.findByTestId('remaining')
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Voltar' })).toBeNull()
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Sair da área privada' }))
+    expect(await screen.findByText('Hoje')).toBeTruthy()
+  })
+  it('a correction from the history opens inside the private area (the gate stays, the context is not ended)', async () => {
+    rpc.mockImplementation(async (fn: string) => {
+      if (fn === 'private_context_status') return { data: active(), error: null }
+      if (fn === 'team_situation') return { data: base, error: null }
+      if (fn === 'team_history') return { data: { total_count: 1, rows: [row] }, error: null }
+      return { data: { ok: true }, error: null }
+    })
+    renderAt()
+    fireEvent.click(await screen.findByRole('button', { name: 'Histórico' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Opções: Corte · corrigir' }))
+    expect(await screen.findByText('Anular privado')).toBeTruthy()
+    expect(rpc).not.toHaveBeenCalledWith('end_private_context')
+  })
+  it('the period sheet closes with back and the situation stays', async () => {
+    serve(base)
+    renderAt()
+    fireEvent.click(await screen.findByRole('button', { name: 'Período: Outubro' }))
+    expect(await screen.findByRole('dialog', { name: 'Período' })).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Fechar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByTestId('remaining')).toBeTruthy()
   })
 })

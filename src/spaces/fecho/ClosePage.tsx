@@ -1,31 +1,39 @@
 // Fechar período (Slice 06 F13 / E1 blocked / E3 error) and Decisões e histórico (F15).
 // Close is blocked while any approved amount is unpaid (04 J5 Decided); a missing owners' decision only warns (07 I5).
+// On the mobile shell (UX slice 7): "Fechar período" is a primary completion action — never styled as destructive —
+// in the bottom bar; after it, back to where it was opened (the Fecho home, now closed and read-only), with no close
+// screen left behind. The history is grouped by day, one row per decision.
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { closePeriod, fechoKeys, getFechoHistory, type HistoryEntry } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
 import { dayKey, formatDayShort, formatTime } from '../../shared/time'
+import { AppScreen } from '../../shared/ui/AppShell'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack } from '../../shared/ui/navigation'
+import { EmptyState } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
 import { rangeLabel, useFecho } from './fecho'
 import { KIND_LABEL, type RecordKind } from '../../modules/corrections/api'
-import { Boundary, FechoHeader, KV, Loading } from './ui'
+import { BoundaryScreen, KV, Loading } from './ui'
 
 export function ClosePage() {
   const org = useOrganization()
   const navigate = useNavigate()
   const { q, to } = useFecho()
-  if (!q.data) return <Loading q={q} />
+  const back = useAppBack(to('/privado/fecho'))
+  if (!q.data) return <Loading q={q} title="Fechar período" />
   const f = q.data, pos = f.position, a = f.approval
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
-  const back = () => navigate(to('/privado/fecho'))
+  const bar = <PrivateBar title="Fechar período" onBack={back} exit={false} />
   if (f.period.state === 'fechado' || !a) {
     return (
-      <main className="app-main">
-        <FechoHeader title="Fechar período" back={back} />
-        <div className="notice notice-warning">{f.period.state === 'fechado' ? 'Este período já está fechado.' : 'Só pode fechar depois de aprovar os valores a pagar.'}</div>
+      <AppScreen bar={bar}>
+        <div className="notice notice-warning" role="status">{f.period.state === 'fechado' ? 'Este período já está fechado.' : 'Só pode fechar depois de aprovar os valores a pagar.'}</div>
         <button className="btn btn-secondary" onClick={back}>Voltar ao Fecho</button>
-      </main>
+      </AppScreen>
     )
   }
   const lines = a.lines.filter((l) => l.approved_minor > 0)
@@ -42,25 +50,23 @@ export function ClosePage() {
     ['Reserva alocada', m(pos.reserve_allocated_minor)],
   ]
   return (
-    <main className="app-main">
-      <FechoHeader title="Fechar período" back={back} />
-      {blocked && (
-        <div className="notice notice-warning" role="status"><strong style={{ display: 'block' }}>Ainda há {unpaid.length} {unpaid.length === 1 ? 'pagamento' : 'pagamentos'} por confirmar</strong>
-          {unpaid.map((l) => `${l.display_name} · ${m(l.outstanding_minor)}`).join(' · ')}. O período só fecha com todos os pagamentos aprovados confirmados.</div>
-      )}
-      {!pos.owners_decision && <div className="notice notice-neutral">Ainda sem decisão dos sócios: fica registado «sem decisão» ao fechar.</div>}
-      <Boundary permission="period.close" run={closePeriod} input={{ periodId: f.period.id, revision: f.review_revision }} blocked={blocked}
-        intro="Depois de fechado, o período fica só de leitura. Alterações só por reabertura autorizada, com motivo e registo de quem."
-        lockNote="Fica no histórico com quem fechou e quando." label="Fechar período" onSuccess={back} onBack={back}>
-        <KV rows={rows} />
-      </Boundary>
-      {blocked && (
-        <div className="footer">
-          <button className="btn btn-primary btn-tall" disabled>Fechar período</button>
-          <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ir aos pagamentos</button>
-        </div>
-      )}
-    </main>
+    <BoundaryScreen bar={bar}
+      top={<>
+        {blocked && (
+          <div className="notice notice-warning" role="status"><strong style={{ display: 'block' }}>Ainda há {unpaid.length} {unpaid.length === 1 ? 'pagamento' : 'pagamentos'} por confirmar</strong>
+            {unpaid.map((l) => `${l.display_name} · ${m(l.outstanding_minor)}`).join(' · ')}. O período só fecha com todos os pagamentos aprovados confirmados.</div>
+        )}
+        {!pos.owners_decision && <div className="notice notice-neutral">Ainda sem decisão dos sócios: fica registado «sem decisão» ao fechar.</div>}
+      </>}
+      permission="period.close" run={closePeriod} input={{ periodId: f.period.id, revision: f.review_revision }} blocked={blocked}
+      intro="Depois de fechado, o período fica só de leitura. Alterações só por reabertura autorizada, com motivo e registo de quem."
+      lockNote="Fica no histórico com quem fechou e quando." label="Fechar período" onSuccess={back} onBack={back}
+      extraActions={blocked && <>
+        <button className="btn btn-primary btn-tall" disabled>Fechar período</button>
+        <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ir aos pagamentos</button>
+      </>}>
+      <KV rows={rows} />
+    </BoundaryScreen>
   )
 }
 
@@ -68,10 +74,10 @@ const pct = (n: unknown) => `${String(Number(n)).replace('.', ',')}%`
 
 export function HistoryPage() {
   const org = useOrganization()
-  const navigate = useNavigate()
   const { p, q, to } = useFecho()
+  const back = useAppBack(to('/privado/fecho'))
   const h = useQuery({ queryKey: fechoKeys.history(p), queryFn: () => getFechoHistory(p) })
-  if (!q.data || !h.data) return <Loading q={q.isError ? q : h} />
+  if (!q.data || !h.data) return <Loading q={q.isError ? q : h} title="Decisões e histórico" />
   const m = (n: unknown) => formatMoney(Number(n), org)
   const entry = (e: HistoryEntry): [string, string] => {
     switch (e.kind) {
@@ -103,27 +109,23 @@ export function HistoryPage() {
     days.at(-1)!.rows.push(e)
   }
   return (
-    <main className="app-main">
-      <header className="stack" style={{ gap: '0.5rem' }}>
-        <FechoHeader title="Decisões e histórico" back={() => navigate(to('/privado/fecho'))} />
-        <h1 style={{ fontSize: '1.5rem' }}>{q.data.period.label}</h1>
-        <span className="muted" style={{ fontSize: '0.875rem' }}>{h.data.length} {h.data.length === 1 ? 'decisão' : 'decisões'} do fecho · serviços, adiantamentos, despesas e compras ficam nos seus espaços</span>
-      </header>
-      {h.data.length === 0 && <p className="muted">Ainda não há decisões neste período.</p>}
+    <AppScreen bar={<PrivateBar title="Decisões e histórico" onBack={back} />}>
+      <section className="stack stack-tight">
+        <h1>{q.data.period.label}</h1>
+        <span className="support">{h.data.length} {h.data.length === 1 ? 'decisão' : 'decisões'} do fecho · serviços, adiantamentos, despesas e compras ficam nos seus espaços</span>
+      </section>
+      {h.data.length === 0 && <EmptyState icon="clock" title="Ainda sem decisões">As decisões deste período aparecem aqui, com quem as tomou.</EmptyState>}
       {days.map((d) => (
-        <section key={d.key} className="list" data-testid="history-day">
-          <span className="label" style={{ padding: '0.375rem 0' }}>{formatDayShort(d.key, org.timezone)}</span>
-          {d.rows.map((e, i) => {
-            const [title, sub] = entry(e)
-            return (
-              <div key={i} className="list-row">
-                <span className="num muted" style={{ width: '2.75rem', fontSize: '0.875rem' }}>{formatTime(e.at, org.timezone)}</span>
-                <span className="grow"><strong style={{ display: 'block' }}>{title}</strong><span className="muted num" style={{ fontSize: '0.8125rem' }}>{sub}</span></span>
-              </div>
-            )
-          })}
+        <section key={d.key} className="stack" data-testid="history-day">
+          <span className="label">{formatDayShort(d.key, org.timezone)}</span>
+          <ListGroup>
+            {d.rows.map((e, i) => {
+              const [title, sub] = entry(e)
+              return <ListRow key={i} leading={<span className="row-time">{formatTime(e.at, org.timezone)}</span>} title={title} subtitle={<span className="num">{sub}</span>} />
+            })}
+          </ListGroup>
         </section>
       ))}
-    </main>
+    </AppScreen>
   )
 }

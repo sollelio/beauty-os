@@ -1,5 +1,7 @@
 // Entering the private context on the shared device (ADR-0009 private_session): person + PIN with the same control as
 // every Confirmação necessária (PinConfirm). The server verifies and owns lockout; the session model is unchanged.
+// On the mobile shell: the private bar (the door to the area, not yet inside it), back in history, Entrar in the bottom
+// bar; after a successful entry this screen is replaced by the destination, so back never returns to the PIN.
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -7,10 +9,14 @@ import { enterPrivateContext, getPrivateStatus, listPrivatePeople, privateKeys }
 import { PinConfirm } from '../../modules/org/PinConfirm'
 import { isPinError, VERIFY_MESSAGES } from '../../modules/org/verifyMessages'
 import { toAppError } from '../../shared/errors'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { Icon } from '../../shared/ui/Icon'
+import { useAppBack } from '../../shared/ui/navigation'
 
 export function PrivateEntryPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const back = useAppBack('/')
   const qc = useQueryClient()
   const people = useQuery({ queryKey: privateKeys.people, queryFn: listPrivatePeople })
   const [personId, setPersonId] = useState<string | null>(null)
@@ -28,25 +34,23 @@ export function PrivateEntryPage() {
   const { ended, next } = (location.state as { ended?: boolean; next?: string } | null) ?? {}
 
   return (
-    <main className="app-main">
-      <header className="flow-header-row">
-        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate('/')}>←</button>
-        <span className="muted" style={{ fontWeight: 600 }}>Área privada</span>
-        <span className="priv">Privado</span>
-      </header>
-      <section className="stack" style={{ gap: '1rem' }}>
+    <AppScreen
+      bar={<AppBar tone="private" overline={<><Icon name="lock" size={14} strokeWidth={2.5} /><span>Área privada</span></>} title="Entrar" leading="back" onLeading={back} />}
+      actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" disabled={!personId || !secret || enter.isPending} onClick={() => enter.mutate()}>
+            {enter.isPending ? 'A verificar…' : 'Entrar'}
+          </button>
+        </BottomActionBar>
+      }>
+      <section className="stack stack-loose">
         <h2>Quem é?</h2>
-        <p className="muted" style={{ margin: 0 }}>Os valores pessoais só aparecem depois de confirmar quem é. A área fecha ao sair e ao fim de pouco tempo.</p>
-        {ended && <div className="notice notice-warning" role="status">A área privada terminou.</div>}
+        <p className="note">Os valores pessoais só aparecem depois de confirmar quem é. A área fecha ao sair e ao fim de pouco tempo.</p>
+        {ended && <div className="notice notice-warning" role="status">A área privada terminou. Confirme de novo para continuar.</div>}
         <PinConfirm legend="Pessoa" people={people.data} loading={people.isPending} emptyText="Ninguém com acesso à área privada neste dispositivo."
           personId={personId} onPerson={setPersonId} secret={secret} onSecret={setSecret} error={err} />
         {err && !isPinError(err) && <div className="notice notice-error" role="alert">{(err.code && VERIFY_MESSAGES[err.code]) || 'Não foi possível entrar.'}</div>}
       </section>
-      <div className="footer">
-        <button className="btn btn-primary btn-tall" disabled={!personId || !secret || enter.isPending} onClick={() => enter.mutate()}>
-          {enter.isPending ? 'A verificar…' : 'Entrar'}
-        </button>
-      </div>
-    </main>
+    </AppScreen>
   )
 }

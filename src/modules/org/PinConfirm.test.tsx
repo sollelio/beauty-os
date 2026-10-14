@@ -50,7 +50,7 @@ describe('PinConfirm', () => {
   it('one eligible confirmer is chosen automatically and the PIN gets focus', async () => {
     renderScreen('/x', <Picker />)
     await waitFor(() => expect(person('Fernando').getAttribute('aria-pressed')).toBe('true'))
-    expect(document.activeElement).toBe(pin())
+    await waitFor(() => expect(document.activeElement).toBe(pin()))                  // focus follows in an effect after the selection renders
   })
 
   it('with several confirmers nobody is preselected; tapping one selects it (and only it)', async () => {
@@ -161,7 +161,7 @@ describe('private entry', () => {
     vi.mocked(enterPrivateContext).mockResolvedValue(undefined)
     renderScreen('/privado/entrar', <PrivateEntryPage />, { routes: [{ path: '/privado', element: <p>Área privada aberta</p> }] })
     await waitFor(() => expect(person('Fernando').getAttribute('aria-pressed')).toBe('true'))
-    expect(document.activeElement).toBe(pin())
+    await waitFor(() => expect(document.activeElement).toBe(pin()))
     fireEvent.change(pin(), { target: { value: '246810' } })
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
     expect(await screen.findByText('Área privada aberta')).toBeTruthy()

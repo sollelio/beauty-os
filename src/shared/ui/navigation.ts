@@ -12,6 +12,15 @@ import { useBlocker, useLocation, useNavigate } from 'react-router'
 type NavState = Record<string, unknown> | null
 const STEP_PARAM = 'passo'
 
+// The step lives beside any other query parameter of the screen (e.g. Fecho's ?p=<period>), never instead of it.
+const withStep = (search: string, step: number | null) => {
+  const sp = new URLSearchParams(search)
+  if (step === null) sp.delete(STEP_PARAM)
+  else sp.set(STEP_PARAM, String(step))
+  const qs = sp.toString()
+  return qs ? `?${qs}` : ''
+}
+
 const hasSheet = (state: unknown) => typeof (state as { sheet?: unknown } | null)?.sheet === 'string'
 
 const withoutSheet = (state: unknown): NavState => {
@@ -48,6 +57,9 @@ export type Flow = {
   goTo: (step: number) => void
   /** After a successful command: show the success state and unwind the step entries (no stale form behind it). */
   finish: () => void
+  /** After a successful command whose result is shown where the flow was opened (a review screen): unwind the flow's
+   *  entries back to that screen, or replace with `parent` when the flow was opened by a deep link. */
+  finishTo: (parent: string) => void
   /** "Registar outro …": a fresh first step on the current entry. */
   restart: () => void
   /** × / "Sair sem guardar": back to where the flow was opened (or `parent`); asks first when there is unsaved data. */
@@ -77,7 +89,7 @@ export function useFlow({ steps, parent, dirty, sheetDirty = false, reachable }:
 
   // A step entry without its data (deep link, reload, a stale forward entry) becomes the first step.
   useEffect(() => {
-    if (misplaced) navigate({ pathname: location.pathname, search: '' }, { replace: true, state: base })
+    if (misplaced) navigate({ pathname: location.pathname, search: withStep(location.search, null) }, { replace: true, state: base })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [misplaced])
 
@@ -105,15 +117,21 @@ export function useFlow({ steps, parent, dirty, sheetDirty = false, reachable }:
     completed,
     goTo: (target) => {
       if (target < step) navigate(target - step)
-      else if (target > step) navigate({ pathname: location.pathname, search: `?${STEP_PARAM}=${target}` }, { state: base })
+      else if (target > step) navigate({ pathname: location.pathname, search: withStep(location.search, target) }, { state: base })
     },
     finish: () => {
       setCompleted(true)
       if (step > 1) navigate(1 - step)
     },
+    finishTo: (to) => {
+      setCompleted(true)
+      bypass.current = true
+      if (hasHistory) navigate(-step)
+      else navigate(to, { replace: true })
+    },
     restart: () => {
       setCompleted(false)
-      navigate({ pathname: location.pathname, search: '' }, { replace: true, state: base })
+      navigate({ pathname: location.pathname, search: withStep(location.search, null) }, { replace: true, state: base })
     },
     exit: () => {
       if (hasHistory) navigate(-1)

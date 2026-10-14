@@ -1,21 +1,34 @@
-// Fecho home (Slice 06 F1/F2/F10b/F12/F14): state strip, one readiness notice, exceptions only, a three-row summary
-// and one clear next action. Every figure comes from the database review (fecho_period).
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+// Fecho home (Slice 06 F1/F2/F10b/F12/F14): the period and its state, one readiness notice, exceptions first, a
+// three-row summary and the one next valid action in the bottom bar. Every figure comes from the database review
+// (fecho_period). On the mobile shell: the private bar (← back inside the private area, never to Hoje), sheets as history
+// entries, and a closed period that reads as read-only — Reabrir sits apart at the end, never as the bar's action.
+import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { annulApproval, fechoKeys, listFechoPeriods, STATE_LABEL, type Fecho, type FechoException } from '../../modules/period/api'
+import { annulApproval, fechoKeys, listFechoPeriods, STATE_LABEL, type Fecho, type FechoException, type PeriodState } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
 import { formatTime, formatDayShort } from '../../shared/time'
+import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack, useSheet } from '../../shared/ui/navigation'
+import { StatusChip } from '../../shared/ui/StatusChip'
+import { ErrorState, Skeleton } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
 import { rangeLabel, useFecho, when } from './fecho'
-import { Boundary, ExceptionRow, KV, Loading, StateStrip, SummaryRow } from './ui'
+import { ExceptionRow, KV, Loading, SheetBoundary, StateStrip, SummaryRow } from './ui'
+
+const STATE_TONE: Record<PeriodState, 'warning' | 'accent' | 'neutral' | 'success'> = {
+  aberto: 'neutral', pronto_para_pagamento: 'accent', em_pagamento: 'accent', fechado: 'success',
+}
 
 export function FechoHome() {
   const org = useOrganization()
   const navigate = useNavigate()
-  const [, setSp] = useSearchParams()
+  const back = useAppBack('/privado')
   const { q, to } = useFecho()
-  const [sheet, setSheet] = useState<null | 'period' | 'annul'>(null)
+  const sheets = useSheet<'period' | 'annul'>()
   if (!q.data) return <Loading q={q} />
   const f = q.data
   const m = (n: number) => formatMoney(n, org)
@@ -47,8 +60,9 @@ export function FechoHome() {
 
   const readiness = (() => {
     if (st === 'fechado' && f.closed) {
-      return <div className="lock-card" role="status"><strong>Fechado em {formatDayShort(f.closed.closed_at, org.timezone)} às {formatTime(f.closed.closed_at, org.timezone)} por {f.closed.closed_by}</strong>
-        <span>Só de leitura; reabrir exige autorização e motivo.</span></div>
+      return <div className="readonly-note" role="status"><LockIcon /><span className="stack stack-tight">
+        <strong>Fechado em {formatDayShort(f.closed.closed_at, org.timezone)} às {formatTime(f.closed.closed_at, org.timezone)} por {f.closed.closed_by}</strong>
+        <span>Só de leitura; reabrir exige autorização e motivo.</span></span></div>
     }
     if (f.reopened) {
       return <div className="notice notice-success" role="status"><strong style={{ display: 'block' }}>{outstanding.length ? `${paidCount} de ${lines.length} pagamentos confirmados` : 'Todos os pagamentos confirmados'}</strong>
@@ -81,14 +95,15 @@ export function FechoHome() {
     : pos.distribution_minor === null ? `livre ${g(pos.livre_minor)} · distribuição por decidir`
       : `livre ${g(pos.livre_minor)} · distribuição ${g(pos.distribution_minor)} · não distribuído ${g(pos.undistributed_minor ?? 0)}`
 
-  const footer = (() => {
+  // The one next valid action (and its companions) for every state but closed.
+  const actions = (() => {
+    if (st === 'fechado') return null
     if (st === 'aberto') {
       const first = f.exceptions.find((e) => e.kind === 'rule_pending')
       return first && first.kind === 'rule_pending'
         ? <button className="btn btn-primary btn-tall" onClick={() => navigate(to(`/privado/fecho/regra/${first.person.person_id}`))}>Decidir regra · {first.person.display_name}</button>
         : <button className="btn btn-primary btn-tall" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
     }
-    if (st === 'fechado') return <button className="btn btn-destructive" onClick={() => navigate(to('/privado/fecho/reabrir'))}>Reabrir período (autorização necessária)</button>
     return (
       <>
         {outstanding.length > 0
@@ -97,101 +112,124 @@ export function FechoHome() {
         {st === 'em_pagamento' && outstanding.length > 0 && (
           <>
             <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/fechar'))}>Fechar período</button>
-            <span className="muted" style={{ textAlign: 'center', fontSize: '0.8125rem' }}>Só fecha depois de todos os pagamentos confirmados.</span>
+            <span className="bar-summary support">Só fecha depois de todos os pagamentos confirmados.</span>
           </>
         )}
         {st === 'em_pagamento' && outstanding.length === 0 && <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ver pagamentos</button>}
-        {f.readiness.can_annul && <button className="btn btn-destructive" onClick={() => setSheet('annul')}>Voltar a rever (anula a aprovação)</button>}
       </>
     )
   })()
 
   return (
-    <main className="app-main">
-      <header className="stack" style={{ gap: '0.625rem' }}>
-        <div className="flow-header-row">
-          <button className="icon-btn" aria-label="Voltar a Hoje" onClick={() => navigate('/')}>⌂</button>
-          <span className="muted" style={{ fontWeight: 600 }}>Fecho</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <button className="icon-btn" aria-label="Decisões e histórico do fecho" onClick={() => navigate(to('/privado/fecho/historico'))}>🕒</button>
-            <span className="priv">Privado</span>
+    <AppScreen
+      bar={<PrivateBar title="Fecho" onBack={back} actions={
+        <button className="app-bar-btn" aria-label="Decisões e histórico do fecho" onClick={() => navigate(to('/privado/fecho/historico'))}><Icon name="clock" size={22} /></button>
+      } />}
+      actions={actions && <BottomActionBar>{actions}</BottomActionBar>}>
+      <section className="stack" aria-label="Período">
+        <div className="row-between">
+          <span className="stack stack-tight">
+            <h1>{f.period.label}</h1>
+            <span className="support">{rangeLabel(f.period.starts_on, f.period.ends_on, org.timezone)} · {f.period.is_current ? 'período actual' : 'outro período'}</span>
           </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-          <span><h1 style={{ fontSize: '1.5rem' }}>{f.period.label}</h1>
-            <span className="muted" style={{ fontSize: '0.875rem' }}>{rangeLabel(f.period.starts_on, f.period.ends_on, org.timezone)} · {f.period.is_current ? 'período actual' : 'outro período'}</span></span>
-          <button className="chip chip-outline" onClick={() => setSheet('period')}>Período ▾</button>
+          <button className="chip chip-outline" aria-label={`Mudar de período · ${f.period.label}`} onClick={() => sheets.open('period')}>Período<Icon name="chevronDown" size={18} /></button>
         </div>
         <StateStrip state={st} />
-      </header>
+      </section>
 
       {readiness}
 
       {f.exceptions.length > 0 && (
-        <section className="stack" style={{ gap: 0 }} aria-label="Precisa de atenção">
+        <section className="stack" aria-label="Precisa de atenção">
           <span className="label">Precisa de atenção</span>
-          {f.exceptions.map(exceptionRow)}
+          <ListGroup>{f.exceptions.map(exceptionRow)}</ListGroup>
         </section>
       )}
 
       {st === 'fechado' ? (
-        <section className="stack">
-          <KV rows={[
-            ['Produção', m(pos.production.total_minor)],
-            ['Ganhos da equipa', m(-pos.team_earned_minor)],
-            ['Despesas', m(-pos.expenses.total_minor)],
-            ['Compras · parte do salão', m(-pos.purchases.salon_minor)],
-            ['Reserva alocada', m(-pos.reserve_allocated_minor)],
-            ...(pos.reserve_used_minor ? [['Pago pela reserva', m(pos.reserve_used_minor)] as [string, string]] : []),
-            ...(pos.excess_minor ? [[`Acima do ganho · ${pos.people.filter((x) => (x.excess_minor ?? 0) > 0).map((x) => x.display_name).join(', ')} · a rever`, m(-pos.excess_minor)] as [string, string]] : []),
-            ...(pos.owners_decision ? [['Distribuição aos sócios', m(-(pos.distribution_minor ?? 0))] as [string, string]] : [['Decisão dos sócios', 'Sem decisão registada ao fechar'] as [string, string]]),
-            ['Não distribuído', pos.undistributed_minor === null ? '—' : m(pos.undistributed_minor)],
-          ]} />
-          <SummaryRow title="Profissionais" sub={professionalsSub} onOpen={() => navigate(to('/privado/fecho/profissionais'))} />
-          <SummaryRow title="Posição do período" sub={positionSub} onOpen={() => navigate(to('/privado/fecho/posicao'))} />
-        </section>
+        <>
+          <section className="stack">
+            <span className="label">Valores fechados</span>
+            <KV rows={[
+              ['Produção', m(pos.production.total_minor)],
+              ['Ganhos da equipa', m(-pos.team_earned_minor)],
+              ['Despesas', m(-pos.expenses.total_minor)],
+              ['Compras · parte do salão', m(-pos.purchases.salon_minor)],
+              ['Reserva alocada', m(-pos.reserve_allocated_minor)],
+              ...(pos.reserve_used_minor ? [['Pago pela reserva', m(pos.reserve_used_minor)] as [string, string]] : []),
+              ...(pos.excess_minor ? [[`Acima do ganho · ${pos.people.filter((x) => (x.excess_minor ?? 0) > 0).map((x) => x.display_name).join(', ')} · a rever`, m(-pos.excess_minor)] as [string, string]] : []),
+              ...(pos.owners_decision ? [['Distribuição aos sócios', m(-(pos.distribution_minor ?? 0))] as [string, string]] : [['Decisão dos sócios', 'Sem decisão registada ao fechar'] as [string, string]]),
+              ['Não distribuído', pos.undistributed_minor === null ? '—' : m(pos.undistributed_minor)],
+            ]} />
+          </section>
+          <ListGroup>
+            <SummaryRow title="Profissionais" sub={professionalsSub} onOpen={() => navigate(to('/privado/fecho/profissionais'))} />
+            <SummaryRow title="Posição do período" sub={positionSub} onOpen={() => navigate(to('/privado/fecho/posicao'))} />
+            <SummaryRow title="Decisões e histórico" sub="quem decidiu, aprovou, pagou e fechou" onOpen={() => navigate(to('/privado/fecho/historico'))} />
+          </ListGroup>
+          <section className="exceptional">
+            <button className="btn btn-destructive" onClick={() => navigate(to('/privado/fecho/reabrir'))}>Reabrir período (autorização necessária)</button>
+            <span className="support">Só em caso de erro. Exige motivo e fica no histórico.</span>
+          </section>
+        </>
       ) : (
-        <section className="stack" style={{ gap: 0 }}>
+        <section className="stack">
           <span className="label">Resumo do período</span>
-          <SummaryRow title="Profissionais" sub={professionalsSub} onOpen={() => navigate(to('/privado/fecho/profissionais'))} />
-          <SummaryRow title="Despesas, compras e reserva"
-            sub={`despesas ${g(pos.expenses.total_minor)} · compras ${g(pos.purchases.salon_minor)} · reserva ${g(pos.reserve_allocated_minor)}`}
-            onOpen={() => navigate(to('/privado/fecho/dinheiro'))} />
-          <SummaryRow title="Posição do período" sub={positionSub} onOpen={() => navigate(to('/privado/fecho/posicao'))} />
+          <ListGroup>
+            <SummaryRow title="Profissionais" sub={professionalsSub} onOpen={() => navigate(to('/privado/fecho/profissionais'))} />
+            <SummaryRow title="Despesas, compras e reserva"
+              sub={`despesas ${g(pos.expenses.total_minor)} · compras ${g(pos.purchases.salon_minor)} · reserva ${g(pos.reserve_allocated_minor)}`}
+              onOpen={() => navigate(to('/privado/fecho/dinheiro'))} />
+            <SummaryRow title="Posição do período" sub={positionSub} onOpen={() => navigate(to('/privado/fecho/posicao'))} />
+          </ListGroup>
         </section>
       )}
 
-      {footer && <div className="footer">{footer}</div>}
-
-      {sheet === 'period' && <PeriodSheet current={f} onPick={(id) => { setSp({ p: id }); setSheet(null) }} onClose={() => setSheet(null)} />}
-      {sheet === 'annul' && (
-        <div className="sheet" role="dialog" aria-label="Voltar a rever" onClick={() => setSheet(null)}>
-          <div className="sheet-body" style={{ maxHeight: '92dvh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-            <Boundary permission="period.decide" run={annulApproval} input={{ periodId: f.period.id, revision: f.review_revision }}
-              intro="Anular a aprovação devolve o período a «Aberto». Os valores voltam a poder mudar; a aprovação anulada fica no histórico."
-              lockNote="Fica no histórico com quem anulou e quando. Só é possível enquanto não houver pagamentos confirmados."
-              label="Anular aprovação" onSuccess={() => setSheet(null)} onBack={() => setSheet(null)} destructive />
-          </div>
-        </div>
+      {f.readiness.can_annul && (
+        <section className="exceptional">
+          <button className="btn btn-destructive" onClick={() => sheets.open('annul')}>Voltar a rever (anula a aprovação)</button>
+          <span className="support">Só enquanto não houver pagamentos confirmados.</span>
+        </section>
       )}
-    </main>
+
+      {sheets.current === 'period' && <PeriodSheet current={f} onPick={(id) => sheets.leaveTo(`/privado/fecho?p=${encodeURIComponent(id)}`)} onClose={sheets.close} />}
+      {sheets.current === 'annul' && (
+        <BottomSheet labelledBy="annul-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <span id="annul-title" className="label">Voltar a rever · {f.period.label}</span>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
+          </div>
+          <SheetBoundary permission="period.decide" run={annulApproval} input={{ periodId: f.period.id, revision: f.review_revision }}
+            intro="Anular a aprovação devolve o período a «Aberto». Os valores voltam a poder mudar; a aprovação anulada fica no histórico."
+            lockNote="Fica no histórico com quem anulou e quando. Só é possível enquanto não houver pagamentos confirmados."
+            label="Anular aprovação" onSuccess={sheets.close} onBack={sheets.close} destructive />
+        </BottomSheet>
+      )}
+    </AppScreen>
   )
 }
 
 function PeriodSheet({ current, onPick, onClose }: { current: Fecho; onPick: (id: string) => void; onClose: () => void }) {
   const periods = useQuery({ queryKey: fechoKeys.periods, queryFn: listFechoPeriods })
   return (
-    <div className="sheet" role="dialog" aria-labelledby="pe-title" onClick={onClose}>
-      <div className="sheet-body" style={{ maxHeight: '80dvh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="flow-header-row"><h2 id="pe-title" style={{ fontSize: '1.25rem' }}>Período</h2><button className="icon-btn" aria-label="Fechar" onClick={onClose}>×</button></div>
-        {periods.data?.map((p) => (
-          <button key={p.id} className="pick" aria-current={p.id === current.period.id} onClick={() => onPick(p.id)}
-            style={p.id === current.period.id ? { borderColor: 'var(--accent)', borderWidth: '1.5px' } : undefined}>
-            <span><strong style={{ display: 'block' }}>{p.label}</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{STATE_LABEL[p.state].toLocaleLowerCase('pt-PT')}</span></span>
-            {p.id === current.period.id && <span aria-hidden style={{ color: 'var(--accent)', fontWeight: 700 }}>✓</span>}
-          </button>
-        ))}
+    <BottomSheet labelledBy="pe-title" onDismiss={onClose}>
+      <div className="row-between">
+        <h2 id="pe-title" className="sheet-title">Período</h2>
+        <button className="icon-btn" aria-label="Fechar" onClick={onClose}><Icon name="close" /></button>
       </div>
-    </div>
+      {periods.isPending && <Skeleton rows={3} />}
+      {periods.isError && <ErrorState onRetry={() => periods.refetch()}>Não foi possível carregar os períodos.</ErrorState>}
+      {periods.data && (
+        <ListGroup>
+          {periods.data.map((p) => (
+            <ListRow key={p.id} as="button" current={p.id === current.period.id} onClick={() => onPick(p.id)} title={p.label}
+              trailing={<>
+                <StatusChip tone={STATE_TONE[p.state]}>{STATE_LABEL[p.state]}</StatusChip>
+                {p.id === current.period.id && <span className="row-accent row-chevron"><Icon name="check" /></span>}
+              </>} />
+          ))}
+        </ListGroup>
+      )}
+    </BottomSheet>
   )
 }

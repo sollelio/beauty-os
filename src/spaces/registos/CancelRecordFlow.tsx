@@ -2,6 +2,9 @@
 // by a person who may correct records · success, with the way to record the right value through the normal flow.
 // Shared patterns: app bar with the back contract (a typed reason is never dropped silently), the person/PIN control,
 // and a destructive final action. The correction itself (cancelRecord, nothing deleted) is unchanged.
+// `area="private"` (UX slice 7): opened from the private area (/privado/anular/…, inside the gate) it wears the private
+// bar and returns there — back, cancel and "Voltar" after success never leave the private area; only "Registar de
+// novo" does, because the normal capture flows are public (leaving ends the private context, 07 §8).
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,7 +17,11 @@ import { formatMoney } from '../../shared/money'
 import { formatDayShort, formatTime } from '../../shared/time'
 import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { Field } from '../../shared/ui/Field'
+import { Icon } from '../../shared/ui/Icon'
 import { useFlow } from '../../shared/ui/navigation'
+import { ErrorState, Skeleton } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
 
 const MESSAGES: Record<string, string> = {
   ...VERIFY_MESSAGES,
@@ -26,7 +33,7 @@ const MESSAGES: Record<string, string> = {
   VALIDATION_FAILED: 'Escreva o motivo da anulação.',
 }
 
-export function CancelRecordFlow() {
+export function CancelRecordFlow({ area }: { area?: 'private' } = {}) {
   const org = useOrganization()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -39,12 +46,20 @@ export function CancelRecordFlow() {
   const [done, setDone] = useState(false)
   const m = (n: number) => formatMoney(n, org)
   const err = command.status === 'error' ? command.error : null
-  const flow = useFlow({ steps: 1, parent: '/', dirty: reason.trim() !== '' && !done, reachable: () => true })
+  const inPrivate = area === 'private'
+  const flow = useFlow({ steps: 1, parent: inPrivate ? '/privado' : '/', dirty: reason.trim() !== '' && !done, reachable: () => true })
+  const bar = inPrivate
+    ? <PrivateBar title="Anular registo" onBack={flow.exit} exit={false} />
+    : <AppBar title="Anular registo" leading="back" onLeading={flow.exit} />
 
   if (!summary.data) {
-    return <main className="app-main">{summary.isError
-      ? <><div className="notice notice-error" role="alert">Não foi possível encontrar este registo.</div><button className="btn btn-secondary" onClick={() => navigate('/')}>Voltar a Hoje</button></>
-      : <p className="muted">A carregar…</p>}</main>
+    return (
+      <AppScreen bar={bar}>
+        {summary.isError
+          ? <ErrorState onRetry={() => summary.refetch()} action={<button type="button" className="link-btn" onClick={flow.exit}>Voltar</button>}>Não foi possível encontrar este registo.</ErrorState>
+          : <Skeleton rows={3} />}
+      </AppScreen>
+    )
   }
   const s = summary.data
   const what = (
@@ -57,20 +72,33 @@ export function CancelRecordFlow() {
   )
 
   if (done || s.cancelled) {
+    const recapture = <button className={`btn ${inPrivate ? 'btn-secondary' : 'btn-primary btn-tall'}`} onClick={() => navigate(RECAPTURE_PATH[s.kind])}>Registar de novo, com o valor certo</button>
     return (
-      <main className="app-main">
-        <div className="stack center" style={{ marginTop: '2rem', gap: '0.75rem' }}>
-          <span aria-hidden className="success-mark">✓</span>
+      <AppScreen bar={bar}
+        actions={
+          <BottomActionBar>
+            {inPrivate ? (
+              <>
+                <button className="btn btn-primary btn-tall" onClick={flow.exit}>Voltar</button>
+                {recapture}
+                <span className="bar-summary support">Registar de novo abre o registo normal e sai da área privada.</span>
+              </>
+            ) : (
+              <>
+                {recapture}
+                <button className="btn btn-secondary" onClick={() => flow.leaveTo('/')}>Voltar a Hoje</button>
+              </>
+            )}
+          </BottomActionBar>
+        }>
+        <div className="stack center success">
+          <span aria-hidden className="success-mark"><Icon name="check" size={32} strokeWidth={2.5} /></span>
           <h2>{done ? 'Registo anulado.' : 'Este registo já foi anulado.'}</h2>
-          <p className="muted" style={{ margin: 0 }}>Nada foi apagado: o original fica no histórico, marcado como anulado, e deixa de contar nos valores.</p>
-          {s.cancelled && <p className="muted num" style={{ margin: 0 }}>Anulado por {s.cancelled.by} · {formatDayShort(s.cancelled.at, org.timezone)} às {formatTime(s.cancelled.at, org.timezone)} · motivo: {s.cancelled.reason}</p>}
+          <p className="note">Nada foi apagado: o original fica no histórico, marcado como anulado, e deixa de contar nos valores.</p>
+          {s.cancelled && <p className="note num">Anulado por {s.cancelled.by} · {formatDayShort(s.cancelled.at, org.timezone)} às {formatTime(s.cancelled.at, org.timezone)} · motivo: {s.cancelled.reason}</p>}
         </div>
         {what}
-        <div className="footer">
-          <button className="btn btn-primary btn-tall" onClick={() => navigate(RECAPTURE_PATH[s.kind])}>Registar de novo, com o valor certo</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/')}>Voltar a Hoje</button>
-        </div>
-      </main>
+      </AppScreen>
     )
   }
 
@@ -83,10 +111,10 @@ export function CancelRecordFlow() {
   const ready = reason.trim() !== '' && confirmerId !== null && secret !== ''
   return (
     <AppScreen
-      bar={<AppBar title="Anular registo" leading="back" onLeading={flow.exit} />}
+      bar={bar}
       actions={
         <BottomActionBar>
-          {!reason.trim() && <span className="muted" style={{ textAlign: 'center' }}>Escreva o motivo para continuar.</span>}
+          {!reason.trim() && <span className="bar-summary">Escreva o motivo para continuar.</span>}
           <button className="btn btn-danger btn-tall" disabled={!ready || command.status === 'pending'} onClick={confirm}>
             {command.status === 'pending' ? 'A anular…' : err?.kind === 'network' ? 'Tentar novamente' : 'Anular registo'}
           </button>
@@ -96,10 +124,9 @@ export function CancelRecordFlow() {
         <h2>Anular este registo?</h2>
         {what}
         <p className="muted" style={{ margin: 0 }}>Nada é apagado. O registo fica no histórico, marcado como anulado, e deixa de contar nos valores. Depois pode registá-lo de novo com o valor certo.</p>
-        <div className="stack" style={{ gap: '0.375rem' }}>
-          <label className="label" htmlFor="cancel-reason">Motivo (obrigatório)</label>
-          <label className="field"><input id="cancel-reason" maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-        </div>
+        <Field id="cancel-reason" label="Motivo (obrigatório)">
+          <input maxLength={120} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </Field>
         <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Confirmação necessária</h3>
         <div className="lock-note"><LockIcon /><span>Fica no histórico com quem anulou, quando e porquê.</span></div>
         <ConfirmerPicker permission="records.correct" confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}

@@ -15,14 +15,17 @@ export function AppScreen({ bar, actions, children }: { bar?: ReactNode; actions
 }
 
 /** `close` (×) leaves a task; `back` (←) returns one level. `step` turns it into the flow variant: count and progress.
- *  `trailing`: one small status at the end of the bar (e.g. a trip's "3 de 4"). */
-export function AppBar({ title, leading, onLeading, step, trailing }: {
-  title: string; leading: 'back' | 'close'; onLeading: () => void; step?: { current: number; total: number }; trailing?: ReactNode
+ *  `trailing`: one small status or action at the end of the bar (e.g. a trip's "3 de 4").
+ *  `tone="private"` with an `overline` marks a protected workspace (the private area): a tinted bar that says so. */
+export function AppBar({ title, leading, onLeading, leadingLabel, step, trailing, overline, tone }: {
+  title: string; leading: 'back' | 'close'; onLeading: () => void; leadingLabel?: string; step?: { current: number; total: number }
+  trailing?: ReactNode; overline?: ReactNode; tone?: 'private'
 }) {
   return (
-    <header className="app-bar">
+    <header className={tone === 'private' ? 'app-bar app-bar-private' : 'app-bar'}>
+      {overline && <div className="app-bar-overline">{overline}</div>}
       <div className="app-bar-row">
-        <button className="app-bar-btn" aria-label={leading === 'close' ? 'Fechar' : 'Voltar'} onClick={onLeading}>
+        <button className="app-bar-btn" aria-label={leadingLabel ?? (leading === 'close' ? 'Fechar' : 'Voltar')} onClick={onLeading}>
           <Icon name={leading === 'close' ? 'close' : 'back'} size={24} />
         </button>
         <span className="app-bar-title">{title}</span>

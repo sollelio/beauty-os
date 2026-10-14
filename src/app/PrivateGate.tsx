@@ -2,6 +2,9 @@ import { useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { exitPrivateContext, usePrivateContext, usePrivateStatus } from '../modules/org/privateContext'
+import { AppScreen } from '../shared/ui/AppShell'
+import { Skeleton } from '../shared/ui/states'
+import { PrivateBar } from '../spaces/privado/PrivateBar'
 
 // Leaving the private area ends the context so it never passes to the next holder (07 §8). Deferred so a
 // StrictMode remount, or moving between private screens, does not end it.
@@ -18,7 +21,7 @@ export function PrivateGate() {
   }, [qc])
 
   // never decide on a status that is being refreshed (a stale "inactive" would end a context that was just opened)
-  if (status.isPending || (status.isFetching && !status.data?.active)) return <main className="app-main"><p className="muted">A carregar…</p></main>
+  if (status.isPending || (status.isFetching && !status.data?.active)) return <AppScreen bar={<PrivateBar title="A abrir" root />}><Skeleton rows={3} /></AppScreen>
   if (status.isError) return <Navigate to="/privado/entrar" replace state={{ next }} />
   if (!status.data.active) return <Navigate to="/privado/entrar" replace state={{ ended: true, next }} />
   return <Outlet context={status.data} />

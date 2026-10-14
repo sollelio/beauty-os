@@ -1,135 +1,89 @@
-// Fecho building blocks (Slice 06 §16): detail header with the Privado badge, state strip, pills, exception rows and
-// the Confirmação necessária boundary used by every Fecho decision (one-shot verification, ADR-0009).
-import { LockIcon } from '../../shared/ui/AppShell'
-import { useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
-import { isPinError } from '../../modules/org/verifyMessages'
-import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
-import type { ConfirmPermission } from '../../modules/org/api'
-import { fechoKeys, STATE_LABEL, STATE_ORDER, type PeriodState } from '../../modules/period/api'
+// Fecho building blocks (Slice 06 §16) on the mobile shell (UX slice 7): the private bar, the state strip, status chips,
+// review rows, value rows, the loading/error screen and the Confirmação necessária boundary used by every Fecho decision
+// (one-shot verification, ADR-0009). The boundary is split into its form and its actions so a screen puts the final
+// action in the bottom bar and a sheet keeps it inside the sheet; the command, the grant and the messages are unchanged.
+import type { ReactNode } from 'react'
+import { STATE_LABEL, STATE_ORDER, type PeriodState } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
-import { FECHO_MESSAGES } from './fecho'
-
-export function FechoHeader({ title, back, right }: { title: string; back: () => void; right?: ReactNode }) {
-  return (
-    <div className="flow-header-row">
-      <button className="icon-btn" aria-label="Voltar" onClick={back}>←</button>
-      <span className="muted" style={{ fontWeight: 600 }}>{title}</span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>{right}<span className="priv">Privado</span></span>
-    </div>
-  )
-}
+import { AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack } from '../../shared/ui/navigation'
+import { StatusChip } from '../../shared/ui/StatusChip'
+import { ErrorState, Skeleton } from '../../shared/ui/states'
+import { PrivateBar } from '../privado/PrivateBar'
+import { useBoundary, type BoundaryProps } from './hooks'
 
 export function StateStrip({ state }: { state: PeriodState }) {
   const i = STATE_ORDER.indexOf(state)
   return (
-    <div className="stack" style={{ gap: '0.375rem' }}>
+    <div className="stack stack-tight">
       <div className="progress" aria-hidden>{STATE_ORDER.map((s, n) => <span key={s} className={n <= i ? 'on' : ''} />)}</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }} data-testid="state-strip">
-        <strong style={{ fontSize: '0.875rem' }}>{STATE_LABEL[state]}</strong>
-        {i < 3 && <span className="muted" style={{ fontSize: '0.875rem' }}>depois: {STATE_LABEL[STATE_ORDER[i + 1]!]}</span>}
+      <div className="row-between" data-testid="state-strip">
+        <strong>{STATE_LABEL[state]}</strong>
+        {i < 3 && <span className="support">depois: {STATE_LABEL[STATE_ORDER[i + 1]!]}</span>}
       </div>
     </div>
   )
 }
 
+/** Review status, read at a glance: blocks (decide), to review, done, neutral. */
 export type PillKind = 'block' | 'review' | 'ok' | 'neutral'
-export const Pill = ({ kind, children }: { kind: PillKind; children: ReactNode }) => <span className={`pill pill-${kind}`}>{children}</span>
+const TONE = { block: 'warning', review: 'caution', ok: 'success', neutral: 'neutral' } as const
+export const Pill = ({ kind, children }: { kind: PillKind; children: ReactNode }) => <StatusChip tone={TONE[kind]}>{children}</StatusChip>
 
+/** One "Precisa de atenção" item: a whole tappable row with its status; the amber dot marks what blocks. */
 export function ExceptionRow({ dot, title, sub, pill, pillKind, onOpen }: { dot: 'amber' | 'neutral'; title: string; sub: string; pill: string; pillKind: PillKind; onOpen?: () => void }) {
-  const body = (
-    <>
-      <span aria-hidden className={`xdot xdot-${dot}`} />
-      <span className="grow"><strong style={{ display: 'block' }}>{title}</strong><span className="muted num" style={{ fontSize: '0.8125rem' }}>{sub}</span></span>
-      <Pill kind={pillKind}>{pill}</Pill>
-    </>
-  )
-  return onOpen ? <button className="xrow" onClick={onOpen}>{body}</button> : <div className="xrow">{body}</div>
+  const slots = {
+    leading: <span aria-hidden className={dot === 'amber' ? 'urgent-dot' : 'dot-quiet'} />,
+    title, subtitle: <span className="num">{sub}</span>, trailing: <Pill kind={pillKind}>{pill}</Pill>,
+  }
+  return onOpen ? <ListRow as="button" onClick={onOpen} chevron {...slots} /> : <ListRow {...slots} />
 }
 
 export function SummaryRow({ title, sub, onOpen }: { title: string; sub: string; onOpen: () => void }) {
+  return <ListRow as="button" onClick={onOpen} title={title} subtitle={<span className="num">{sub}</span>} chevron />
+}
+
+/** Label → value rows (money right-aligned in the value column). */
+export function KV({ rows, testId }: { rows: [string, ReactNode][]; testId?: string }) {
   return (
-    <button className="brow" onClick={onOpen}>
-      <span className="grow"><strong style={{ display: 'block' }}>{title}</strong><span className="muted num" style={{ fontSize: '0.8125rem' }}>{sub}</span></span>
-      <span aria-hidden className="muted">›</span>
-    </button>
+    <ListGroup data-testid={testId}>
+      {rows.map(([k, v]) => <ListRow key={k} title={<span className="kv-key">{k}</span>} trailing={<span className="row-value num kv-value">{v}</span>} className="kv-row" />)}
+    </ListGroup>
   )
 }
 
-export function KV({ rows }: { rows: [string, ReactNode][] }) {
-  return <dl className="kv-card">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
-}
-
-/** Confirmação necessária (Slice 02 boundary): verify the confirming person, run the command once per intent.
- *  `destructive`: the command undoes or invalidates something (reabrir, anular aprovação) — its final button says so. */
-export function Boundary<I, R>({ intro, children, lockNote, permission, run, input, label, onSuccess, blocked, onBack, destructive }: {
-  intro: string; children?: ReactNode; lockNote: string; permission: ConfirmPermission
-  run: (commandId: string, grantId: string, input: I) => Promise<R>; input: I; label: string
-  onSuccess: (r: R) => void; blocked?: boolean; onBack?: () => void; destructive?: boolean
+/** A decision screen: what is decided above the boundary, the final action in the bottom bar (with `extraActions`). */
+export function BoundaryScreen<I, R>({ bar, top, after, extraActions, ...props }: BoundaryProps<I, R> & {
+  bar: ReactNode; top?: ReactNode; after?: ReactNode; extraActions?: ReactNode
 }) {
-  const qc = useQueryClient()
-  const command = useVerifiedCommand<I, R>(run)
-  const [confirmerId, setConfirmerId] = useState<string | null>(null)
-  const [secret, setSecret] = useState('')
-  const err = command.status === 'error' ? command.error : null
-  const stale = err?.code === 'STALE_REVIEW' || err?.code === 'PERIOD_STATE_INVALID'
-  useEffect(() => { if (stale) void qc.invalidateQueries({ queryKey: fechoKeys.all }) }, [stale, qc])
-
-  function confirm() {
-    if (!confirmerId || !secret) return
-    command.confirm({ input, confirmerId, secret }, {
-      onSuccess: (r) => { setSecret(''); void qc.invalidateQueries({ queryKey: fechoKeys.all }); onSuccess(r) },
-    })
-  }
+  const b = useBoundary(props)
   return (
-    <>
-      <section className="stack" style={{ gap: '1rem' }}>
-        <h2>Confirmação necessária</h2>
-        <p className="muted" style={{ margin: 0 }}>{intro}</p>
-        {children}
-        <div className="lock-note"><LockIcon /><span>{lockNote}</span></div>
-        {!blocked && <ConfirmerPicker permission={permission} confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
-          error={err} messages={FECHO_MESSAGES} />}
-        {err?.kind === 'network' && (
-          <div className="notice notice-error" role="alert"><strong style={{ display: 'block' }}>Não foi registado.</strong>Não foi possível ligar ao servidor. Nada mudou; tente novamente.</div>
-        )}
-        {err && err.kind !== 'network' && !isPinError(err) && (
-          <div className={`notice ${stale ? 'notice-warning' : 'notice-error'}`} role="alert">{(err.code && FECHO_MESSAGES[err.code]) || 'Não foi possível registar.'}</div>
-        )}
-      </section>
-      {!blocked && (
-        <div className="footer">
-          {err?.kind === 'network' ? (
-            <>
-              <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
-              {onBack && <button className="btn btn-secondary" onClick={onBack}>Voltar sem registar</button>}
-            </>
-          ) : (
-            <button className={`btn ${destructive ? 'btn-danger' : 'btn-primary'} btn-tall`} disabled={!confirmerId || !secret || command.status === 'pending'} onClick={confirm}>
-              {command.status === 'pending' ? 'A confirmar…' : label}
-            </button>
-          )}
-        </div>
-      )}
-    </>
+    <AppScreen bar={bar} actions={(b.actions || extraActions) && <BottomActionBar>{b.actions}{extraActions}</BottomActionBar>}>
+      {top}
+      {b.form}
+      {after}
+    </AppScreen>
   )
 }
 
-export function Loading({ q }: { q: { isError: boolean; error: unknown } }) {
-  const navigate = useNavigate()
-  if (q.isError) {
-    const code = toAppError(q.error).code
-    return (
-      <main className="app-main">
-        <div className="notice notice-error" role="alert">
-          {code === 'NOT_AUTHORIZED' ? 'O Fecho só está disponível para quem gere as finanças da equipa.' : 'Não foi possível carregar o Fecho.'}
-        </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/privado')}>Voltar</button>
-      </main>
-    )
-  }
-  return <main className="app-main"><p className="muted">A carregar…</p></main>
+/** The same boundary inside a sheet: its actions stay in the sheet, after the form. */
+export function SheetBoundary<I, R>(props: BoundaryProps<I, R>) {
+  const b = useBoundary(props)
+  return <>{b.form}{b.actions && <div className="sheet-actions">{b.actions}</div>}</>
 }
 
+/** First load of a Fecho screen, or why it cannot be shown — inside the private bar, with a way back. */
+export function Loading({ q, title = 'Fecho' }: { q: { isError: boolean; error: unknown }; title?: string }) {
+  const back = useAppBack('/privado')
+  const code = q.isError ? toAppError(q.error).code : null
+  return (
+    <AppScreen bar={<PrivateBar title={title} onBack={back} />}>
+      {q.isError ? (
+        <ErrorState action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>
+          {code === 'NOT_AUTHORIZED' ? 'O Fecho só está disponível para quem gere as finanças da equipa.' : 'Não foi possível carregar o Fecho.'}
+        </ErrorState>
+      ) : <Skeleton rows={4} headline />}
+    </AppScreen>
+  )
+}
