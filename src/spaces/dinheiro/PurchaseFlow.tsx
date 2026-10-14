@@ -154,8 +154,8 @@ export function PurchaseFlow() {
           <section className="panel">
             <span className="label">Stock</span>
             <span className="support">As compras ficaram no histórico de cada produto. O estado (OK · Baixo · Comprar) só muda se alguém o mudar — agora ou mais tarde, no Stock.</span>
-            <button className="btn btn-secondary" onClick={() => navigate('/stock/rever', { state: { lines: reviewLines } })}>Rever stock · {plural(reviewLines.length)}</button>
-            <button className="link-btn" onClick={() => navigate('/stock')}>Voltar a Stock</button>
+            <button className="btn btn-secondary" onClick={() => navigate('/stock/rever', { state: { lines: reviewLines }, replace: true })}>Rever stock · {plural(reviewLines.length)}</button>
+            <button className="link-btn" onClick={() => navigate('/stock', { replace: true })}>Voltar a Stock</button>
           </section>
         )}
       </AppScreen>

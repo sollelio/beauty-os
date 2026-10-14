@@ -2,6 +2,6 @@
 // purchase). Not decoration: where plain supporting text says it as clearly, use the text.
 import type { ReactNode } from 'react'
 
-export function StatusChip({ tone = 'neutral', children }: { tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'accent'; children: ReactNode }) {
+export function StatusChip({ tone = 'neutral', children }: { tone?: 'neutral' | 'success' | 'warning' | 'caution' | 'danger' | 'accent'; children: ReactNode }) {
   return <span className={`status-chip status-${tone}`}>{children}</span>
 }

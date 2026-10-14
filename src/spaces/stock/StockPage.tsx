@@ -1,5 +1,7 @@
 // Stock (Slice 05 K1/K1b): attention first — Urgente · comprar já → Atenção (Comprar before Baixo) → Em ordem.
 // The state is what a person marked; purchases only add facts beside it ("comprado hoje · …").
+// On the mobile shell: rows of the shared pattern, the one primary action in the bottom bar, the product and history
+// sheets as history entries (back closes them; unsaved product edits are never dropped without "Descartar?").
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,19 +12,36 @@ import {
 } from '../../modules/stock/api'
 import { formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { BottomSheet } from '../../shared/ui/BottomSheet'
+import { DiscardSheet } from '../../shared/ui/DiscardSheet'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack, useFlow, useSheet } from '../../shared/ui/navigation'
+import { SegmentedControl } from '../../shared/ui/SegmentedControl'
+import { StatusChip } from '../../shared/ui/StatusChip'
 import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 
 const ORDER: Record<StockState, number> = { comprar: 0, baixo: 1, ok: 2 }
+const STATE_TONE = { ok: 'success', baixo: 'caution', comprar: 'warning' } as const
+const STATES = (['ok', 'baixo', 'comprar'] as StockState[]).map((s) => ({ id: s, label: STATE_LABEL[s] }))
 
-function StatePill({ state }: { state: StockState }) {
-  return <span className={`state-pill st-${state}`}>{STATE_LABEL[state]}</span>
+type Draft = { state: StockState; level: StockLevel | null; reserve_units: number; on_list: boolean; urgent: boolean }
+type Sheet = { kind: 'product' | 'history'; id: string; d: Draft }
+const draftOf = (p: StockProduct): Draft => ({ state: p.state, level: p.level, reserve_units: p.reserve_units, on_list: p.on_list, urgent: p.urgent })
+const changes = (d: Draft, p: StockProduct): StockEdit => {
+  const edit: StockEdit = {}
+  for (const k of Object.keys(d) as (keyof Draft)[]) if (d[k] !== p[k]) Object.assign(edit, { [k]: d[k] })
+  return edit
 }
 
 export function StockPage() {
   const navigate = useNavigate()
+  const back = useAppBack('/')
   const overview = useQuery({ queryKey: stockKeys.overview, queryFn: getStockOverview })
-  const [openId, setOpenId] = useState<string | null>(null)
   const [showOk, setShowOk] = useState<boolean | null>(null)
+  const sheets = useSheet<Sheet>()
+  const sheet = sheets.current
 
   const all = overview.data ?? []
   const urgent = all.filter((p) => p.urgent)
@@ -31,26 +50,33 @@ export function StockPage() {
   const onList = all.filter((p) => p.on_list).length
   const calm = urgent.length === 0 && attention.length === 0
   const okOpen = showOk ?? calm
-  const open = all.find((p) => p.id === openId) ?? null
+  const open = sheet ? all.find((p) => p.id === sheet.id) ?? null : null
+  // unsaved product edits: back, the backdrop and × ask first (the same guard as a capture flow's sheet)
+  const sheetDirty = Boolean(sheet && open && Object.keys(changes(sheet.d, open)).length > 0)
+  const flow = useFlow({ steps: 1, parent: '/', dirty: false, sheetDirty, reachable: () => true })
+  const [askClose, setAskClose] = useState(false)
 
   const row = (p: StockProduct, dot = false) => (
-    <button key={p.id} className="stock-row" onClick={() => setOpenId(p.id)}>
-      {dot && <span aria-hidden className="urgent-dot" />}
-      <span className="grow"><strong style={{ display: 'block' }}>{p.name}</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{productNote(p)}</span></span>
-      {p.on_list && !p.urgent && <span role="img" aria-label="Na lista de compra" className="list-icon">☰</span>}
-      <StatePill state={p.state} />
-    </button>
+    <ListRow key={p.id} as="button" onClick={() => sheets.open({ kind: 'product', id: p.id, d: draftOf(p) })}
+      leading={dot ? <span aria-hidden className="urgent-dot" /> : undefined} title={p.name} subtitle={productNote(p)}
+      trailing={<>
+        {p.on_list && !p.urgent && <span role="img" aria-label="Na lista de compra" className="row-chevron"><Icon name="list" /></span>}
+        <StatusChip tone={STATE_TONE[p.state]}>{STATE_LABEL[p.state]}</StatusChip>
+      </>} />
   )
+  const closeSheet = () => (sheetDirty ? setAskClose(true) : sheets.close())
 
   return (
-    <main className="app-main">
-      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <div className="stack" style={{ gap: '0.25rem' }}><span className="label">Estado aproximado · marcado pela equipa</span><h1>Stock</h1></div>
-        <button className="icon-btn" aria-label="Voltar a Hoje" onClick={() => navigate('/')}>⌂</button>
-      </header>
-      <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/lista')}>
-        {onList > 0 ? `Preparar compra · ${onList} ${onList === 1 ? 'produto' : 'produtos'}` : 'Preparar compra'}
-      </button>
+    <AppScreen
+      bar={<AppBar title="Stock" leading="back" onLeading={back} />}
+      actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/lista')}>
+            {onList > 0 ? `Preparar compra · ${onList} ${onList === 1 ? 'produto' : 'produtos'}` : 'Preparar compra'}
+          </button>
+        </BottomActionBar>
+      }>
+      <span className="label">Estado aproximado · marcado pela equipa</span>
       {overview.isPending && <Skeleton rows={4} />}
       {overview.isError && <ErrorState onRetry={() => overview.refetch()}>Não foi possível carregar o Stock.</ErrorState>}
       {overview.data && all.length === 0 && (
@@ -59,128 +85,133 @@ export function StockPage() {
       {overview.data && all.length > 0 && (
         <>
           {urgent.length > 0 && (
-            <section className="stack" style={{ gap: 0 }}><span className="label">Urgente · comprar já</span>{urgent.map((p) => row(p, true))}</section>
+            <section className="stack"><span className="label">Urgente · comprar já</span><ListGroup>{urgent.map((p) => row(p, true))}</ListGroup></section>
           )}
-          <section className="stack" style={{ gap: 0 }}>
+          <section className="stack">
             <span className="label">Atenção</span>
-            {calm
-              ? <div className="notice notice-success" style={{ marginTop: '0.375rem' }}>Nada marcado como baixo ou a comprar.</div>
-              : attention.map((p) => row(p))}
+            {calm ? <div className="notice notice-success">Nada marcado como baixo ou a comprar.</div> : <ListGroup>{attention.map((p) => row(p))}</ListGroup>}
           </section>
           {ok.length > 0 && (
-            <section className="stack" style={{ gap: 0 }}>
+            <section className="stack">
               <button className="group-toggle" aria-expanded={okOpen} onClick={() => setShowOk(!okOpen)}>
-                <span className="label">Em ordem · {ok.length}</span><span aria-hidden>{okOpen ? '▴' : '▾'}</span>
+                <span className="label">Em ordem · {ok.length}</span>
+                <span className="toggle-chevron" data-open={okOpen}><Icon name="chevronDown" /></span>
               </button>
-              {okOpen && ok.map((p) => row(p))}
+              {okOpen && <ListGroup>{ok.map((p) => row(p))}</ListGroup>}
             </section>
           )}
         </>
       )}
-      <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>{STOCK_FOOTNOTE}</p>
-      {open && <ProductSheet key={open.id} product={open} onClose={() => setOpenId(null)} />}
-    </main>
+      <p className="note support">{STOCK_FOOTNOTE}</p>
+
+      {sheet?.kind === 'product' && open && (
+        <ProductSheet key={open.id} product={open} d={sheet.d} dirty={sheetDirty} onChange={(d) => sheets.update({ ...sheet, d })}
+          onHistory={() => sheets.update({ ...sheet, kind: 'history' })} onClose={closeSheet}
+          onSaved={() => { flow.allowNext(); sheets.close() }} />
+      )}
+      {sheet?.kind === 'history' && open && <HistorySheet product={open} onBack={() => sheets.update({ ...sheet, kind: 'product' })} />}
+      <DiscardSheet open={askClose || (flow.discard.open && flow.discard.reason === 'sheet')} title="Descartar as alterações?" detail="O produto fica como estava."
+        onKeep={() => (askClose ? setAskClose(false) : flow.discard.cancel())}
+        onDiscard={() => { if (askClose) { setAskClose(false); flow.allowNext(); sheets.close() } else flow.discard.confirm() }} />
+    </AppScreen>
   )
 }
 
-function ProductSheet({ product, onClose }: { product: StockProduct; onClose: () => void }) {
+function ProductSheet({ product, d, dirty, onChange, onHistory, onClose, onSaved }: {
+  product: StockProduct; d: Draft; dirty: boolean; onChange: (d: Draft) => void; onHistory: () => void; onClose: () => void; onSaved: () => void
+}) {
   const org = useOrganization()
   const qc = useQueryClient()
-  const [d, setD] = useState({ state: product.state, level: product.level, reserve_units: product.reserve_units, on_list: product.on_list, urgent: product.urgent })
-  const [history, setHistory] = useState(false)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const last = product.last_purchase
 
-  function pickState(state: StockState) { setD({ ...d, state, on_list: state === 'comprar' ? true : d.on_list }) }   // Comprar also lists it
+  function pickState(state: StockState) { onChange({ ...d, state, on_list: state === 'comprar' ? true : d.on_list }) }   // Comprar also lists it
   async function save() {
-    const edit: StockEdit = {}
-    for (const k of Object.keys(d) as (keyof typeof d)[]) if (d[k] !== product[k]) Object.assign(edit, { [k]: d[k] })
-    if (Object.keys(edit).length === 0) return onClose()
+    const edit = changes(d, product)
+    if (Object.keys(edit).length === 0) return onSaved()
     setSaving(true); setFailed(false)
     try {
       await updateStock(product.id, edit)
       await qc.invalidateQueries({ queryKey: ['stock'] })
-      onClose()
+      onSaved()
     } catch { setFailed(true) } finally { setSaving(false) }
   }
 
-  if (history) return <HistorySheet product={product} onClose={() => setHistory(false)} />
   return (
-    <div className="sheet" role="dialog" aria-labelledby="pr-title" onClick={onClose}>
-      <div className="sheet-body" style={{ maxHeight: '92dvh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="flow-header-row">
-          <span><h2 id="pr-title" style={{ fontSize: '1.25rem' }}>{product.name}</h2><span className="muted" style={{ fontSize: '0.875rem' }}>{[product.purpose, product.unit_word].filter(Boolean).join(' · ')}</span></span>
-          <button className="icon-btn" aria-label="Fechar" onClick={onClose}>×</button>
+    <BottomSheet labelledBy="pr-title" onDismiss={onClose} dismissible={!dirty}>
+      <div className="row-between">
+        <span className="stack stack-tight">
+          <h2 id="pr-title" className="sheet-title">{product.name}</h2>
+          <span className="support">{[product.purpose, product.unit_word].filter(Boolean).join(' · ')}</span>
+        </span>
+        <button className="icon-btn" aria-label="Fechar" onClick={onClose}><Icon name="close" /></button>
+      </div>
+      <span className="label">Estado</span>
+      <SegmentedControl label="Estado do produto" hideLabel options={STATES} value={d.state} onChange={(s) => pickState(s as StockState)} />
+      <section className="stack">
+        <span className="label">Quanto resta? (aproximado)</span>
+        <div className="wrap" role="group" aria-label="Quanto resta">
+          {(Object.keys(LEVEL_LABEL) as StockLevel[]).map((l) => (
+            <button key={l} type="button" className="chip chip-outline" aria-pressed={d.level === l} onClick={() => onChange({ ...d, level: d.level === l ? null : l })}>{LEVEL_LABEL[l]}</button>
+          ))}
         </div>
-        <section className="stack">
-          <span className="label">Estado</span>
-          <div className="segmented" role="group" aria-label="Estado do produto">
-            {(['ok', 'baixo', 'comprar'] as StockState[]).map((s) => <button key={s} className="seg" aria-pressed={d.state === s} onClick={() => pickState(s)}>{STATE_LABEL[s]}</button>)}
-          </div>
-        </section>
-        <section className="stack">
-          <span className="label">Quanto resta? (aproximado)</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {(Object.keys(LEVEL_LABEL) as StockLevel[]).map((l) => (
-              <button key={l} className="chip chip-outline" aria-pressed={d.level === l} onClick={() => setD({ ...d, level: d.level === l ? null : l })}>{LEVEL_LABEL[l]}</button>
-            ))}
-          </div>
-        </section>
-        <div className="stock-card">
-          <span><strong style={{ display: 'block' }}>Em reserva</strong><span className="muted" style={{ fontSize: '0.8125rem' }}>unidades por abrir</span></span>
+      </section>
+      <ListGroup>
+        <div className="row">
+          <span className="row-body"><span className="row-title">Em reserva</span><span className="row-subtitle">unidades por abrir</span></span>
           <span className="stepper">
-            <button className="step" aria-label="Menos em reserva" onClick={() => setD({ ...d, reserve_units: Math.max(0, d.reserve_units - 1) })}>−</button>
+            <button className="step" aria-label="Menos em reserva" onClick={() => onChange({ ...d, reserve_units: Math.max(0, d.reserve_units - 1) })}><Icon name="minus" /></button>
             <span className="num stepper-value" data-testid="reserve">{d.reserve_units}</span>
-            <button className="step" aria-label="Mais em reserva" onClick={() => setD({ ...d, reserve_units: Math.min(999, d.reserve_units + 1) })}>+</button>
+            <button className="step" aria-label="Mais em reserva" onClick={() => onChange({ ...d, reserve_units: Math.min(999, d.reserve_units + 1) })}><Icon name="plus" /></button>
           </span>
         </div>
-        {product.bought_today && <span className="muted" style={{ fontSize: '0.875rem' }}>Comprado hoje · {product.bought_today.quantity} {product.bought_today.unit_word}. O estado acima é o que estava marcado; mude-o se quiser.</span>}
-        <button className="pick" aria-pressed={d.on_list} onClick={() => setD({ ...d, on_list: !d.on_list, urgent: d.on_list ? false : d.urgent })}>
-          <strong>Na lista de compra</strong><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{d.on_list ? 'Sim · tirar' : 'Juntar'}</span>
-        </button>
-        <button className="pick" aria-pressed={d.urgent} onClick={() => setD({ ...d, urgent: !d.urgent, on_list: d.urgent ? d.on_list : true })}>
-          <strong>Urgente · comprar já</strong><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{d.urgent ? 'Sim · tirar' : 'Marcar'}</span>
-        </button>
+        <ListRow as="button" title="Na lista de compra" current={d.on_list}
+          onClick={() => onChange({ ...d, on_list: !d.on_list, urgent: d.on_list ? false : d.urgent })}
+          trailing={<span className="row-accent">{d.on_list ? 'Sim · tirar' : 'Juntar'}</span>} />
+        <ListRow as="button" title="Urgente · comprar já" current={d.urgent}
+          onClick={() => onChange({ ...d, urgent: !d.urgent, on_list: d.urgent ? d.on_list : true })}
+          trailing={<span className="row-accent">{d.urgent ? 'Sim · tirar' : 'Marcar'}</span>} />
         {last && (
-          <button className="pick" onClick={() => setHistory(true)}>
-            <span><strong style={{ display: 'block' }}>Última compra</strong>
-              <span className="muted num" style={{ fontSize: '0.875rem' }}>{[formatDayShort(last.occurred_at, org.timezone), `${last.quantity} ${last.unit_word}`, formatMoney(last.line_cost_minor, org), last.origin].filter(Boolean).join(' · ')}</span></span>
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Ver</span>
-          </button>
+          <ListRow as="button" onClick={onHistory} title="Última compra" chevron
+            subtitle={<span className="num">{[formatDayShort(last.occurred_at, org.timezone), `${last.quantity} ${last.unit_word}`, formatMoney(last.line_cost_minor, org), last.origin].filter(Boolean).join(' · ')}</span>}
+            trailing={<span className="row-accent">Ver</span>} />
         )}
-        {failed && <div className="notice notice-error" role="alert">Não foi possível guardar. Tente novamente.</div>}
-        <button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'A guardar…' : 'Guardar'}</button>
-      </div>
-    </div>
+      </ListGroup>
+      {product.bought_today && <span className="support">Comprado hoje · {product.bought_today.quantity} {product.bought_today.unit_word}. O estado acima é o que estava marcado; mude-o se quiser.</span>}
+      {failed && <ErrorState onRetry={save}>Não foi possível guardar. As alterações continuam aqui.</ErrorState>}
+      <button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'A guardar…' : 'Guardar'}</button>
+    </BottomSheet>
   )
 }
 
-function HistorySheet({ product, onClose }: { product: StockProduct; onClose: () => void }) {
+function HistorySheet({ product, onBack }: { product: StockProduct; onBack: () => void }) {
   const org = useOrganization()
   const h = useQuery({ queryKey: stockKeys.history(product.id), queryFn: () => getProductHistory(product.id) })
   const mark = h.data?.mark
   return (
-    <div className="sheet" role="dialog" aria-labelledby="hi-title" onClick={onClose}>
-      <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-        <div className="flow-header-row"><h2 id="hi-title" style={{ fontSize: '1.25rem' }}>Compras · {product.name}</h2><button className="icon-btn" aria-label="Fechar" onClick={onClose}>×</button></div>
-        <div className="list">
-          {h.data?.purchases.map((x, i) => (
-            <div key={i} className="list-row">
-              <span className="num muted" style={{ width: '3.25rem' }}>{formatDayShort(x.occurred_at, org.timezone)}</span>
-              <span className="grow num">{[`${x.quantity} ${x.unit_word}`, x.origin].filter(Boolean).join(' · ')}</span>
-              <span className="num" style={{ fontWeight: 600 }}>{formatMoney(x.line_cost_minor, org)}</span>
-            </div>
-          ))}
-        </div>
-        {mark && (
-          <div className="list-row">
-            <strong className="grow">Marcado «{STATE_LABEL[mark.state].toLocaleLowerCase('pt-PT')}»</strong>
-            <span className="muted num">{formatDayShort(mark.marked_at, org.timezone)}{mark.days_after_purchase !== null ? ` · ${mark.days_after_purchase} dias depois da compra` : ''}</span>
-          </div>
-        )}
-        <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Das compras registadas (Dinheiro). Mostra o produto, a quantidade, o custo da linha e onde foi comprado. Quem pagou não aparece aqui.</p>
+    <BottomSheet labelledBy="hi-title" onDismiss={onBack}>
+      <div className="sheet-head">
+        <button className="icon-btn" aria-label="Voltar" onClick={onBack}><Icon name="back" /></button>
+        <h2 id="hi-title" className="sheet-title">Compras · {product.name}</h2>
       </div>
-    </div>
+      {h.isPending && <Skeleton rows={2} />}
+      {h.isError && <ErrorState onRetry={() => h.refetch()}>Não foi possível carregar as compras deste produto.</ErrorState>}
+      {h.isSuccess && h.data.purchases.length === 0 && !mark && <EmptyState icon="receipt" title="Sem compras registadas" />}
+      {h.isSuccess && (h.data.purchases.length > 0 || mark) && (
+        <ListGroup>
+          {h.data.purchases.map((x, i) => (
+            <ListRow key={i} leading={<span className="row-time num">{formatDayShort(x.occurred_at, org.timezone)}</span>}
+              title={<span className="num">{[`${x.quantity} ${x.unit_word}`, x.origin].filter(Boolean).join(' · ')}</span>}
+              trailing={<span className="row-value num">{formatMoney(x.line_cost_minor, org)}</span>} />
+          ))}
+          {mark && (
+            <ListRow title={`Marcado «${STATE_LABEL[mark.state].toLocaleLowerCase('pt-PT')}»`}
+              subtitle={<span className="num">{formatDayShort(mark.marked_at, org.timezone)}{mark.days_after_purchase !== null ? ` · ${mark.days_after_purchase} dias depois da compra` : ''}</span>} />
+          )}
+        </ListGroup>
+      )}
+      <p className="note support">Das compras registadas (Dinheiro). Mostra o produto, a quantidade, o custo da linha e onde foi comprado. Quem pagou não aparece aqui.</p>
+    </BottomSheet>
   )
 }

@@ -1,9 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router'
-import { OrganizationContext } from '../../modules/org/OrganizationContext'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { StockProduct } from '../../modules/stock/api'
+import { renderScreen } from '../../test/router'
 
 vi.mock('../../modules/stock/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/stock/api')>()),
@@ -12,16 +10,11 @@ vi.mock('../../modules/stock/api', async (orig) => ({
 import { getProductHistory, getStockOverview, updateStock } from '../../modules/stock/api'
 import { StockPage } from './StockPage'
 
-const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const p = (id: string, name: string, over: Partial<StockProduct> = {}): StockProduct => ({
   id, name, unit_word: 'garrafão', purpose: null, state: 'ok', level: null, reserve_units: 0, marked_at: null,
   on_list: false, planned_qty: null, urgent: false, last_purchase: null, bought_today: null, ...over,
 })
-const renderIt = () => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <OrganizationContext.Provider value={org}><MemoryRouter><StockPage /></MemoryRouter></OrganizationContext.Provider>
-  </QueryClientProvider>,
-)
+const renderIt = () => renderScreen('/stock', <StockPage />, { entries: ['/', '/stock'], index: 1 })
 beforeEach(() => vi.mocked(updateStock).mockClear())
 
 describe('StockPage', () => {
@@ -38,7 +31,7 @@ describe('StockPage', () => {
     const urgent = screen.getByText('Urgente · comprar já').parentElement!
     expect(within(urgent).getByText('Lâminas')).toBeTruthy()
     const attention = screen.getByText('Atenção').parentElement!
-    expect(within(attention).getAllByRole('button').map((b) => b.querySelector('strong')?.textContent)).toEqual(['Cera depilatória', 'Shampoo 5 L', 'Tinta preta'])
+    expect(within(attention).getAllByRole('button').map((b) => b.querySelector('.row-title')?.textContent)).toEqual(['Cera depilatória', 'Shampoo 5 L', 'Tinta preta'])
     expect(within(attention).getByText('comprado hoje · 2 unid. · quase vazio')).toBeTruthy()   // a fact beside an unchanged mark
     expect(screen.getByText('Em ordem · 1')).toBeTruthy()
     expect(screen.queryByText('Acetona')).toBeNull()

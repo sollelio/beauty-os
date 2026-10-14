@@ -1,7 +1,10 @@
 // Modo mercado (Slice 05 K4/K5) and Passagem (K6). The trip is a local draft rebuilt from the current list on each
 // entry, keeping progress; checking items records nothing. The real purchase is the Slice 03 flow.
+// On the mobile shell, for one hand in a busy market: the whole row toggles «comprado» (72px; the round check is a mark,
+// not the target; the quantity sits under the name so a long name keeps the row's width); ⋯ is its own 48px button; every sheet is a history entry (back closes it); the draft is saved on
+// every change, so moving back to the list and in again keeps it.
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Navigate, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { getStockOverview, stockKeys, type StockProduct } from '../../modules/stock/api'
@@ -10,37 +13,39 @@ import {
   addUnplanned, boughtItems, buildTrip, clearTrip, isSubstituted, loadTrip, removeUnplanned, revertSubstitute, saveTrip,
   setQty, skip, substitute, toggle, tripCounts, type PickedProduct, type Trip, type TripItem,
 } from '../../modules/stock/trip'
+import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
-import { useSheet } from '../../shared/ui/navigation'
-import { ErrorState, Skeleton } from '../../shared/ui/states'
+import { Icon } from '../../shared/ui/Icon'
+import { ListGroup, ListRow } from '../../shared/ui/ListRow'
+import { useAppBack, useSheet } from '../../shared/ui/navigation'
+import { EmptyState, ErrorState, Skeleton } from '../../shared/ui/states'
 
-type Sheet = null | { kind: 'options'; key: string } | { kind: 'substitute'; key: string } | { kind: 'unplanned' } | { kind: 'unplanned-qty'; pick: PickedProduct; qty: number }
+type Sheet = { kind: 'options'; key: string } | { kind: 'substitute'; key: string } | { kind: 'unplanned' } | { kind: 'unplanned-qty'; pick: PickedProduct; qty: number }
 
 export function MarketPage() {
   const navigate = useNavigate()
+  const back = useAppBack('/stock/lista')
   const overview = useQuery({ queryKey: stockKeys.overview, queryFn: getStockOverview })
-  if (overview.data) return <MarketTrip products={overview.data} />
+  if (overview.data) return <MarketTrip products={overview.data} back={back} />
   return (
-    <main className="app-main">
-      <header className="flow-header-row">
-        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate('/stock/lista')}>←</button>
-        <span className="muted" style={{ fontWeight: 600 }}>Compras</span><span style={{ width: '2.75rem' }} />
-      </header>
+    <AppScreen bar={<AppBar title="Compras" leading="back" onLeading={back} />}>
       {overview.isError
         ? <ErrorState onRetry={() => overview.refetch()} action={<button type="button" className="link-btn" onClick={() => navigate('/stock/lista')}>Voltar à lista</button>}>
             Não foi possível carregar a lista de compra.
           </ErrorState>
         : <Skeleton rows={4} />}
-    </main>
+    </AppScreen>
   )
 }
 
-function MarketTrip({ products }: { products: StockProduct[] }) {
+function MarketTrip({ products, back }: { products: StockProduct[]; back: () => void }) {
   const org = useOrganization()
   const navigate = useNavigate()
   // Rebuilt from the current list on entry, keeping progress from the stored draft.
   const [trip, setTrip] = useState<Trip>(() => { const t = buildTrip(products, loadTrip(org.id)); saveTrip(org.id, t); return t })
-  const [sheet, setSheet] = useState<Sheet>(null)
+  const sheets = useSheet<Sheet>()
+  const sheet = sheets.current
   const ending = useSheet<true>()                                       // "Terminar sem compra?" — back keeps the trip
   const update = (t: Trip) => { saveTrip(org.id, t); setTrip(t) }
   const c = tripCounts(trip)
@@ -52,36 +57,43 @@ function MarketTrip({ products }: { products: StockProduct[] }) {
   const sub = (i: TripItem) => (isSubstituted(i) ? `em vez de ${i.plannedName}` : i.unplanned ? 'não planeado' : i.status === 'skipped' ? 'não comprei' : null)
 
   return (
-    <main className="app-main">
-      <header className="flow-header-row">
-        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate('/stock/lista')}>←</button>
-        <span className="muted" style={{ fontWeight: 600 }}>Compras</span>
-        <span className="label num" data-testid="progress">{c.progress}</span>
-      </header>
-      {trip.items.length === 0 && <p className="muted" style={{ margin: 0 }}>Lista vazia.</p>}
-      {trip.items.length > 0 && c.bought === 0 && <p className="muted" style={{ margin: 0 }}>Marque o que vai comprando.</p>}
+    <AppScreen
+      bar={<AppBar title="Compras" leading="back" onLeading={back} trailing={<span className="app-bar-step num" data-testid="progress">{c.progress}</span>} />}
+      actions={
+        <BottomActionBar>
+          <span className="bar-summary" data-testid="trip-summary">
+            {c.bought} {c.bought === 1 ? 'comprado' : 'comprados'} · {c.pending} por comprar · {c.skipped} não comprei
+          </span>
+          {c.bought > 0
+            ? <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/passagem')}>Terminar e registar compra</button>
+            : <button className="btn btn-destructive" onClick={() => ending.open(true)}>Terminar sem compra</button>}
+        </BottomActionBar>
+      }>
+      {trip.items.length === 0 && <EmptyState icon="list" title="Lista vazia">Junte produtos à lista de compra antes de ir ao mercado.</EmptyState>}
+      {trip.items.length > 0 && c.bought === 0 && <p className="note">Marque o que vai comprando.</p>}
       {groups.map((g) => (
-        <section key={g.label} className="stack" style={{ gap: 0 }}>
+        <section key={g.label} className="stack">
           <span className="label">{g.label}</span>
-          {g.items.map((i) => (
-            <div key={i.key} className={`market-row${i.status === 'skipped' ? ' skipped' : ''}`}>
-              <button className={`check${i.status === 'bought' ? ' on' : ''}`} aria-pressed={i.status === 'bought'} aria-label={`Comprado: ${i.name}`} onClick={() => update(toggle(trip, i.key))}>{i.status === 'bought' ? '✓' : ''}</button>
-              <span className="grow"><span className="market-name">{i.name}</span>{sub(i) && <span className="muted" style={{ display: 'block', fontSize: '0.875rem' }}>{sub(i)}</span>}</span>
-              <span className="num market-qty">{i.qty} {i.unitWord}</span>
-              <button className="icon-btn" aria-label={`Opções: ${i.name}`} onClick={() => setSheet({ kind: 'options', key: i.key })}>⋯</button>
-            </div>
-          ))}
+          <ListGroup>
+            {g.items.map((i) => (
+              <div key={i.key} className="row-line">
+                <button type="button" className={`row row-tappable row-market${i.status === 'skipped' ? ' is-skipped' : ''}`} aria-pressed={i.status === 'bought'}
+                  onClick={() => update(toggle(trip, i.key))}>
+                  <span className="row-leading"><span className="check-mark" aria-hidden>{i.status === 'bought' && <Icon name="check" size={18} strokeWidth={3} />}</span></span>
+                  <span className="row-body">
+                    <span className="row-title">{i.name}</span>
+                    <span className="row-qty">{i.qty} {i.unitWord}</span>
+                    {sub(i) && <span className="row-subtitle">{sub(i)}</span>}
+                  </span>
+                </button>
+                <button className="icon-btn" aria-label={`Opções: ${i.name}`} onClick={() => sheets.open({ kind: 'options', key: i.key })}><Icon name="more" /></button>
+              </div>
+            ))}
+          </ListGroup>
         </section>
       ))}
-      <button className="btn btn-secondary btn-dashed" onClick={() => setSheet({ kind: 'unplanned' })}>+ Item não planeado</button>
-      <div className="footer">
-        <span className="muted num" style={{ textAlign: 'center' }} data-testid="trip-summary">
-          {c.bought} {c.bought === 1 ? 'comprado' : 'comprados'} · {c.pending} por comprar · {c.skipped} não comprei
-        </span>
-        {c.bought > 0
-          ? <button className="btn btn-primary btn-tall" onClick={() => navigate('/stock/passagem')}>Terminar e registar compra</button>
-          : <button className="btn btn-destructive" onClick={() => ending.open(true)}>Terminar sem compra</button>}
-      </div>
+      <button className="btn btn-secondary btn-dashed" onClick={() => sheets.open({ kind: 'unplanned' })}><Icon name="plus" />Item não planeado</button>
+
       {ending.current && (
         <ConfirmDialog title="Terminar sem compra?" safeLabel="Continuar no mercado" destructiveLabel="Terminar sem compra"
           onSafe={ending.close} onDestructive={() => { clearTrip(org.id); ending.leaveTo('/stock') }}>
@@ -90,108 +102,109 @@ function MarketTrip({ products }: { products: StockProduct[] }) {
       )}
 
       {sheet?.kind === 'options' && item && (
-        <div className="sheet" role="dialog" aria-labelledby="opt-title" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <h2 id="opt-title" style={{ fontSize: '1.25rem' }}>{item.name}</h2>
-            <div className="stock-card">
-              <strong>Quantidade comprada</strong>
-              <span className="stepper">
-                <button className="step" aria-label="Menos" onClick={() => update(setQty(trip, item.key, item.qty - 1))}>−</button>
-                <span className="num stepper-value" style={{ minWidth: '5.5rem' }}>{item.qty} {item.unitWord}</span>
-                <button className="step" aria-label="Mais" onClick={() => update(setQty(trip, item.key, item.qty + 1))}>+</button>
-              </span>
-            </div>
+        <BottomSheet labelledBy="opt-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <h2 id="opt-title" className="sheet-title">{item.name}</h2>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
+          </div>
+          <div className="row-between">
+            <span className="row-title">Quantidade comprada</span>
+            <span className="stepper">
+              <button className="step" aria-label="Menos" onClick={() => update(setQty(trip, item.key, item.qty - 1))}><Icon name="minus" /></button>
+              <span className="num stepper-value">{item.qty} {item.unitWord}</span>
+              <button className="step" aria-label="Mais" onClick={() => update(setQty(trip, item.key, item.qty + 1))}><Icon name="plus" /></button>
+            </span>
+          </div>
+          <ListGroup>
             {item.unplanned ? (
-              <button className="pick" onClick={() => { update(removeUnplanned(trip, item.key)); setSheet(null) }}>Tirar das compras</button>
+              <ListRow as="button" title="Tirar das compras" onClick={() => { update(removeUnplanned(trip, item.key)); sheets.close() }} />
             ) : (
               <>
-                <button className="pick" onClick={() => setSheet({ kind: 'substitute', key: item.key })}>Não há · levei outro produto</button>
-                {isSubstituted(item) && <button className="pick" onClick={() => { update(revertSubstitute(trip, item.key)); setSheet(null) }}>Voltar ao produto planeado</button>}
-                {item.status !== 'skipped' && <button className="pick" onClick={() => { update(skip(trip, item.key)); setSheet(null) }}>Não comprei</button>}
+                <ListRow as="button" title="Não há · levei outro produto" chevron onClick={() => sheets.update({ kind: 'substitute', key: item.key })} />
+                {isSubstituted(item) && <ListRow as="button" title="Voltar ao produto planeado" onClick={() => { update(revertSubstitute(trip, item.key)); sheets.close() }} />}
+                {item.status !== 'skipped' && <ListRow as="button" title="Não comprei" onClick={() => { update(skip(trip, item.key)); sheets.close() }} />}
               </>
             )}
-            <button className="btn btn-primary" onClick={() => setSheet(null)}>OK</button>
-          </div>
-        </div>
+          </ListGroup>
+          <button className="btn btn-primary" onClick={sheets.close}>OK</button>
+        </BottomSheet>
       )}
       {sheet?.kind === 'substitute' && item && (
         <ProductPicker title="O que levou em vez?" subtitle={`Não há ${item.plannedName}`} products={products} exclude={item.plannedId ? [item.plannedId] : []}
           note={<>A substituição é decisão sua. Fica registada «em vez de {item.plannedName}»; o produto planeado mantém a sua marca em Stock.</>}
-          onPick={(p) => { update(substitute(trip, item.key, p)); setSheet(null) }} onClose={() => setSheet(null)} />
+          onPick={(p) => { update(substitute(trip, item.key, p)); sheets.close() }} onClose={sheets.close} />
       )}
       {sheet?.kind === 'unplanned' && (
-        <ProductPicker title="Item não planeado" products={products} onPick={(pick) => setSheet({ kind: 'unplanned-qty', pick, qty: 1 })} onClose={() => setSheet(null)} />
+        <ProductPicker title="Item não planeado" products={products} onPick={(pick) => sheets.update({ kind: 'unplanned-qty', pick, qty: 1 })} onClose={sheets.close} />
       )}
       {sheet?.kind === 'unplanned-qty' && (
-        <div className="sheet" role="dialog" aria-labelledby="un-title" onClick={() => setSheet(null)}>
-          <div className="sheet-body" onClick={(e) => e.stopPropagation()}>
-            <h2 id="un-title" style={{ fontSize: '1.25rem' }}>Item não planeado</h2>
-            <div className="stock-card"><span className="muted">Produto</span><strong>{sheet.pick.name}</strong></div>
-            <div className="stock-card">
-              <strong>Quantidade</strong>
-              <span className="stepper">
-                <button className="step" aria-label="Menos" onClick={() => setSheet({ ...sheet, qty: Math.max(1, sheet.qty - 1) })}>−</button>
-                <span className="num stepper-value" style={{ minWidth: '5.5rem' }}>{sheet.qty} {sheet.pick.unitWord}</span>
-                <button className="step" aria-label="Mais" onClick={() => setSheet({ ...sheet, qty: Math.min(9999, sheet.qty + 1) })}>+</button>
-              </span>
-            </div>
-            <button className="btn btn-primary" onClick={() => { update(addUnplanned(trip, sheet.pick, sheet.qty)); setSheet(null) }}>Adicionar às compras</button>
+        <BottomSheet labelledBy="un-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <h2 id="un-title" className="sheet-title">Item não planeado</h2>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
           </div>
-        </div>
+          <ListGroup>
+            <ListRow title={sheet.pick.name} subtitle="Produto" />
+          </ListGroup>
+          <div className="row-between">
+            <span className="row-title">Quantidade</span>
+            <span className="stepper">
+              <button className="step" aria-label="Menos" onClick={() => sheets.update({ ...sheet, qty: Math.max(1, sheet.qty - 1) })}><Icon name="minus" /></button>
+              <span className="num stepper-value">{sheet.qty} {sheet.pick.unitWord}</span>
+              <button className="step" aria-label="Mais" onClick={() => sheets.update({ ...sheet, qty: Math.min(9999, sheet.qty + 1) })}><Icon name="plus" /></button>
+            </span>
+          </div>
+          <button className="btn btn-primary" onClick={() => { update(addUnplanned(trip, sheet.pick, sheet.qty)); sheets.close() }}>Adicionar às compras</button>
+        </BottomSheet>
       )}
-    </main>
+    </AppScreen>
   )
 }
 
+// Passagem (K6): plan vs real before the Slice 03 purchase. With nothing bought (e.g. back here after the purchase was
+// recorded and the draft cleared) there is nothing to hand over: Stock replaces this entry, so no dead end stays behind.
 export function HandoffPage() {
   const org = useOrganization()
   const navigate = useNavigate()
+  const back = useAppBack('/stock/mercado')
   const trip = loadTrip(org.id)
-  if (!trip || boughtItems(trip).length === 0) {
-    return (
-      <main className="app-main">
-        <p className="muted">Não há compras marcadas no mercado.</p>
-        <button className="btn btn-secondary" onClick={() => navigate('/stock')}>Voltar a Stock</button>
-      </main>
-    )
-  }
+  if (!trip || boughtItems(trip).length === 0) return <Navigate to="/stock" replace />
   const bought = boughtItems(trip)
   const notBought = trip.items.filter((i) => i.status !== 'bought' && !i.unplanned)
   const meta = (i: TripItem) => (isSubstituted(i) ? `em vez de ${i.plannedName}` : i.unplanned ? 'não planeado' : i.urgent ? 'planeado · urgente' : 'planeado')
   return (
-    <main className="app-main">
-      <header className="flow-header-row">
-        <button className="icon-btn" aria-label="Voltar" onClick={() => navigate('/stock/mercado')}>←</button>
-        <span className="muted" style={{ fontWeight: 600 }}>Compras</span><span style={{ width: '2.75rem' }} />
-      </header>
+    <AppScreen
+      bar={<AppBar title="Compras" leading="back" onLeading={back} />}
+      actions={
+        <BottomActionBar>
+          <span className="bar-summary">{bought.length} {bought.length === 1 ? 'produto vai' : 'produtos vão'} para a compra · os custos introduz a seguir</span>
+          <button className="btn btn-primary btn-tall" onClick={() => navigate('/dinheiro/compra', { state: { fromTrip: true } })}>Continuar para Registar compra</button>
+        </BottomActionBar>
+      }>
       <section className="stack">
-        <h1 style={{ fontSize: '1.625rem' }}>Registar a compra real</h1>
-        <p className="muted" style={{ margin: 0 }}>A lista era um plano. A seguir regista o que comprou de facto — quantidades e custos reais. Nada entra em Dinheiro nem em Stock até confirmar.</p>
+        <h2>Registar a compra real</h2>
+        <p className="note">A lista era um plano. A seguir regista o que comprou de facto — quantidades e custos reais. Nada entra em Dinheiro nem em Stock até confirmar.</p>
       </section>
-      <section className="stack" style={{ gap: 0 }}>
+      <section className="stack">
         <span className="label">Vai para a compra</span>
-        {bought.map((i) => (
-          <div key={i.key} className="list-row">
-            <span className="grow"><strong style={{ display: 'block' }}>{i.name}</strong><span className="muted" style={{ fontSize: '0.875rem' }}>{meta(i)}</span></span>
-            <strong className="num">{i.qty} {i.unitWord}</strong>
-          </div>
-        ))}
+        <ListGroup>
+          {bought.map((i) => (
+            <ListRow key={i.key} title={i.name} subtitle={meta(i)} trailing={<span className="row-value num">{i.qty} {i.unitWord}</span>} />
+          ))}
+        </ListGroup>
       </section>
       {notBought.length > 0 && (
-        <section className="stack" style={{ gap: 0 }}>
+        <section className="stack">
           <span className="label">Não comprado · fica marcado em Stock</span>
-          {notBought.map((i) => (
-            <div key={i.key} className="list-row">
-              <span className="grow muted">{i.plannedName ?? i.name}</span>
-              <span className="muted num" style={{ fontSize: '0.875rem' }}>{i.status === 'skipped' ? 'não comprei · ' : ''}planeado {i.plannedQty ?? i.qty} {i.plannedUnit ?? i.unitWord}</span>
-            </div>
-          ))}
+          <ListGroup>
+            {notBought.map((i) => (
+              <ListRow key={i.key} className="row-muted" title={i.plannedName ?? i.name}
+                trailing={<span className="support num">{i.status === 'skipped' ? 'não comprei · ' : ''}planeado {i.plannedQty ?? i.qty} {i.plannedUnit ?? i.unitWord}</span>} />
+            ))}
+          </ListGroup>
         </section>
       )}
-      {bought.some((i) => i.urgent) && <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>Se o item urgente foi comprado noutro sítio ou noutro dia, registe-o como compra à parte.</p>}
-      <div className="footer">
-        <button className="btn btn-primary btn-tall" onClick={() => navigate('/dinheiro/compra', { state: { fromTrip: true } })}>Continuar para Registar compra</button>
-      </div>
-    </main>
+      {bought.some((i) => i.urgent) && <p className="note support">Se o item urgente foi comprado noutro sítio ou noutro dia, registe-o como compra à parte.</p>}
+    </AppScreen>
   )
 }

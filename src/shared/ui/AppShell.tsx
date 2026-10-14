@@ -14,9 +14,10 @@ export function AppScreen({ bar, actions, children }: { bar?: ReactNode; actions
   )
 }
 
-/** `close` (×) leaves a task; `back` (←) returns one level. `step` turns it into the flow variant: count and progress. */
-export function AppBar({ title, leading, onLeading, step }: {
-  title: string; leading: 'back' | 'close'; onLeading: () => void; step?: { current: number; total: number }
+/** `close` (×) leaves a task; `back` (←) returns one level. `step` turns it into the flow variant: count and progress.
+ *  `trailing`: one small status at the end of the bar (e.g. a trip's "3 de 4"). */
+export function AppBar({ title, leading, onLeading, step, trailing }: {
+  title: string; leading: 'back' | 'close'; onLeading: () => void; step?: { current: number; total: number }; trailing?: ReactNode
 }) {
   return (
     <header className="app-bar">
@@ -26,6 +27,7 @@ export function AppBar({ title, leading, onLeading, step }: {
         </button>
         <span className="app-bar-title">{title}</span>
         {step && <span className="app-bar-step num">{step.current} / {step.total}</span>}
+        {trailing}
       </div>
       {step && (
         <div className="progress app-bar-progress" aria-hidden>

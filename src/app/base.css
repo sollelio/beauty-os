@@ -128,7 +128,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .row-icon-warning { background: var(--warning-bg); color: var(--warning-icon); }
 .row-time { width: 3rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
-.row-title { font-size: var(--t-headline); font-weight: 600; line-height: 1.3; }
+.row-title { font-size: var(--t-headline); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }   /* a long product name wraps, never clips */
 .row-subtitle { font-size: var(--t-support); line-height: 1.35; color: var(--muted); }
 .row-subtitle strong { color: var(--ink); font-size: var(--t-body); }
 .row-trailing { flex: 0 0 auto; display: flex; align-items: center; gap: var(--s-2); font-variant-numeric: tabular-nums; }
@@ -143,6 +143,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .status-neutral { background: var(--disabled-bg); color: var(--ink); }
 .status-success { background: var(--success-bg); color: var(--success-fg); }
 .status-warning { background: var(--warning-bg); color: var(--warning-fg); }
+.status-caution { background: var(--surface); color: var(--warning-fg); box-shadow: inset 0 0 0 1px var(--warning-marker); }   /* a watch, lighter than warning (Stock «Baixo») */
 .status-danger { background: var(--error-bg); color: var(--error-fg); }
 .status-accent { background: var(--accent-tint); color: var(--accent); }
 
@@ -233,7 +234,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .group-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 2.75rem; border: 0; background: none; padding: 0; color: var(--muted); }
 .stock-card { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.625rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .stepper { display: flex; align-items: center; gap: 0.625rem; }
-.step { width: var(--tap); height: var(--tap); border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface); font-size: 1.375rem; font-weight: 600; color: var(--ink); }
+.step { flex: none; width: var(--tap); height: var(--tap); border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface); font-size: 1.375rem; font-weight: 600; color: var(--ink); }
 .stepper-value { min-width: 3rem; text-align: center; font-size: 1.125rem; font-weight: 700; }
 .plan-row { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.625rem 0; border-top: 1px solid var(--line); }
 .stack > .label + .plan-row { border-top: 0; }
@@ -282,7 +283,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .sheet { z-index: 100; }
 .sheet-body { max-height: min(92dvh, calc(100% - 1rem)); overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 .sheet-body:focus { outline: none; }
-.sheet-title { font-size: 1.25rem; }
+.sheet-title { font-size: 1.25rem; overflow-wrap: anywhere; }
 
 /* PinConfirm + destructive actions (UX slice 2). Person choice as a grid of 52px options; a six-cell PIN that shows
    progress, never digits, over one real numeric input; feedback in a reserved line; danger only on final commands. */
@@ -303,3 +304,26 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .pin:focus-within .pin-cell.next { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .pin-invalid .pin-cell { border-color: var(--error-fg); }
 .pin-feedback { margin: 0; min-height: 1.25rem; font-size: 0.875rem; color: var(--error-fg); }
+
+/* Stock (UX slice 6) on the shared rows: market rows toggle as a whole (72px, the check is a mark, not a 36px target),
+   plan items carry their "Levar" stepper under the row, groups collapse with a chevron. */
+.row-market { min-height: 4.5rem; }
+.row-market .row-title { font-size: 1.1875rem; }
+.row-qty { font-size: 1.0625rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.check-mark { width: 1.75rem; height: 1.75rem; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--surface); color: #fff; transition: background-color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
+.row-market[aria-pressed="true"] .check-mark { background: var(--accent); border-color: var(--accent); }
+.row-market.is-skipped .row-title, .row-market.is-skipped .row-qty { text-decoration: line-through; color: var(--muted); }
+.plan-item { border-top: 1px solid var(--line); }
+.row-group > .plan-item:first-child { border-top: 0; }
+.plan-item > .row { border-top: 0; }
+.plan-stepper { display: flex; align-items: center; gap: var(--s-3); padding: 0 var(--s-4) var(--s-3); }
+.group-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: var(--tap); border: 0; background: none; padding: 0; color: var(--muted); border-radius: var(--r-sm); }
+.group-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.toggle-chevron { display: grid; transition: transform var(--motion-base) var(--ease); }
+.toggle-chevron[data-open="true"] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .toggle-chevron { transition: none; } }
+.row-block { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3) var(--s-4) var(--s-4); border-top: 1px solid var(--line); }
+.row-group > .row-block:first-child { border-top: 0; }
+.saved-line { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--success-fg); }
+.urgent-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warning-marker); }
+.row-muted .row-title { color: var(--muted); font-weight: 500; }
