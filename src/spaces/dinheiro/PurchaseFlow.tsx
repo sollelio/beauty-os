@@ -19,9 +19,9 @@ import { updateStock } from '../../modules/stock/api'
 import { boughtItems, clearTrip, endedPlanIds, isSubstituted, loadTrip, type Trip } from '../../modules/stock/trip'
 import type { ReviewLine } from '../stock/ReviewPage'
 import { recordPurchase, type RecordPurchaseInput, type RecordPurchaseResult } from '../../modules/purchasing/api'
-import type { MovementDraft, PurchaseForm as PurchaseDraftForm } from '../../modules/movements/drafts'
+import { isBlockedDraft, type MovementDraft, type PurchaseForm as PurchaseDraftForm } from '../../modules/movements/drafts'
 import { useDraftActions, useDraftParam, useMovementData } from '../../modules/movements/useMovement'
-import { DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
+import { DraftBlocked, DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
 import { draftFailure, MOVEMENT_BLOCKED } from '../rascunhos/copy'
 import { contributionState, payersText } from '../../modules/purchasing/contributions'
 import { formatMoney, minorToWholeUnits, wholeUnitsToMinor } from '../../shared/money'
@@ -73,6 +73,7 @@ function PurchaseForm({ draft }: { draft: MovementDraft<'purchase'> | null }) {
   const command = useVerifiedCommand<RecordPurchaseInput, RecordPurchaseResult>(drafts.wrapRun(recordPurchase), { intent: drafts.intent })
   const saved = drafts.save
   const offline = lists.offline
+  const blockedDraft = isBlockedDraft(draft)
   const f = draft?.payload.form
   const toDigits = (minor: number) => String(minorToWholeUnits(minor, org))
 
@@ -236,7 +237,7 @@ function PurchaseForm({ draft }: { draft: MovementDraft<'purchase'> | null }) {
     <BottomActionBar>
       <button className="btn btn-primary btn-tall" onClick={saveDraft} disabled={saved.isPending}>{saved.isPending ? 'A guardar…' : 'Guardar neste telemóvel'}</button>
     </BottomActionBar>
-  ) : step === 3 && input ? (
+  ) : step === 3 && input && !blockedDraft ? (
     <BottomActionBar>
       {err?.kind === 'network' ? (
         <>
@@ -345,10 +346,12 @@ function PurchaseForm({ draft }: { draft: MovementDraft<'purchase'> | null }) {
             <DraftNotes draft={draft} />
             {summary}
             <div className="lock-note"><LockIcon /><span>Fica no histórico com data, hora e quem confirmou. Entra em Dinheiro e fica no histórico dos produtos em Stock.</span></div>
-            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
+            {blockedDraft && draft ? <DraftBlocked draft={draft} onDiscard={() => setAskDiscard(true)} /> : (
+              <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
+            )}
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
             {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{draftFailure(err, 'Não foi possível guardar esta compra.')}</div>}
-            {draft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
+            {draft && !blockedDraft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
           </section>
         </>
       )}

@@ -1,7 +1,11 @@
 // Pieces the three movement flows share for drafts (Offline 6): loading / missing states, the honest "saved on this
 // phone" screen, and the review mark of a draft the server did not accept.
-import type { ReactNode } from 'react'
-import type { MovementDraft } from '../../modules/movements/drafts'
+import { useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { reenterDraft, type MovementDraft } from '../../modules/movements/drafts'
+import { offlineKeys, useOfflineRuntime } from '../../shared/offline/runtime'
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
 import { Icon } from '../../shared/ui/Icon'
 import { useAppBack } from '../../shared/ui/navigation'
@@ -66,3 +70,41 @@ export function DraftSaveStep({ what, children }: { what: string; children: Reac
     </section>
   )
 }
+
+/**
+ * A draft the server refused in a way confirming again cannot fix (period approved or closed, captured time out of
+ * the window, not authorized, possibly received already): no PIN here. It can be discarded, or — except when it may
+ * have been received — entered again as a clearly new movement with the time of now (Offline 7).
+ */
+export function DraftBlocked({ draft, onDiscard }: { draft: MovementDraft; onDiscard: () => void }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { storeAccess, refresh } = useOfflineRuntime()
+  const [ask, setAsk] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const uncertain = draft.payload.review?.code === 'IDEMPOTENCY_CONFLICT'
+  async function reenter() {
+    setAsk(false)
+    try {
+      await reenterDraft(await storeAccess!.getStore(), draft)
+      await Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: offlineKeys.all })])
+      navigate('/rascunhos', { replace: true })
+    } catch { setFailed(true) }
+  }
+  return (
+    <div className="stack" data-testid="draft-blocked">
+      <p className="note">Este rascunho não pode ser confirmado como está.{uncertain ? ' Confirme no histórico se já foi registado antes de o descartar.' : ''}</p>
+      <div className="wrap">
+        {!uncertain && <button className="btn btn-secondary btn-fit" onClick={() => setAsk(true)}>Registar como novo</button>}
+        <button className="link-btn" onClick={onDiscard}>Descartar rascunho</button>
+      </div>
+      {failed && <div className="notice notice-error" role="alert">Não foi possível criar o novo rascunho neste telemóvel.</div>}
+      {ask && (
+        <ConfirmDialog title="Registar como novo?" safeLabel="Cancelar" destructiveLabel="Criar novo rascunho" onSafe={() => setAsk(false)} onDestructive={() => void reenter()}>
+          Fica um rascunho novo, com a hora de agora — conta no período atual, não no original. Este rascunho é descartado.
+        </ConfirmDialog>
+      )}
+    </div>
+  )
+}
+

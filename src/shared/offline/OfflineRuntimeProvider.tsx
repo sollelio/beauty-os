@@ -13,10 +13,11 @@ import { deleteBinding, saveBinding, type PublicOrganization } from './binding'
 import { getConnectivity, subscribeConnectivity, useConnectivity } from './connectivity'
 import { createSyncCoordinator, type Drainer, type SyncCoordinator, type SyncOutcome } from './coordinator'
 import { openSharedOfflineDb } from './db'
-import { findForeignPartitions } from './partition'
+import { findForeignPartitions, purgePartition } from './partition'
 import { readPersistentStorage, requestPersistentStorage, type StorageNavigator } from './persistence'
 import { IDLE_SYNC, offlineKeys, OfflineRuntimeContext, type BindingSource, type OfflineRuntime, type StorageState } from './runtime'
 import { readLocalStatus } from './status'
+import { buildSyncReport, type SyncReport } from './syncReport'
 import { createOfflineStore, type OfflineStore } from './store'
 import type { Partition } from './types'
 import { isUuid } from './validate'
@@ -25,6 +26,7 @@ import { isUuid } from './validate'
 export type ServerBinding = 'bound' | 'unbound' | 'unknown'
 
 const RETRY_DELAY_MS = 60_000                // gentle retry after a transient failure, while the app is open and online
+const REPORT_DEBOUNCE_MS = 800               // local changes come in bursts (a drain, a refresh): one report after them
 
 /** One database connection, opened on first use and opened again after a failure. */
 function dbHandle(open: () => Promise<IDBDatabase>) {
@@ -38,7 +40,7 @@ const idleSnapshot = () => IDLE_SYNC
 const LOCAL = { networkMode: 'always', retry: false, staleTime: Infinity } as const
 
 export function OfflineRuntimeProvider({
-  organization, principal, bindingSource, serverBinding = 'unknown', drain, refreshSnapshot, onDrained,
+  organization, principal, bindingSource, serverBinding = 'unknown', drain, refreshSnapshot, onDrained, reportSync,
   openDb = openSharedOfflineDb, storageApi, children,
 }: {
   organization: PublicOrganization | null
@@ -48,6 +50,8 @@ export function OfflineRuntimeProvider({
   drain?: Drainer
   refreshSnapshot?: (store: OfflineStore) => Promise<void>
   onDrained?: (outcome: SyncOutcome) => void
+  /** Sends this device's sync report to the server (Offline 7); the server scopes it to the session's device. */
+  reportSync?: (report: SyncReport) => Promise<unknown>
   openDb?: () => Promise<IDBDatabase>
   storageApi?: StorageNavigator     // navigator by default
   children: ReactNode
@@ -134,6 +138,31 @@ export function OfflineRuntimeProvider({
       .then(() => queryClient.invalidateQueries({ queryKey: offlineKeys.snapshot(partition) }), () => { /* kept: the previous snapshot */ })
   }, [partition, refreshSnapshot, serverBinding, connectivity, getDb, queryClient])
 
+  // ---------- the device sync report (Offline 7): foreground only, never faked ----------
+  const timeZone = organization?.timezone ?? null
+  const [syncReport, setSyncReport] = useState<{ at: string | null; failed: boolean }>({ at: null, failed: false })
+  const canReport = !!partition && !!reportSync && !!timeZone && serverBinding === 'bound' && connectivity === 'online' && local.isSuccess
+  const reportSyncNow = useCallback(async () => {
+    if (!partition || !reportSync || !timeZone || serverBinding !== 'bound' || getConnectivity() !== 'online') return false
+    try {
+      await reportSync(await buildSyncReport(createOfflineStore(await getDb(), partition), timeZone))
+      setSyncReport({ at: new Date().toISOString(), failed: false })
+      return true
+    } catch {
+      setSyncReport((r) => ({ ...r, failed: true }))
+      return false
+    }
+  }, [partition, reportSync, timeZone, serverBinding, getDb])
+  // after every change of local state (capture, sync, draft confirmed or discarded, review), on start and reconnect
+  // (canReport turns true), and when the app comes back to the foreground — a phone left open past a period's end
+  useEffect(() => {
+    if (!canReport) return
+    const t = setTimeout(() => void reportSyncNow(), REPORT_DEBOUNCE_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') void reportSyncNow() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', onVisible) }
+  }, [canReport, local.dataUpdatedAt, reportSyncNow])
+
   const storeAccess = useMemo(() => partition && { partition, getStore: async () => createOfflineStore(await getDb(), partition) }, [partition, getDb])
 
   const storage: StorageState = !partition ? 'none' : local.isError ? 'unavailable' : local.isPending ? 'loading' : 'ready'
@@ -161,7 +190,15 @@ export function OfflineRuntimeProvider({
       return result
     },
     syncNow: async () => (coordinator ? after(await coordinator.request('manual')) : null),
-  }), [partition, bindingSource, storage, local.data, held.data, persisted.data, coordinator, sync, storeAccess, refreshLocal, queryClient, storageApi, getDb, after])
+    syncReport,
+    reportSyncNow,
+    discardForeign: async () => {
+      const d = await getDb()
+      for (const p of await findForeignPartitions(d, partition)) await purgePartition(d, p, { discardUnsyncedWork: true })
+      await queryClient.invalidateQueries({ queryKey: offlineKeys.all })
+    },
+  }), [partition, bindingSource, storage, local.data, held.data, persisted.data, coordinator, sync, storeAccess, refreshLocal, queryClient, storageApi, getDb, after,
+    syncReport, reportSyncNow])
 
   return <OfflineRuntimeContext.Provider value={value}>{children}</OfflineRuntimeContext.Provider>
 }

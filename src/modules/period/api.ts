@@ -84,6 +84,7 @@ export const fechoKeys = {
   history: (p: string | null) => ['private', 'fecho', 'history', k(p)] as const,
   rulePreview: (p: string, person: string, pct: number | null) => ['private', 'fecho', 'rule-preview', p, person, pct] as const,
   distribution: (p: string, kind: string, amount: number | null) => ['private', 'fecho', 'distribution', p, kind, amount] as const,
+  sync: (p: string) => ['private', 'fecho', 'sync', p] as const,
 }
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
@@ -129,3 +130,9 @@ export type PaymentInput = { periodId: string; personId: string; amountMinor: nu
 export const confirmPayment = (c: string, g: string, i: PaymentInput) =>
   rpc<R & { outstanding_minor: number; paid_at: string }>('confirm_payment',
     { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_person_id: i.personId, p_amount_minor: i.amountMinor, p_payment_method_id: i.methodId })
+
+/** Offline 7 (ADR-0010 §5): the period's device sync state, live — how many offline-capable devices are ready, still
+ *  hold work for it, or have not checked in since it ended. Counts only; never cached for offline use. */
+export type SyncStatus = { ready: number; pending: number; silent: number; safe: boolean }
+export const getSyncStatus = (periodId: string) => rpc<SyncStatus>('fecho_sync_status', { p_period_id: periodId })
+

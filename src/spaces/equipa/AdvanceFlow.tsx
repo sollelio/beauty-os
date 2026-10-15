@@ -9,7 +9,7 @@ import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { isPinError } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
-import type { MovementDraft } from '../../modules/movements/drafts'
+import { isBlockedDraft, type MovementDraft } from '../../modules/movements/drafts'
 import { useDraftActions, useDraftParam, useMovementData } from '../../modules/movements/useMovement'
 import type { CapturePerson } from '../../modules/services/api'
 import { recordAdvance, type RecordAdvanceInput, type RecordAdvanceResult } from '../../modules/team/api'
@@ -23,7 +23,7 @@ import { Icon } from '../../shared/ui/Icon'
 import { useFlow } from '../../shared/ui/navigation'
 import { PaymentFields } from '../../shared/ui/PaymentFields'
 import { effectiveChoice, type PaymentChoice } from '../../shared/payment'
-import { DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
+import { DraftBlocked, DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
 import { draftFailure, MOVEMENT_BLOCKED } from '../rascunhos/copy'
 
 export function AdvanceFlow() {
@@ -53,6 +53,7 @@ function AdvanceForm({ draft }: { draft: MovementDraft<'advance'> | null }) {
   const [askDiscard, setAskDiscard] = useState(false)
 
   const offline = lists.offline
+  const blockedDraft = isBlockedDraft(draft)
   const amountMinor = wholeUnitsToMinor(amount, org)
   // the organization's own active methods; advances are paid with one method (no Misto, Slice 02 #7)
   const methodList = lists.data.paymentMethods ?? []
@@ -125,7 +126,7 @@ function AdvanceForm({ draft }: { draft: MovementDraft<'advance'> | null }) {
     <BottomActionBar>
       <button className="btn btn-primary btn-tall" onClick={saveDraft} disabled={saved.isPending}>{saved.isPending ? 'A guardar…' : 'Guardar neste telemóvel'}</button>
     </BottomActionBar>
-  ) : step === 3 && input ? (
+  ) : step === 3 && input && !blockedDraft ? (
     <BottomActionBar>
       {advance.status === 'error' && advance.error?.kind === 'network' ? (
         <>
@@ -206,13 +207,15 @@ function AdvanceForm({ draft }: { draft: MovementDraft<'advance'> | null }) {
               <LockIcon />
               <span>Fica no histórico com data, hora e quem confirmou. É descontado ao valor a receber no fecho do período.</span>
             </div>
-            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
-              error={advance.status === 'error' ? advance.error : null} />
+            {blockedDraft && draft ? <DraftBlocked draft={draft} onDiscard={() => setAskDiscard(true)} /> : (
+              <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret}
+                error={advance.status === 'error' ? advance.error : null} />
+            )}
             {advance.status === 'error' && advance.error?.kind === 'network' && (
               <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>
             )}
             {otherDomainError && <div className="notice notice-error" role="alert">{draftFailure(advance.error, 'Não foi possível guardar este adiantamento.')}</div>}
-            {draft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
+            {draft && !blockedDraft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
           </section>
         </>
       )}

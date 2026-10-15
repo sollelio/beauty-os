@@ -12,7 +12,7 @@ const { offlineError } = vi.hoisted(() => ({ offlineError: () => Promise.reject(
 vi.mock('../shared/supabase/client', () => ({ getSupabase: vi.fn(() => { throw new Error('no direct backend call') }), authStorageKey: () => 'k' }))
 vi.mock('../modules/org/api', async (orig) => ({
   ...(await orig<typeof import('../modules/org/api')>()),
-  getDeviceContext: vi.fn(), getSessionPrincipal: vi.fn(), readStoredPrincipal: vi.fn(), watchDevicePrincipal: vi.fn(),
+  getDeviceContext: vi.fn(), getSessionPrincipal: vi.fn(), readStoredPrincipal: vi.fn(), watchDevicePrincipal: vi.fn(), reportDeviceSync: vi.fn(async () => ({})),
 }))
 vi.mock('../modules/services/api', async (orig) => ({
   ...(await orig<typeof import('../modules/services/api')>()),
@@ -20,9 +20,11 @@ vi.mock('../modules/services/api', async (orig) => ({
   listFrequentServices: vi.fn(offlineError), recordService: vi.fn(offlineError), submitQueuedService: vi.fn(),
 }))
 vi.mock('../modules/catalogue/api', async (orig) => ({ ...(await orig<typeof import('../modules/catalogue/api')>()), listServices: vi.fn(offlineError) }))
+vi.mock('../modules/movements/snapshot', async (orig) => ({ ...(await orig<typeof import('../modules/movements/snapshot')>()), refreshMovementSnapshot: vi.fn(async () => {}) }))
 vi.mock('../modules/stock/api', async (orig) => ({ ...(await orig<typeof import('../modules/stock/api')>()), countMarkedToBuy: vi.fn(offlineError) }))
 
-import { getDeviceContext, getSessionPrincipal, readStoredPrincipal, watchDevicePrincipal } from '../modules/org/api'
+import { getDeviceContext, getSessionPrincipal, readStoredPrincipal, reportDeviceSync, watchDevicePrincipal } from '../modules/org/api'
+import { refreshMovementSnapshot } from '../modules/movements/snapshot'
 import * as services from '../modules/services/api'
 import { writeCaptureSnapshot } from '../modules/services/offline'
 import { AppError } from '../shared/errors'
@@ -111,6 +113,11 @@ describe('cold start without a connection', () => {
     const [sentId, , sentAt] = vi.mocked(services.submitQueuedService).mock.calls[0]!
     expect([sentId, sentAt]).toEqual([item!.commandId, item!.occurredAt])
     expect((await outbox())[0]).toMatchObject({ state: 'synced', ack: { record_id: '00000000-0000-4000-8000-0000000099ee' } })
+    // the app leaves the cached binding (Offline 7): server figures on Hoje, kept salon data refreshed, and this
+    // phone's sync report — nothing left
+    expect(await screen.findByTestId('count-line')).toBeTruthy()
+    await waitFor(() => expect(refreshMovementSnapshot).toHaveBeenCalled())
+    await waitFor(() => expect(reportDeviceSync).toHaveBeenLastCalledWith({ days: [], undated: { services: 0, drafts: 0, conflicts: 0 } }))
 
     // and nothing is sent again
     act(() => { window.dispatchEvent(new Event('online')) })

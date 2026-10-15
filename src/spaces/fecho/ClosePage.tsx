@@ -3,6 +3,7 @@
 // On the mobile shell (UX slice 7): "Fechar período" is a primary completion action — never styled as destructive —
 // in the bottom bar; after it, back to where it was opened (the Fecho home, now closed and read-only), with no close
 // screen left behind. The history is grouped by day, one row per decision.
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
@@ -17,12 +18,16 @@ import { PrivateBar } from '../privado/PrivateBar'
 import { rangeLabel, useFecho } from './fecho'
 import { KIND_LABEL, type RecordKind } from '../../modules/corrections/api'
 import { BoundaryScreen, KV, Loading } from './ui'
+import { SyncNotice, SyncStatusSheet } from './SyncGate'
+import { useSyncGate } from './useSyncGate'
 
 export function ClosePage() {
   const org = useOrganization()
   const navigate = useNavigate()
   const { q, to } = useFecho()
   const back = useAppBack(to('/privado/fecho'))
+  const sync = useSyncGate(q.data?.period.id)
+  const [syncOpen, setSyncOpen] = useState(false)
   if (!q.data) return <Loading q={q} title="Fechar período" />
   const f = q.data, pos = f.position, a = f.approval
   const m = (n: number) => formatMoney(n, org)
@@ -57,13 +62,17 @@ export function ClosePage() {
             {unpaid.map((l) => `${l.display_name} · ${m(l.outstanding_minor)}`).join(' · ')}. O período só fecha com todos os pagamentos aprovados confirmados.</div>
         )}
         {!pos.owners_decision && <div className="notice notice-neutral">Ainda sem decisão dos sócios: fica registado «sem decisão» ao fechar.</div>}
+        {sync.blocked && sync.q.data && <SyncNotice status={sync.q.data} verb="fechar" onOpen={() => setSyncOpen(true)} />}
       </>}
-      permission="period.close" run={closePeriod} input={{ periodId: f.period.id, revision: f.review_revision }} blocked={blocked}
+      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
+      permission="period.close" run={closePeriod} input={{ periodId: f.period.id, revision: f.review_revision }} blocked={blocked || sync.blocked}
       intro="Depois de fechado, o período fica só de leitura. Alterações só por reabertura autorizada, com motivo e registo de quem."
       lockNote="Fica no histórico com quem fechou e quando." label="Fechar período" onSuccess={back} onBack={back}
-      extraActions={blocked && <>
+      extraActions={(blocked || sync.blocked) && <>
         <button className="btn btn-primary btn-tall" disabled>Fechar período</button>
-        <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ir aos pagamentos</button>
+        {blocked
+          ? <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/pagamentos'))}>Ir aos pagamentos</button>
+          : <button className="btn btn-secondary" onClick={() => setSyncOpen(true)}>Ver estado da sincronização</button>}
       </>}>
       <KV rows={rows} />
     </BoundaryScreen>

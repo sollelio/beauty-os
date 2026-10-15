@@ -1,5 +1,6 @@
 // Device enrollment with an operator-issued code (docs/operations/pilot-runbook.md). Optional Turnstile CAPTCHA.
 import { useCallback, useState } from 'react'
+import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { useQueryClient } from '@tanstack/react-query'
 import { enrollDevice, orgKeys } from '../../modules/org/api'
 import { toAppError } from '../../shared/errors'
@@ -21,7 +22,9 @@ export function EnrollmentScreen() {
   const [token, setToken] = useState<string | null>(null)
   const [resetKey, setResetKey] = useState(0)
   const onToken = useCallback((t: string | null) => setToken(t), [])
-  const held = useOfflineRuntime().heldElsewhere
+  const runtime = useOfflineRuntime()
+  const held = runtime.heldElsewhere
+  const [askPurge, setAskPurge] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,8 +49,15 @@ export function EnrollmentScreen() {
       {held > 0 && (
         // work captured under a previous binding stays on the device, untouched, until a person decides (ADR-0010 §6)
         <div className="notice notice-warning" role="status" data-testid="held-elsewhere">
-          {held === 1 ? 'Há 1 registo guardado' : `Há ${held} registos guardados`} neste telemóvel que não chegaram ao servidor. Não limpe os dados do navegador: fale com a gestão.
+          {held === 1 ? 'Há 1 registo guardado neste telemóvel que não chegou' : `Há ${held} registos guardados neste telemóvel que não chegaram`} ao servidor. Não limpe os dados do navegador: fale com a gestão.
+          <button className="link-btn" onClick={() => setAskPurge(true)}>Apagar deste telemóvel</button>
         </div>
+      )}
+      {askPurge && (
+        <ConfirmDialog title="Apagar o trabalho da ligação anterior?" safeLabel="Manter" destructiveLabel="Apagar"
+          onSafe={() => setAskPurge(false)} onDestructive={() => { setAskPurge(false); void runtime.discardForeign() }}>
+          Estes registos nunca chegaram ao servidor e não vão ser enviados por uma nova ligação. Apagar remove-os só deste telemóvel; não muda nada no servidor. Não pode ser desfeito.
+        </ConfirmDialog>
       )}
       <form className="stack" onSubmit={submit}>
         <label className="field">

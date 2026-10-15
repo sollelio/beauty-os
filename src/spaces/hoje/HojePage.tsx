@@ -48,13 +48,13 @@ export function HojePage() {
         </ListGroup>
       </nav>
 
-      {(pending.send || pending.confirm) && (
-        // work on this phone, never mixed into the server's figures: services to send, movements to confirm with PIN
+      {(pending.send || pending.confirm || pending.review) && (
+        // work on this phone, never mixed into the server's figures: to send, to confirm with PIN, to review
         <section className="stack" aria-label="Neste telemóvel">
           <ListGroup>
             {pending.send && <ListRow as="button" onClick={() => syncSheet.open(true)} leading={<RowIcon name="clock" tone="quiet" />} chevron title={pending.send} />}
-            {pending.confirm && <ListRow as="link" to="/rascunhos" leading={<RowIcon name="lock" tone="quiet" />} chevron title={pending.confirm}
-              subtitle={pending.confirmReview ?? undefined} />}
+            {pending.confirm && <ListRow as="link" to="/rascunhos" leading={<RowIcon name="lock" tone="quiet" />} chevron title={pending.confirm} />}
+            {pending.review && <ListRow as="link" to="/rever" leading={<RowIcon name="alert" tone="warning" />} chevron title={pending.review} />}
           </ListGroup>
         </section>
       )}

@@ -224,3 +224,46 @@ describe('foreground coordinator', () => {
     await waitFor(() => expect(refreshSnapshot).toHaveBeenCalledTimes(1))
   })
 })
+
+describe('device sync report (Offline 7)', () => {
+  it('online with a server-confirmed binding: reports this partition\'s counts, and again after a local change', async () => {
+    const reportSync = vi.fn(async () => ({}))
+    mount({ reportSync })
+    await waitFor(() => expect(reportSync).toHaveBeenCalledTimes(1))
+    expect(reportSync).toHaveBeenLastCalledWith({ days: [], undated: { services: 0, drafts: 0, conflicts: 0 } })
+    await waitFor(() => expect(latest.syncReport.at).not.toBeNull())
+    const db = await openDb()
+    await createOfflineStore(db, A1).outbox.put({ commandId: crypto.randomUUID(), type: 'record_service', occurredAt: '2026-10-15T09:00:00.000Z', payload: { p_value_minor: 1 } })
+    db.close()
+    await act(() => latest.refresh())
+    await waitFor(() => expect(reportSync).toHaveBeenLastCalledWith({ days: [{ day: '2026-10-15', services: 1, drafts: 0, conflicts: 0 }], undated: { services: 0, drafts: 0, conflicts: 0 } }))
+  })
+  it('offline, or on the cached binding, nothing is reported and nothing is pretended', async () => {
+    const reportSync = vi.fn(async () => ({}))
+    online = false
+    const { set } = mount({ reportSync })
+    await ready()
+    expect(await act(() => latest.reportSyncNow())).toBe(false)
+    set({ bindingSource: 'cache', serverBinding: 'unknown' })
+    online = true
+    await act(() => new Promise((r) => setTimeout(r, 1000)))
+    expect(reportSync).not.toHaveBeenCalled()
+    expect(latest.syncReport).toEqual({ at: null, failed: false })
+  })
+  it('a report that cannot reach the server is marked failed, not sent', async () => {
+    const reportSync = vi.fn(async () => { throw new Error('Failed to fetch') })
+    mount({ reportSync })
+    await waitFor(() => expect(latest.syncReport).toEqual({ at: null, failed: true }))
+  })
+  it('the purge of other bindings is explicit and never touches this partition', async () => {
+    await seed(A1, { local: 1 })
+    await seed({ organizationId: ORG_B, deviceUserId: USER_2 }, { local: 2, drafts: 1 })
+    mount({})
+    await ready()
+    expect(latest.local?.foreign).toEqual({ partitions: 1, unsyncedWork: 3 })
+    await act(() => latest.discardForeign())
+    await waitFor(() => expect(latest.local?.foreign).toEqual({ partitions: 0, unsyncedWork: 0 }))
+    expect(latest.local?.outboxPending).toBe(1)
+  })
+})
+

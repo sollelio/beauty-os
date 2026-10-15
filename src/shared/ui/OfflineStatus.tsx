@@ -36,7 +36,7 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
     ['Ligação', connectivity === 'offline' ? OFFLINE_TITLE : 'Com ligação'],
     ['Por enviar', waiting],
     ...(local && local.outboxFailed > 0 ? [['Envio falhou', local.outboxFailed] as [string, number]] : []),
-    ...(local && local.draftsPending > 0 ? [['Por confirmar com PIN', local.draftsPending] as [string, number]] : []),
+    ...(local && local.draftsPending - local.draftsReview > 0 ? [['Por confirmar com PIN', local.draftsPending - local.draftsReview] as [string, number]] : []),
     ...(local && local.outboxConflicts + local.draftsReview > 0 ? [['Para rever', local.outboxConflicts + local.draftsReview] as [string, number]] : []),
     ['Último envio', last ? `${formatDayShort(last, org.timezone)}, ${formatTime(last, org.timezone)}` : 'Ainda nenhum'],
   ]
@@ -53,7 +53,10 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
       {connectivity === 'online' && local && waiting + local.outboxFailed > 0 && (
         <button className="btn btn-primary" onClick={() => void syncNow()} disabled={busy}>{busy ? 'A enviar…' : 'Enviar agora'}</button>
       )}
-      {local && local.draftsPending > 0 && (
+      {local && local.outboxConflicts + local.draftsReview > 0 && (
+        <button className="btn btn-secondary" onClick={() => navigate('/rever')}>Rever</button>
+      )}
+      {local && local.draftsPending - local.draftsReview > 0 && (
         <button className="btn btn-secondary" onClick={() => navigate('/rascunhos')}>Ver por confirmar com PIN</button>
       )}
       <button className="btn btn-secondary" onClick={onDismiss}>Fechar</button>

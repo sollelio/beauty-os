@@ -35,3 +35,20 @@ export function draftFailure(err: AppError | null, fallback: string): string {
   if (err.message === 'DRAFT_LOCKED') return LOCKED_TEXT
   return err.code && REVIEW[err.code] ? REVIEW[err.code]! : captureFailure(err, fallback)
 }
+
+// ---------- review (Offline 7): calm reasons for queued services; never a backend code ----------
+const SERVICE_REVIEW: Record<string, string> = {
+  PERSON_INACTIVE: 'A pessoa deste serviço já não está ativa.',
+  SERVICE_INACTIVE: 'Este serviço já não está disponível no catálogo.',
+  PAYMENT_METHOD_INACTIVE: 'A forma de pagamento já não está ativa.',
+  PERIOD_APPROVED: 'O período deste serviço já tem os valores aprovados e não aceita novos registos.',
+  PERIOD_CLOSED: 'O período deste serviço já está fechado e não aceita novos registos.',
+  CAPTURE_TIME_TOO_OLD: 'Foi guardado há mais de 48 horas: já não pode ser registado com a hora original.',
+  CAPTURE_TIME_IN_FUTURE: 'A hora guardada está no futuro (o relógio do telemóvel pode estar errado).',
+  IDEMPOTENCY_CONFLICT: 'Não foi possível confirmar se este registo já foi recebido.',
+  NOT_AUTHORIZED: 'Este telemóvel deixou de estar autorizado a enviar registos.',
+}
+export const serviceReviewText = (code: string) => SERVICE_REVIEW[code] ?? 'O servidor não aceitou este registo.'
+export const DISCARD_LOCAL = 'Só é apagado deste telemóvel. Nada foi registado no servidor.'
+export const DISCARD_UNCERTAIN = 'Pode já ter chegado ao servidor. Apagar remove-o só deste telemóvel — não apaga nada no servidor. Confirme primeiro, no histórico, se já está registado.'
+

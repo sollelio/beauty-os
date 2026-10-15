@@ -33,12 +33,19 @@ export type OfflineRuntime = {
   requestPersistence: () => Promise<PersistResult | null>
   /** Runs a foreground cycle now ("Enviar agora"). */
   syncNow: () => Promise<SyncOutcome | null>
+  /** The last sync report this device sent (Offline 7): when the server received it, or that it could not be sent. */
+  syncReport: { at: string | null; failed: boolean }
+  /** Sends this device's sync report now (e.g. before Fecho reads the period's sync state); false when it could not. */
+  reportSyncNow: () => Promise<boolean>
+  /** Explicit, confirmed by a person: deletes the local work of every other binding on this device. Never migrated. */
+  discardForeign: () => Promise<void>
 }
 
 export const IDLE_SYNC: SyncSnapshot = { status: 'idle', lastTrigger: null, lastOutcome: null }
 export const INACTIVE_RUNTIME: Omit<OfflineRuntime, 'connectivity'> = {
   partitionActive: false, bindingSource: null, storage: 'none', local: null, heldElsewhere: 0, persistence: null, sync: IDLE_SYNC,
   storeAccess: null, refresh: async () => {}, requestPersistence: async () => null, syncNow: async () => null,
+  syncReport: { at: null, failed: false }, reportSyncNow: async () => false, discardForeign: async () => {},
 }
 
 export const OfflineRuntimeContext = createContext<Omit<OfflineRuntime, 'connectivity'> | null>(null)

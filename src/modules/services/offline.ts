@@ -157,3 +157,25 @@ export function createServiceDrainer(deps: ServiceDrainDeps = { deviceContext: g
 
 /** The app's drainer (module-level, so the runtime's coordinator is not recreated on every render). */
 export const serviceDrainer = createServiceDrainer()
+
+// ---------- review (Offline 7): queued services the server did not accept ----------
+// No retry of the same command: nothing on this phone can prove an inactive reference is active again, so a refused
+// service is registered again (a new intent, through the current flow) or discarded.
+/** Codes after which it is not certain the server did not keep something: discarding needs a stronger warning. */
+export const UNCERTAIN_SERVICE_CONFLICTS = new Set(['IDEMPOTENCY_CONFLICT', 'NOT_AUTHORIZED'])
+
+export type ServiceConflict = { commandId: string; code: string; occurredAt: string; valueMinor: number | null; personId: string | null; serviceId: string | null }
+export async function listServiceConflicts(store: OfflineStore): Promise<ServiceConflict[]> {
+  return (await store.outbox.listByState('conflict')).filter((i) => i.type === 'record_service').map((i) => {
+    const p = readQueuedPayload(i.payload)
+    return { commandId: i.commandId, code: i.lastError ?? 'UNKNOWN', occurredAt: i.occurredAt, valueMinor: p?.p_value_minor ?? null,
+      personId: p?.p_person_id ?? null, serviceId: p?.p_service_id ?? null }
+  })
+}
+/** Explicit, confirmed by a person: removes the item from this phone only; nothing is created or deleted on the server. */
+export async function discardServiceItem(store: OfflineStore, commandId: string): Promise<void> {
+  const item = await store.outbox.get(commandId)
+  if (item && item.state !== 'synced' && item.state !== 'conflict' && item.state !== 'failed') throw new Error('NOT_IN_REVIEW')
+  await store.outbox.delete(commandId)
+}
+

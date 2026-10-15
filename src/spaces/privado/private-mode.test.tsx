@@ -17,8 +17,9 @@ vi.mock('../../modules/org/api', async (orig) => ({
 }))
 vi.mock('../../modules/period/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/period/api')>()),
-  getFecho: vi.fn(), getMoneyReview: vi.fn(), closePeriod: vi.fn(), reopenPeriod: vi.fn(), annulApproval: vi.fn(), getRulePreview: vi.fn(),
+  getFecho: vi.fn(), getMoneyReview: vi.fn(), closePeriod: vi.fn(), approvePeriod: vi.fn(), reopenPeriod: vi.fn(), annulApproval: vi.fn(), getRulePreview: vi.fn(),
   listFechoPeriods: vi.fn().mockResolvedValue([]), getFechoHistory: vi.fn().mockResolvedValue([]),
+  getSyncStatus: vi.fn().mockResolvedValue({ ready: 0, pending: 0, silent: 0, safe: true }),
 }))
 vi.mock('../../modules/corrections/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/corrections/api')>()),
@@ -28,7 +29,7 @@ vi.mock('../../modules/team/situation', async (orig) => ({
   ...(await orig<typeof import('../../modules/team/situation')>()),
   listTeamPeople: vi.fn().mockResolvedValue([{ id: 'n', display_name: 'Nádia', capabilities: ['Cabelo'] }]),
 }))
-import { annulApproval, closePeriod, getFecho, getMoneyReview, getRulePreview, reopenPeriod } from '../../modules/period/api'
+import { annulApproval, approvePeriod, closePeriod, getFecho, getMoneyReview, getRulePreview, getSyncStatus, reopenPeriod } from '../../modules/period/api'
 import { cancelRecord, getRecordSummary } from '../../modules/corrections/api'
 import { PrivateGate, PrivateHome } from '../../app/PrivateGate'
 import { EquipaPage } from './EquipaPage'
@@ -36,6 +37,7 @@ import { PrivateEntryPage } from './PrivateEntryPage'
 import { FechoHome } from '../fecho/FechoHome'
 import { MoneyPage } from '../fecho/MoneyPage'
 import { ClosePage } from '../fecho/ClosePage'
+import { ApprovePage } from '../fecho/ApprovePage'
 import { ReopenPage } from '../fecho/ReopenPage'
 import { RuleFlow } from '../fecho/RuleFlow'
 import { CancelRecordFlow } from '../registos/CancelRecordFlow'
@@ -96,6 +98,7 @@ function renderApp(entries: InitialEntry[], qc = new QueryClient({ defaultOption
         { path: 'fecho', element: <FechoHome /> },
         { path: 'fecho/dinheiro', element: <MoneyPage /> },
         { path: 'fecho/fechar', element: <ClosePage /> },
+        { path: 'fecho/aprovar', element: <ApprovePage /> },
         { path: 'fecho/reabrir', element: <ReopenPage /> },
         { path: 'fecho/regra/:personId', element: <RuleFlow /> },
         { path: 'anular/:kind/:recordId', element: <CancelRecordFlow area="private" /> },
@@ -305,3 +308,46 @@ describe('Anular from Fecho → Dinheiro stays in the private area', () => {
     expect(vi.mocked(cancelRecord).mock.calls[0]![2]).toEqual({ kind: 'expense', recordId: 'e1', reason: 'Duplicada' })
   })
 })
+
+describe('Fecho offline sync gate (Offline 7)', () => {
+  const unsafe = { ready: 1, pending: 1, silent: 1, safe: false }
+  const safe = { ready: 3, pending: 0, silent: 0, safe: true }
+  it('a period not synchronized on every phone: calm notice, controls blocked, status sheet — and no command sent', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho('em_pagamento'))
+    vi.mocked(getSyncStatus).mockResolvedValue(unsafe)
+    renderApp(['/privado/fecho', '/privado/fecho/fechar'])
+    expect((await screen.findByTestId('sync-notice')).textContent).toMatch(/Há registos offline por sincronizar antes de fechar este período\.2 telemóveis ainda precisam de atenção/)
+    expect(screen.queryByLabelText('PIN')).toBeNull()
+    expect((screen.getByRole('button', { name: 'Fechar período' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver estado da sincronização' })[0]!)
+    const rows = [...(await screen.findByTestId('sync-gate-status')).querySelectorAll('div')].map((d) => d.textContent)
+    expect(rows).toEqual(['Sincronizados para este período1 telemóvel', 'Com registos por enviar, confirmar ou rever1 telemóvel', 'Sem notícias desde o fim do período1 telemóvel'])
+    expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/)                   // no device ids
+    vi.mocked(getSyncStatus).mockResolvedValue(safe)
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }))
+    await waitFor(() => expect(screen.queryByTestId('sync-notice')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }))
+    await confirmAs()
+    expect((screen.getByRole('button', { name: 'Fechar período' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(closePeriod).not.toHaveBeenCalled()
+  })
+  it('approval is gated the same way', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho('aberto'))
+    vi.mocked(getSyncStatus).mockResolvedValue(unsafe)
+    renderApp(['/privado/fecho', '/privado/fecho/aprovar'])
+    expect((await screen.findByTestId('sync-notice')).textContent).toMatch(/antes de aprovar este período/)
+    expect(screen.queryByLabelText('PIN')).toBeNull()
+    expect(approvePeriod).not.toHaveBeenCalled()
+  })
+  it('the server is the authority: its refusal is shown even when the screen thought it was safe', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho('em_pagamento'))
+    vi.mocked(getSyncStatus).mockResolvedValue(safe)
+    const { AppError } = await import('../../shared/errors')
+    vi.mocked(closePeriod).mockRejectedValue(new AppError('domain', 'PERIOD_OFFLINE_SYNC_PENDING', 'PERIOD_OFFLINE_SYNC_PENDING'))
+    renderApp(['/privado/fecho', '/privado/fecho/fechar'])
+    await confirmAs()
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar período' }))
+    expect(await screen.findByText(/Há registos offline por sincronizar neste período/)).toBeTruthy()
+  })
+})
+

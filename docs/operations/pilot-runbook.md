@@ -51,6 +51,20 @@ select private.admin_create_period(:org, '<label>', '<first day>', '<last day>')
 - **Browser storage lost / re-enroll:** issue a new code and enroll again; revoke the old device. A browser whose
   device was revoked shows *Ligar dispositivo* and enrolls with a new code (it gets a fresh identity automatically).
 - **Unused codes:** `select private.admin_revoke_enrollment_codes(:org);`
+- **A phone blocks Fecho (offline sync, ADR-0010 §5):** approval and close need every active offline-capable phone to
+  have reported after the period's end with nothing pending, unconfirmed or to review. To see which phones a period is
+  waiting for:
+  ```sql
+  select v.id, v.label, v.enrolled_at, v.offline_capable_at, r.reported_at, r.days, r.undated
+    from private.devices v left join private.device_sync_reports r on r.device_id = v.id
+   where v.organization_id = :org and v.revoked_at is null and v.offline_capable_at is not null
+   order by r.reported_at nulls first;
+  ```
+  A phone in use reports when the app is opened with a connection: ask the salon to open Beauty OS on it, send what it
+  holds and review what is "Para rever". A phone that is **lost, broken, replaced or no longer used** (including the old
+  binding of a re-enrolled browser) is revoked with `private.admin_revoke_device(:device_id, '<reason>')` — it then
+  stops counting, and if it ever comes back online it cannot send anything (its local work stays on it, never moved).
+  There is no override of the block.
 
 ## 4. Permissions (07 §8)
 

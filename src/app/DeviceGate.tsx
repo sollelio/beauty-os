@@ -1,13 +1,13 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet } from 'react-router'
-import { getDeviceContext, orgKeys, readStoredPrincipal, watchDevicePrincipal } from '../modules/org/api'
+import { getDeviceContext, orgKeys, readStoredPrincipal, reportDeviceSync, watchDevicePrincipal } from '../modules/org/api'
 import { OrganizationContext } from '../modules/org/OrganizationContext'
 import { refreshCaptureSnapshot, serviceDrainer } from '../modules/services/offline'
 import { refreshMovementSnapshot } from '../modules/movements/snapshot'
 import { servicesKeys } from '../modules/services/api'
 import { toAppError } from '../shared/errors'
-import { getConnectivity } from '../shared/offline/connectivity'
+import { getConnectivity, useConnectivity } from '../shared/offline/connectivity'
 import type { SyncOutcome } from '../shared/offline/coordinator'
 import { useCachedBinding, useDevicePrincipal } from '../shared/offline/identity'
 import { OfflineRuntimeProvider } from '../shared/offline/OfflineRuntimeProvider'
@@ -31,6 +31,12 @@ export function DeviceGate() {
   const ctx = useQuery({ queryKey: orgKeys.deviceContext, queryFn: getDeviceContext, retry: (n) => getConnectivity() === 'online' && n < 1 })
   const noServer = !ctx.data && ((ctx.isPending && ctx.fetchStatus === 'paused') || (ctx.isError && toAppError(ctx.error).kind === 'network'))
   const cached = useCachedBinding(principal, noServer)
+  // Opened without a connection, the query library still believes it is online, so the browser's "online" event does
+  // not refetch: ask the server again ourselves when the connection returns (until then the runtime stays on the cached
+  // binding — no snapshot refresh, no sync report).
+  const connectivity = useConnectivity()
+  const { refetch } = ctx
+  useEffect(() => { if (noServer && connectivity === 'online') void refetch() }, [noServer, connectivity, refetch])
   const onDrained = useCallback((outcome: SyncOutcome) => {
     if (outcome.kind !== 'drained') return
     if (outcome.result.synced > 0) void queryClient.invalidateQueries({ queryKey: servicesKeys.all })
@@ -60,7 +66,7 @@ export function DeviceGate() {
   return (
     <OfflineRuntimeProvider organization={organization} principal={principal} bindingSource={ctx.data ? 'server' : 'cache'}
       serverBinding={ctx.data ? (ctx.data.bound ? 'bound' : 'unbound') : 'unknown'}
-      drain={serviceDrainer} refreshSnapshot={refreshSnapshots} onDrained={onDrained}>
+      drain={serviceDrainer} refreshSnapshot={refreshSnapshots} onDrained={onDrained} reportSync={reportDeviceSync}>
       {organization ? (
         <OrganizationContext.Provider value={organization}>
           <Outlet />

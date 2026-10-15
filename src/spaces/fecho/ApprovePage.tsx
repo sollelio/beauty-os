@@ -1,6 +1,7 @@
 // Aprovar valores (Slice 06 F10): one boundary for the whole period, with each person's derivation, the cases it
 // acknowledges and what stays apart. Submits the reviewed revision (ADR-0005 R-3). On the mobile shell: the final
 // "Aprovar …" is the primary action in the bottom bar; after it, back in history to where approval was opened.
+import { useState } from 'react'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { approvePeriod } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
@@ -10,11 +11,15 @@ import { useAppBack } from '../../shared/ui/navigation'
 import { PrivateBar } from '../privado/PrivateBar'
 import { useFecho } from './fecho'
 import { BoundaryScreen, Loading } from './ui'
+import { SyncNotice, SyncStatusSheet } from './SyncGate'
+import { useSyncGate } from './useSyncGate'
 
 export function ApprovePage() {
   const org = useOrganization()
   const { q, to } = useFecho()
   const back = useAppBack(to('/privado/fecho'))
+  const sync = useSyncGate(q.data?.period.id)
+  const [syncOpen, setSyncOpen] = useState(false)
   if (!q.data) return <Loading q={q} title="Aprovar valores" />
   const f = q.data, pos = f.position
   const m = (n: number) => formatMoney(n, org)
@@ -38,6 +43,13 @@ export function ApprovePage() {
   return (
     <BoundaryScreen bar={bar} permission="period.decide" run={approvePeriod} input={{ periodId: f.period.id, revision: f.review_revision }}
       intro="Só uma pessoa autorizada aprova os valores a pagar." label={`Aprovar ${m(pos.payable_minor)}`} onSuccess={back} onBack={back}
+      blocked={sync.blocked}
+      top={sync.blocked && sync.q.data && <SyncNotice status={sync.q.data} verb="aprovar" onOpen={() => setSyncOpen(true)} />}
+      extraActions={sync.blocked && <>
+        <button className="btn btn-primary btn-tall" disabled>{`Aprovar ${m(pos.payable_minor)}`}</button>
+        <button className="btn btn-secondary" onClick={() => setSyncOpen(true)}>Ver estado da sincronização</button>
+      </>}
+      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
       lockNote="Fica no histórico com quem aprovou e quando. O período passa a «Pronto para pagamento»; depois, os valores só mudam com registo de quem e porquê.">
       <ListGroup data-testid="approval-lines">
         {pos.people.map((x) => (

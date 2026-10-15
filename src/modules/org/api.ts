@@ -34,6 +34,14 @@ export function watchDevicePrincipal(onChange: (userId: string | null) => void):
   return () => data.subscription.unsubscribe()
 }
 
+/** This device's sync report (Offline 7): its own unsent / unconfirmed / to-review counts per day. The server derives
+ *  the device and organization from the session. */
+export async function reportDeviceSync(report: unknown): Promise<{ reported_at: string }> {
+  const { data, error } = await getSupabase().rpc('report_device_sync', { p_report: report })
+  if (error) throw toAppError(error)
+  return data as { reported_at: string }
+}
+
 /** The current session's principal, refreshing the session if needed (online; before a synchronization). */
 export async function getSessionPrincipal(): Promise<string | null> {
   const { data, error } = await getSupabase().auth.getSession()

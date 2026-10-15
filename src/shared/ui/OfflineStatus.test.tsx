@@ -41,13 +41,14 @@ describe('Sem ligação', () => {
 
 describe('local work', () => {
   it('a row only when something is pending', () => {
-    const none = { send: null, confirm: null, confirmReview: null }
+    const none = { send: null, confirm: null, review: null }
     expect(pendingRows(null)).toEqual(none)
     expect(pendingRows(local())).toEqual(none)
     expect(pendingRows(local({ outboxPending: 1 }))).toEqual({ ...none, send: '1 registo por enviar' })
-    // never combined: services to send and movements to confirm with PIN are counted apart
-    expect(pendingRows(local({ outboxPending: 3, draftsPending: 2 }))).toEqual({ send: '3 registos por enviar', confirm: '2 por confirmar com PIN', confirmReview: null })
-    expect(pendingRows(local({ draftsPending: 1, draftsReview: 1 }))).toEqual({ send: null, confirm: '1 por confirmar com PIN', confirmReview: '1 precisa de revisão' })
+    // never combined, never overlapping: to send · to confirm with PIN · to review (refused by the server)
+    expect(pendingRows(local({ outboxPending: 3, draftsPending: 2 }))).toEqual({ send: '3 registos por enviar', confirm: '2 por confirmar com PIN', review: null })
+    expect(pendingRows(local({ outboxPending: 3, outboxConflicts: 1, draftsPending: 2, draftsReview: 1 })))
+      .toEqual({ send: '2 registos por enviar', confirm: '1 por confirmar com PIN', review: '2 para rever' })
   })
   it('the status sheet shows counts and dates only', () => {
     online = false

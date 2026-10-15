@@ -9,7 +9,7 @@ import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { isPinError } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
 import { recordExpense, type ExpenseCategory, type RecordExpenseInput, type RecordExpenseResult } from '../../modules/money/api'
-import type { MovementDraft } from '../../modules/movements/drafts'
+import { isBlockedDraft, type MovementDraft } from '../../modules/movements/drafts'
 import { useDraftActions, useDraftParam, useMovementData } from '../../modules/movements/useMovement'
 import { checkPayment, choiceLabel, effectiveChoice, MIXED, paymentParts, type PaymentChoice } from '../../shared/payment'
 import { formatMoney, minorToWholeUnits, wholeUnitsToMinor } from '../../shared/money'
@@ -21,7 +21,7 @@ import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/Ap
 import { Field } from '../../shared/ui/Field'
 import { Icon } from '../../shared/ui/Icon'
 import { useFlow } from '../../shared/ui/navigation'
-import { DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
+import { DraftBlocked, DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
 import { draftFailure, MOVEMENT_BLOCKED } from '../rascunhos/copy'
 
 export function ExpenseFlow() {
@@ -53,6 +53,7 @@ function ExpenseForm({ draft }: { draft: MovementDraft<'expense'> | null }) {
   const [askDiscard, setAskDiscard] = useState(false)
 
   const offline = lists.offline
+  const blockedDraft = isBlockedDraft(draft)
   const amountMinor = wholeUnitsToMinor(amount, org)
   const mixedMinor: [number | null, number | null] = [wholeUnitsToMinor(mixed[0], org), wholeUnitsToMinor(mixed[1], org)]
   // the organization's own active methods (codes and labels are tenant data); the first is preselected
@@ -123,7 +124,7 @@ function ExpenseForm({ draft }: { draft: MovementDraft<'expense'> | null }) {
     <BottomActionBar>
       <button className="btn btn-primary btn-tall" onClick={saveDraft} disabled={saved.isPending}>{saved.isPending ? 'A guardar…' : 'Guardar neste telemóvel'}</button>
     </BottomActionBar>
-  ) : step === 3 && category && input ? (
+  ) : step === 3 && category && input && !blockedDraft ? (
     <BottomActionBar>
       {err?.kind === 'network' ? (
         <>
@@ -198,10 +199,12 @@ function ExpenseForm({ draft }: { draft: MovementDraft<'expense'> | null }) {
             <DraftNotes draft={draft} />
             {summary}
             <div className="lock-note"><LockIcon /><span>Fica no histórico com data, hora e quem confirmou. Conta como despesa do salão em Dinheiro.</span></div>
-            <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
+            {blockedDraft && draft ? <DraftBlocked draft={draft} onDiscard={() => setAskDiscard(true)} /> : (
+              <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
+            )}
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
             {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{draftFailure(err, 'Não foi possível guardar esta despesa.')}</div>}
-            {draft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
+            {draft && !blockedDraft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
           </section>
         </>
       )}

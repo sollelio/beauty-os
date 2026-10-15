@@ -14,6 +14,7 @@ export const FECHO_MESSAGES: Record<string, string> = {
   RULE_PENDING: 'Ainda há regras por definir.',
   PAYMENT_EXCEEDS_APPROVED: 'O valor passa o que está aprovado para esta pessoa.',
   UNPAID_APPROVED_AMOUNTS: 'Ainda há pagamentos aprovados por confirmar.',
+  PERIOD_OFFLINE_SYNC_PENDING: 'Há registos offline por sincronizar neste período. Só pode avançar quando todos os telemóveis estiverem sincronizados.',
   PERIOD_CLOSED: 'O período está fechado. Os valores são só de leitura.',
   PERIOD_STATE_INVALID: 'O período mudou de estado entretanto. Reveja e tente de novo.',
   RESERVE_INSUFFICIENT: 'A reserva não tem saldo suficiente para este valor.',

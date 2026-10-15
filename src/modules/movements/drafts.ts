@@ -98,6 +98,22 @@ export const markRejected = (store: OfflineStore, draftId: string, code: string)
 export const markNotSent = (store: OfflineStore, draftId: string) =>
   update(store, draftId, (p) => ({ ...p, attempt: p.attempt && { ...p.attempt, sent: false } }))
 
+/** Draft review codes after which the same draft must not be confirmed again (it would be refused again, or could
+ *  duplicate something the server kept): it can only be discarded, or entered again as a new movement. */
+export const BLOCKING_DRAFT_REVIEWS = new Set(['PERIOD_APPROVED', 'PERIOD_CLOSED', 'CAPTURE_TIME_TOO_OLD', 'CAPTURE_TIME_IN_FUTURE', 'IDEMPOTENCY_CONFLICT', 'NOT_AUTHORIZED'])
+export const isBlockedDraft = (d: MovementDraft | null) => !!d?.payload.review && BLOCKING_DRAFT_REVIEWS.has(d.payload.review.code)
+
+/**
+ * "Registar como novo" (Offline 7): a clearly new intent — a new draft with the same content, a new capture time (now)
+ * and no command id yet — while the old draft is discarded. Never for an idempotency conflict (it may exist already).
+ */
+export async function reenterDraft<K extends MovementKind>(store: OfflineStore, draft: MovementDraft<K>): Promise<MovementDraft<K>> {
+  if (draft.payload.review?.code === 'IDEMPOTENCY_CONFLICT') throw new DraftLockedError()
+  const fresh = await saveDraft(store, draft.type, draft.payload.form, draft.payload.display)
+  await store.drafts.delete(draft.draftId)
+  return fresh
+}
+
 /** Explicit, confirmed by the person: removes only this device's draft; the server is never involved. */
 export const discardDraft = (store: OfflineStore, draftId: string) => store.drafts.delete(draftId)
 
