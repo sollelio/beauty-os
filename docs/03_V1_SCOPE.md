@@ -33,6 +33,8 @@ Journeys: [04](04_CORE_USER_JOURNEYS.md) · Experience: [05](05_PRODUCT_EXPERIEN
 | 13 | Stock Lite / replenishment visibility | Approximate levels, reserve status, attention list, purchase list, emergency replenishment. No forecasting. | J6 |
 | 14 | History / audit trail | Corrections, reopening of closed periods, sensitive actions. | All |
 
+`Decided` (Sollelio, 2026-10-16) **Learning experience** is in V1 scope as a support layer — Brand Splash, an isolated interactive guide on synthetic data, and a Help Center with written steps and microanimations; no videos and no mandatory or repeated onboarding. Approved design references and phased plan (not yet implemented): [learning experience](design/learning-experience.md).
+
 ### Period states — `Decided`
 
 The close period moves through four states (UI labels in the pilot's language):
@@ -79,7 +81,7 @@ A V1 rule is a percentage of the person's own production in the period, either *
 | Suppliers | Supplier marketplace; supplier portal; delivery network; real-time supplier inventory |
 | Finance & people | Full accounting; tax; formal payroll; full HR; attendance; shift scheduling |
 | Stock | Advanced inventory forecasting; automatic purchasing; barcode scanning; exact per-service millilitre consumption; warehouse management; advanced expiry/batch workflows |
-| Other | POS hardware; AI recommendations; full white-label / tenant theming beyond name + logo ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)); native iOS/Android apps ([05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor)) |
+| Other | POS hardware; AI recommendations; full white-label / tenant theming beyond name + logo ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)); native iOS/Android apps ([05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor)); tutorial videos — replaced by in-app microanimations ([learning experience](design/learning-experience.md)) |
 
 ## 5. Open scope questions
 

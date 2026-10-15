@@ -47,7 +47,9 @@ Source: `sollelio-brand-assets/README.md` and the assets beside it (v0.1).
 - Master wordmark dominant; product descriptor subordinate. Lockup typography: Rubik (the README says "Regular"; the SVGs set the wordmark at weight 500 and the descriptor at 400).
 - Palette: Mineral Indigo `#3030A8` (master) · Cobalt `#2457F5` (master accent) · Teal `#00A69A` (Events accent) · Amber `#D98A20` (Workforce accent) · Warm Graphite `#25272B` · Warm Off-white `#F7F4EE` · Midnight Indigo `#11152D` · White `#FFFFFF`.
 
-`Open / requires validation` The Beauty OS **product name, product accent and `Sollelio <product>` lockup are not chosen**. They are later brand decisions, taken once naming is stable. Any accent used in a design slice before then is provisional ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)).
+`Decided` (Sollelio, 2026-10-15) **Beauty OS product brand — *Sollelio Beauty OS — Brand Assets v0.1*.** Product name *Sollelio Beauty OS* (short *Beauty OS*); the unchanged Sollelio symbol with the **Precision Violet** `#7657D6` accent plane (Violet on dark `#9A7CF0`); the full *Sollelio / Beauty OS* lockup (public material) and the compact *Beauty OS / SOLLELIO* lockup (inside the product). Architecture: Sollelio (masterbrand) → Sollelio Beauty OS (product) → salons (tenants, never inside the Beauty OS logo). Approved through the PWA installability slice ([05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor)); the package is not yet in the repository ([learning experience §5](design/learning-experience.md#5-brand-assets)). *(Supersedes the earlier "product name, accent and lockup not chosen" status.)*
+
+`Open / requires validation` The product **UI** accent token and the **UI** typeface are separate product-system decisions, not taken: the app keeps Mineral Indigo as its interactive accent ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)).
 
 ## 2. Target vertical
 
@@ -71,7 +73,7 @@ Each organization will eventually need isolation of its members/users, professio
 
 ## 4. The pilot
 
-`Confirmed` One real salon, **Salão Agradável**, acts as pilot customer / design partner to discover the domain. Its logo (lime-green botanical monogram, transparent background) is a **tenant identity reference only**; it must not shape the product design system ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)).
+`Confirmed` One real salon, **Salão Agradável**, acts as pilot customer / design partner to discover the domain — the first tenant and founding design partner. Visual direction: **product first, salon second** (Sollelio, 2026-10-16). Its logo (lime-green botanical monogram, transparent background) is a **tenant identity reference only**; it must not shape the product design system ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)).
 
 `Decided` The product must **not** become bespoke software for that salon.
 

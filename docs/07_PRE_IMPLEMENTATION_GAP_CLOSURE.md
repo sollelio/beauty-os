@@ -204,7 +204,7 @@ None of these blocks architecture, provided the architecture follows §10:
 - **Configuration UIs**: people/ownership/capabilities, standing rules, service catalogue, categories, payment methods (I6–I8).
 - **Dinheiro space** timeline (I9).
 - **Contribution settlement**, **advance-excess policy**, **cash check**, **period length**, **self-recording**, **who holds each authorization** — pilot validation (§5).
-- **Product name, accent and UI typeface** — Sollelio brand decisions; tokens are swappable (§5 P23).
+- **UI accent token and UI typeface** — Sollelio product-system decisions; tokens are swappable (§5 P23). Product name, brand accent and lockups are decided (brand package v0.1, 2026-10-15; 00 §1).
 - **Cash-check formula** (Slice 06 C1) — candidate, **not approved**: it is incomplete (§7 F-G5).
 
 ## 4. V1 MUST coverage matrix
@@ -287,7 +287,7 @@ Build with the flexible model in §10; gather evidence.
 | P20 | Relative priority of problems; whether the patterns hold in other salons | 02 §1 · 01 §7 |
 | P21 | Privacy of free-text notes | Slice 02 Q8 |
 | P22 | Whether a rule decision should carry an optional reason (e.g. to label a lowered rule as retention) | D2 |
-| P23 | Beauty OS product name, accent, lockup and UI typeface (Sollelio brand decision, not pilot; tokens are swappable) | 00 §1 · 05 §6 |
+| P23 | Beauty OS UI accent token and UI typeface (Sollelio product-system decision, not pilot; tokens are swappable). *Product name, brand accent (Precision Violet plane) and lockups decided by the brand package v0.1, Sollelio 2026-10-15.* | 00 §1 · 05 §6 |
 
 ### 5.4 `POST-V1`
 
