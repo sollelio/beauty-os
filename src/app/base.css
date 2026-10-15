@@ -370,3 +370,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .section-head h2.label { font-size: var(--t-overline); line-height: 1.25; letter-spacing: 0.06em; }
 .plain-list { list-style: none; margin: 0; padding: 0; }
 .insight-head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
+
+/* Offline V1 (ADR-0010 §11): a calm global note while the browser is offline — neutral, in the page flow. */
+.offline-banner { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 0.125rem 0.5rem; padding: calc(0.5rem + env(safe-area-inset-top)) 1.25rem 0.5rem; background: var(--surface); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--t-support); text-align: center; }
+.offline-banner span { color: var(--muted); }

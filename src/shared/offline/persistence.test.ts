@@ -1,6 +1,6 @@
 // Offline 2 · navigator.storage.persist() wrapper (ADR-0010 §8): explicit, non-fatal, no durability claim.
 import { describe, expect, it, vi } from 'vitest'
-import { requestPersistentStorage } from './persistence'
+import { readPersistentStorage, requestPersistentStorage } from './persistence'
 
 describe('requestPersistentStorage', () => {
   it('reports granted and denied', async () => {
@@ -20,3 +20,18 @@ describe('requestPersistentStorage', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('readPersistentStorage', () => {
+  it('reads persisted() where supported, without asking', async () => {
+    const persist = vi.fn(async () => true)
+    expect(await readPersistentStorage({ storage: { persisted: async () => true, persist } })).toBe('granted')
+    expect(await readPersistentStorage({ storage: { persisted: async () => false, persist } })).toBe('not_granted')
+    expect(persist).not.toHaveBeenCalled()
+  })
+  it('is non-fatal where the API is missing or fails', async () => {
+    expect(await readPersistentStorage(undefined)).toBe('unavailable')
+    expect(await readPersistentStorage({ storage: {} })).toBe('unavailable')
+    expect(await readPersistentStorage({ storage: { persisted: async () => { throw new Error('x') } } })).toBe('unavailable')
+  })
+})
+

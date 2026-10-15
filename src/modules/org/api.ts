@@ -20,6 +20,16 @@ export async function getDeviceContext(): Promise<DeviceContext> {
 }
 
 /**
+ * The device principal — this browser's anonymous Supabase user id — now and whenever it changes (sign-in, sign-out,
+ * a replaced identity). Read from the locally kept session, so it is known without a connection. It partitions the
+ * device's offline storage (ADR-0010 §6). Returns the unsubscribe.
+ */
+export function watchDevicePrincipal(onChange: (userId: string | null) => void): () => void {
+  const { data } = getSupabase().auth.onAuthStateChange((_event, session) => onChange(session?.user.id ?? null))
+  return () => data.subscription.unsubscribe()
+}
+
+/**
  * Enrollment (ADR-0009): the device signs in anonymously (once) and redeems an operator-issued code. Where Auth
  * CAPTCHA is enabled the anonymous sign-in carries a Turnstile token (mitigation 4). A browser whose earlier
  * binding was revoked (lost/replaced device) starts a fresh anonymous identity and enrolls again (mitigation 5).

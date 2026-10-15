@@ -3,13 +3,26 @@
 // storage can still be lost (Offline 8 hardening).
 export type PersistResult = 'granted' | 'denied' | 'unavailable'
 
-type StorageNavigator = { storage?: { persist?: () => Promise<boolean> } }
+/** Whether this origin's storage is already persistent (reading it never prompts). */
+export type PersistStatus = 'granted' | 'not_granted' | 'unavailable'
+
+export type StorageNavigator = { storage?: { persist?: () => Promise<boolean>; persisted?: () => Promise<boolean> } }
 
 export async function requestPersistentStorage(nav: StorageNavigator | undefined = globalThis.navigator): Promise<PersistResult> {
   const storage = nav?.storage
   if (!storage || typeof storage.persist !== 'function') return 'unavailable'
   try {
     return (await storage.persist()) ? 'granted' : 'denied'
+  } catch {
+    return 'unavailable'
+  }
+}
+
+export async function readPersistentStorage(nav: StorageNavigator | undefined = globalThis.navigator): Promise<PersistStatus> {
+  const storage = nav?.storage
+  if (!storage || typeof storage.persisted !== 'function') return 'unavailable'
+  try {
+    return (await storage.persisted()) ? 'granted' : 'not_granted'
   } catch {
     return 'unavailable'
   }

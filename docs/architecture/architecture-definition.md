@@ -412,6 +412,7 @@ No horizontal infrastructure phase beyond step 3.
 | Module-boundary lint tooling | First violation |
 | Remote-person sign-in method (email, magic link, phone OTP) | Deferred (ADR-0009); before remote payment confirmation is implemented |
 | PWA / offline sync | ~~After pilot evidence (D5)~~ **Decided** — [ADR-0010](adr/0010-offline-capture-and-sync.md) (Offline V1); offline Stock edits, fully offline movements and Background Sync remain deferred there |
+| Offline cold start: cached operational binding | **Offline 4** (recorded in Offline 3). `DeviceGate` resolves the organization only from the online `device_context`, so a cold start without a connection has no organization and no offline partition. Offline 4 must cache the operational binding needed for public offline capture without weakening server authorization (the server still checks the device principal on every synchronized command) and without enabling any private offline access ([ADR-0010](adr/0010-offline-capture-and-sync.md) §1, §4) |
 
 ## 22. Architecture risks
 

@@ -1,4 +1,6 @@
 // Hoje (Slice 01 §3): primary action, salon-level count line, recent records. No money totals, no per-person totals.
+// Local work not yet on the server (ADR-0010 §11) shows as one row, only when there is some; its counts stay apart
+// from the server's figures.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
@@ -6,6 +8,9 @@ import { countMarkedToBuy, stockKeys } from '../../modules/stock/api'
 import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
+import { useOfflineRuntime } from '../../shared/offline/runtime'
+import { pendingLine } from '../../shared/ui/offlineCopy'
+import { SyncStatusSheet } from '../../shared/ui/OfflineStatus'
 import { formatTime, formatToday } from '../../shared/time'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { Icon } from '../../shared/ui/Icon'
@@ -20,6 +25,8 @@ export function HojePage() {
   const summary = useQuery({ queryKey: servicesKeys.hoje, queryFn: getHojeSummary })
   const toBuy = useQuery({ queryKey: stockKeys.toBuy, queryFn: countMarkedToBuy })
   const chooser = useSheet<true>()
+  const syncSheet = useSheet<true>()
+  const pending = pendingLine(useOfflineRuntime().local)
 
   return (
     <main className="app-main">
@@ -38,6 +45,15 @@ export function HojePage() {
           <ListRow as="link" to="/stock" leading={<RowIcon name="box" />} title="Stock" chevron />
         </ListGroup>
       </nav>
+
+      {pending && (
+        <section className="stack" aria-label="Neste telemóvel">
+          <ListGroup>
+            <ListRow as="button" onClick={() => syncSheet.open(true)} leading={<RowIcon name="clock" tone="quiet" />} chevron
+              title={pending.title} subtitle={pending.subtitle ?? undefined} />
+          </ListGroup>
+        </section>
+      )}
 
       {(toBuy.data ?? 0) > 0 && (
         <section className="stack" aria-label="Atenção">
@@ -83,6 +99,7 @@ export function HojePage() {
           )}
         </>
       )}
+      {syncSheet.current && <SyncStatusSheet onDismiss={syncSheet.close} />}
       {chooser.current && (
         // choosing replaces the sheet's history entry with the flow, so back from the flow returns to Hoje
         <BottomSheet labelledBy="chooser-title" onDismiss={chooser.close}>

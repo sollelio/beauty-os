@@ -14,6 +14,8 @@ vi.mock('../../modules/stock/api', async (orig) => ({
   countMarkedToBuy: vi.fn().mockResolvedValue(2),
 }))
 import { HojePage } from './HojePage'
+import { INACTIVE_RUNTIME, OfflineRuntimeContext } from '../../shared/offline/runtime'
+import type { LocalStatus } from '../../shared/offline/status'
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const renderIt = () => render(
@@ -64,3 +66,38 @@ describe('Hoje', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
+
+describe('Hoje · local work (Offline 3)', () => {
+  const local = (over: Partial<LocalStatus>): LocalStatus => ({ schemaVersion: 1, outboxPending: 0, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0,
+    lastSuccessfulSyncAt: null, foreign: { partitions: 2, unsyncedWork: 9 }, ...over })
+  const withLocal = (l: LocalStatus | null) => render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <OrganizationContext.Provider value={org}>
+        <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: !!l, storage: l ? 'ready' : 'none', local: l }}>
+          <MemoryRouter><HojePage /></MemoryRouter>
+        </OfflineRuntimeContext.Provider>
+      </OrganizationContext.Provider>
+    </QueryClientProvider>,
+  )
+  it('no row without local work — other partitions\' work is never counted here', async () => {
+    withLocal(local({}))
+    await screen.findByText('Ainda não há serviços registados hoje.')
+    expect(screen.queryByRole('region', { name: 'Neste telemóvel' })).toBeNull()
+    expect(screen.queryByText(/por enviar|por confirmar/)).toBeNull()
+  })
+  it('no row on a device without an active partition', async () => {
+    withLocal(null)
+    await screen.findByText('Ainda não há serviços registados hoje.')
+    expect(screen.queryByText(/por enviar/)).toBeNull()
+  })
+  it('one row with the local count, apart from the server figures; it opens the status sheet', async () => {
+    withLocal(local({ outboxPending: 2, draftsPending: 1 }))
+    const row = await screen.findByRole('button', { name: /2 registos por enviar/ })
+    expect(row.textContent).toContain('1 movimento por confirmar com PIN')
+    expect((await screen.findByTestId('count-line')).textContent).not.toContain('2 registos')
+    fireEvent.click(row)
+    expect(await screen.findByRole('heading', { name: 'Neste telemóvel' })).toBeTruthy()
+    expect(within(screen.getByTestId('sync-status')).getByText('Por enviar').nextSibling?.textContent).toBe('2')
+  })
+})
+
