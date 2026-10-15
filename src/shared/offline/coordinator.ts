@@ -1,15 +1,16 @@
 // Foreground synchronization coordinator (ADR-0010 §9): one cycle at a time, started by the app opening a partition,
-// by connectivity returning, or by a person ("Enviar agora"). Offline 3 provides the structure only — there is no
-// drainer yet, so no command is ever sent: a cycle reports "nothing to send", or that it is blocked, never success.
-// No interval or background retry runs here; gentle retry arrives with the drainer (Offline 4).
+// by connectivity returning, by a gentle retry, or by a person ("Enviar agora"). Without a drainer nothing is sent:
+// a cycle reports "nothing to send", or that it is blocked, never success.
+// No interval runs here: the runtime asks for a gentle retry after a transient failure (Offline 4).
 import type { OfflineStore } from './store'
 
 /** The coordinator's own status, separate from each outbox item's local/syncing/synced/failed/conflict state. */
 export type SyncStatus = 'idle' | 'checking' | 'syncing' | 'blocked' | 'error'
-export type SyncTrigger = 'start' | 'reconnect' | 'manual'
+export type SyncTrigger = 'start' | 'reconnect' | 'manual' | 'retry'
 
-/** What a drainer reports after sending queued commands, oldest first (Offline 4). */
-export type DrainResult = { synced: number; failed: number; conflicts: number }
+/** What a drainer reports after sending queued commands, oldest first (Offline 4). `stopped`: why it stopped before
+ *  the end — the network went away, or the server no longer recognises this device / principal for the partition. */
+export type DrainResult = { synced: number; failed: number; conflicts: number; stopped?: 'network' | 'unbound' | 'principal_changed' }
 export type Drainer = (store: OfflineStore, signal: AbortSignal) => Promise<DrainResult>
 
 export type SyncOutcome =
@@ -35,7 +36,7 @@ const IDLE: SyncSnapshot = { status: 'idle', lastTrigger: null, lastOutcome: nul
 export function createSyncCoordinator({ getStore, isOnline, drain }: {
   getStore: () => Promise<OfflineStore>
   isOnline: () => boolean
-  drain?: Drainer                     // none in Offline 3
+  drain?: Drainer
 }): SyncCoordinator {
   let snapshot = IDLE
   let running: Promise<SyncOutcome> | null = null

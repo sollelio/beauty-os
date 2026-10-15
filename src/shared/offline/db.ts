@@ -6,8 +6,11 @@ import { OfflineStorageError, toStorageError } from './errors'
 import type { Partition } from './types'
 
 export const OFFLINE_DB_NAME = 'beauty-os-offline'
+/** The partitioned stores: every key starts with [organizationId, deviceUserId]. */
 export const STORES = ['outbox', 'drafts', 'snapshot', 'meta'] as const
-export type StoreName = (typeof STORES)[number]
+/** The last-known operational binding, keyed by the device principal (it names the organization). */
+export const BINDING_STORE = 'binding'
+export type StoreName = (typeof STORES)[number] | typeof BINDING_STORE
 
 export type UpgradeStep = (db: IDBDatabase, tx: IDBTransaction) => void
 
@@ -22,6 +25,10 @@ export const UPGRADE_STEPS: readonly UpgradeStep[] = [
     db.createObjectStore('drafts', { keyPath: [...PARTITION_KEY, 'draftId'] }).createIndex('partition', PARTITION_KEY)
     db.createObjectStore('snapshot', { keyPath: [...PARTITION_KEY, 'group'] }).createIndex('partition', PARTITION_KEY)
     db.createObjectStore('meta', { keyPath: [...PARTITION_KEY, 'key'] }).createIndex('partition', PARTITION_KEY)
+  },
+  // 2 · Offline 4: the cached operational binding (organization of a device principal), for an offline start
+  (db) => {
+    db.createObjectStore(BINDING_STORE, { keyPath: 'deviceUserId' })
   },
 ]
 export const OFFLINE_DB_VERSION = UPGRADE_STEPS.length
@@ -51,6 +58,17 @@ export function openOfflineDb({ factory, name = OFFLINE_DB_NAME, steps = UPGRADE
     }
     request.onerror = () => reject(toStorageError(request.error, 'OPEN_FAILED'))
   })
+}
+
+/** The app's one connection to the offline database, opened on first use and opened again after a failure or after
+ *  a newer version (another tab) took over. */
+let shared: Promise<IDBDatabase> | null = null
+export function openSharedOfflineDb(): Promise<IDBDatabase> {
+  shared ??= openOfflineDb().then(
+    (db) => { db.onversionchange = () => { db.close(); shared = null }; return db },
+    (e: unknown) => { shared = null; throw e },
+  )
+  return shared
 }
 
 export const promised = <T>(request: IDBRequest<T>): Promise<T> =>

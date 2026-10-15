@@ -1,6 +1,6 @@
 // Offline 3 · status UI: "Sem ligação" only offline, no claim that work is kept offline, counts without content.
-import { act, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import { INACTIVE_RUNTIME, OfflineRuntimeContext } from '../offline/runtime'
@@ -63,3 +63,32 @@ describe('local work', () => {
     expect(document.body.textContent).not.toMatch(/payload|outbox|draft|sync|partition|minor/i)
   })
 })
+
+describe('Enviar agora', () => {
+  const sheet = (l: LocalStatus, syncNow = vi.fn(async () => null)) => {
+    render(
+      <MemoryRouter><OrganizationContext.Provider value={org}>
+        <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, storage: 'ready', local: l, syncNow }}>
+          <SyncStatusSheet onDismiss={() => {}} />
+        </OfflineRuntimeContext.Provider>
+      </OrganizationContext.Provider></MemoryRouter>,
+    )
+    return syncNow
+  }
+  it('online with work to send: one tap runs a cycle', () => {
+    const syncNow = sheet(local({ outboxPending: 2 }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar agora' }))
+    expect(syncNow).toHaveBeenCalledTimes(1)
+  })
+  it('not offered offline, nor when only reviews are left', () => {
+    online = false
+    sheet(local({ outboxPending: 2 }))
+    expect(screen.queryByRole('button', { name: 'Enviar agora' })).toBeNull()
+  })
+  it('only conflicts: a review note, no send button', () => {
+    sheet(local({ outboxPending: 1, outboxConflicts: 1 }))
+    expect(screen.queryByRole('button', { name: 'Enviar agora' })).toBeNull()
+    expect(screen.getByText(/precisam de revisão/)).toBeTruthy()
+  })
+})
+

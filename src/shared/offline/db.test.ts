@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OFFLINE_DB_NAME, OFFLINE_DB_VERSION, openOfflineDb, STORES, UPGRADE_STEPS } from './db'
+import { BINDING_STORE, OFFLINE_DB_NAME, OFFLINE_DB_VERSION, openOfflineDb, STORES, UPGRADE_STEPS } from './db'
 import { OfflineStorageError, toStorageError } from './errors'
 import { createOfflineStore } from './store'
 
@@ -16,17 +16,18 @@ const failure = async (p: Promise<unknown>) => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('schema', () => {
-  it('opens with an explicit version and creates the four stores with their partition indexes', async () => {
+  it('opens with an explicit version and creates the partitioned stores (with their indexes) and the binding store', async () => {
     expect(OFFLINE_DB_NAME).toBe('beauty-os-offline')
-    expect(OFFLINE_DB_VERSION).toBe(1)
+    expect(OFFLINE_DB_VERSION).toBe(2)
     const db = await openOfflineDb({ factory: new IDBFactory() })
     expect(db.name).toBe(OFFLINE_DB_NAME)
     expect(db.version).toBe(OFFLINE_DB_VERSION)
-    expect([...db.objectStoreNames].sort()).toEqual([...STORES].sort())
+    expect([...db.objectStoreNames].sort()).toEqual([...STORES, BINDING_STORE].sort())
     const tx = db.transaction([...STORES], 'readonly')
     for (const s of STORES) expect([...tx.objectStore(s).indexNames], s).toContain('partition')
     expect([...tx.objectStore('outbox').indexNames]).toContain('partitionState')
     expect(tx.objectStore('outbox').keyPath).toEqual(['organizationId', 'deviceUserId', 'commandId'])
+    expect(db.transaction(BINDING_STORE).objectStore(BINDING_STORE).keyPath).toBe('deviceUserId')
   })
   it('a later version runs only its own step and keeps the existing records', async () => {
     const factory = new IDBFactory()
@@ -36,7 +37,7 @@ describe('schema', () => {
     v1.close()
     const step2 = vi.fn((_db: IDBDatabase, tx: IDBTransaction) => { tx.objectStore('outbox').createIndex('byCreatedAt', 'createdAt') })
     const v2 = await openOfflineDb({ factory, steps: [...UPGRADE_STEPS, step2] })
-    expect(v2.version).toBe(2)
+    expect(v2.version).toBe(OFFLINE_DB_VERSION + 1)
     expect(step2).toHaveBeenCalledTimes(1)
     expect([...v2.transaction('outbox').objectStore('outbox').indexNames]).toContain('byCreatedAt')
     expect((await createOfflineStore(v2, A1).outbox.get(kept.commandId))?.payload).toEqual(kept.payload)
@@ -47,7 +48,7 @@ describe('schema', () => {
     const close = vi.spyOn(old, 'close')
     const v2 = await openOfflineDb({ factory, steps: [...UPGRADE_STEPS, () => {}] })
     expect(close).toHaveBeenCalled()
-    expect(v2.version).toBe(2)
+    expect(v2.version).toBe(OFFLINE_DB_VERSION + 1)
   })
 })
 
@@ -92,3 +93,18 @@ describe('failures are explicit', () => {
     expect(((await failure(s.outbox.list())) as OfflineStorageError).code).toBe('MALFORMED_RECORD')
   })
 })
+
+describe('upgrade from version 1 (Offline 2) to 2 (Offline 4)', () => {
+  it('adds the binding store and keeps every partitioned record', async () => {
+    const factory = new IDBFactory()
+    const v1 = await openOfflineDb({ factory, steps: UPGRADE_STEPS.slice(0, 1) })
+    const kept = item()
+    await createOfflineStore(v1, A1).outbox.put(kept)
+    v1.close()
+    const v2 = await openOfflineDb({ factory })
+    expect(v2.version).toBe(2)
+    expect([...v2.objectStoreNames]).toContain(BINDING_STORE)
+    expect((await createOfflineStore(v2, A1).outbox.get(kept.commandId))?.state).toBe('local')
+  })
+})
+

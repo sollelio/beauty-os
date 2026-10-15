@@ -1,6 +1,7 @@
 // Module `org` access layer: device session, enrollment, device context (ADR-0009).
-import { getSupabase } from '../../shared/supabase/client'
-import { toAppError } from '../../shared/errors'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
+import { authStorageKey, getSupabase } from '../../shared/supabase/client'
+import { AppError, toAppError } from '../../shared/errors'
 
 export type Organization = {
   id: string; name: string; timezone: string
@@ -12,7 +13,9 @@ export const orgKeys = { deviceContext: ['org', 'device-context'] as const }
 
 export async function getDeviceContext(): Promise<DeviceContext> {
   const sb = getSupabase()
-  const { data: session } = await sb.auth.getSession()
+  const { data: session, error: sessionError } = await sb.auth.getSession()
+  // an expired session that cannot be refreshed for lack of network is "no connection", never "not bound"
+  if (sessionError && isAuthRetryableFetchError(sessionError)) throw new AppError('network', sessionError.message)
   if (!session.session) return { bound: false }
   const { data, error } = await sb.rpc('device_context')
   if (error) throw toAppError(error)
@@ -25,8 +28,28 @@ export async function getDeviceContext(): Promise<DeviceContext> {
  * device's offline storage (ADR-0010 §6). Returns the unsubscribe.
  */
 export function watchDevicePrincipal(onChange: (userId: string | null) => void): () => void {
-  const { data } = getSupabase().auth.onAuthStateChange((_event, session) => onChange(session?.user.id ?? null))
+  // offline with an expired access token the client reports no session, but keeps it stored: the stored id still
+  // names this browser's identity (it authorizes nothing — the server checks the principal on every command)
+  const { data } = getSupabase().auth.onAuthStateChange((_event, session) => onChange(session?.user.id ?? readStoredPrincipal()))
   return () => data.subscription.unsubscribe()
+}
+
+/** The current session's principal, refreshing the session if needed (online; before a synchronization). */
+export async function getSessionPrincipal(): Promise<string | null> {
+  const { data, error } = await getSupabase().auth.getSession()
+  if (error && isAuthRetryableFetchError(error)) throw new AppError('network', error.message)
+  return data.session?.user.id ?? null
+}
+
+/** The user id of the session kept in this browser, read without a network; null when there is none. */
+export function readStoredPrincipal(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string | null {
+  try {
+    const raw = storage?.getItem(authStorageKey())
+    const id = raw ? (JSON.parse(raw) as { user?: { id?: unknown } }).user?.id : null
+    return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id) ? id : null
+  } catch {
+    return null
+  }
 }
 
 /**

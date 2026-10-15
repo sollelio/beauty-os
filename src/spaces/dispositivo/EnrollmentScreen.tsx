@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { enrollDevice, orgKeys } from '../../modules/org/api'
 import { toAppError } from '../../shared/errors'
+import { useOfflineRuntime } from '../../shared/offline/runtime'
 import { Turnstile } from './Turnstile'
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || null
@@ -20,6 +21,7 @@ export function EnrollmentScreen() {
   const [token, setToken] = useState<string | null>(null)
   const [resetKey, setResetKey] = useState(0)
   const onToken = useCallback((t: string | null) => setToken(t), [])
+  const held = useOfflineRuntime().heldElsewhere
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,6 +43,12 @@ export function EnrollmentScreen() {
       <span className="label">Dispositivo</span>
       <h1>Ligar este dispositivo</h1>
       <p className="muted">Este dispositivo ainda não está ligado a uma organização. Introduza o código de ligação.</p>
+      {held > 0 && (
+        // work captured under a previous binding stays on the device, untouched, until a person decides (ADR-0010 §6)
+        <div className="notice notice-warning" role="status" data-testid="held-elsewhere">
+          {held === 1 ? 'Há 1 registo guardado' : `Há ${held} registos guardados`} neste telemóvel que não chegaram ao servidor. Não limpe os dados do navegador: fale com a gestão.
+        </div>
+      )}
       <form className="stack" onSubmit={submit}>
         <label className="field">
           <span className="label" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden' }}>Código de ligação</span>

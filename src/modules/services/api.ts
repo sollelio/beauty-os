@@ -41,6 +41,23 @@ export async function recordService(commandId: string, input: RecordServiceInput
   return data as RecordServiceResult
 }
 
+/** The record_service arguments a queued offline service replays (ADR-0010 §9): the command id is the outbox item's,
+ *  and p_occurred_at is its captured time — both fixed at capture, never regenerated. */
+export type QueuedServicePayload = { p_person_id: string; p_service_id: string; p_value_minor: number; p_payments: PaymentPart[] }
+
+export async function submitQueuedService(commandId: string, payload: QueuedServicePayload, occurredAt: string): Promise<RecordServiceResult> {
+  const { data, error } = await getSupabase().rpc('record_service', {
+    p_command_id: commandId,
+    p_person_id: payload.p_person_id,
+    p_service_id: payload.p_service_id,
+    p_value_minor: payload.p_value_minor,
+    p_payments: payload.p_payments,
+    p_occurred_at: occurredAt,
+  })
+  if (error) throw toAppError(error)
+  return data as RecordServiceResult
+}
+
 export async function getHojeSummary(): Promise<HojeSummary | null> {
   const { data, error } = await getSupabase().rpc('hoje_service_summary', { p_recent_limit: 4 })
   if (error) throw toAppError(error)

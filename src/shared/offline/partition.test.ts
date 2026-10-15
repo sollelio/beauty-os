@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { openOfflineDb } from './db'
 import { OfflineStorageError } from './errors'
 import { findForeignPartitions, listPartitions, purgePartition } from './partition'
+import { readBinding, saveBinding } from './binding'
 import { createOfflineStore } from './store'
 import type { Partition } from './types'
 
@@ -74,13 +75,27 @@ describe('purge', () => {
     await fill(A1, { unsynced: 1, drafts: 1 })
     await fill(A2, { unsynced: 1 })
     await fill(B2, { unsynced: 1 })
-    expect(await purgePartition(db, A1, { discardUnsyncedWork: true })).toEqual({ outbox: 1, drafts: 1, snapshot: 1, meta: 1 })
+    expect(await purgePartition(db, A1, { discardUnsyncedWork: true })).toEqual({ outbox: 1, drafts: 1, snapshot: 1, meta: 1, binding: 0 })
     expect(sorted(await listPartitions(db))).toEqual(sorted([A2, B2]))
     expect(await createOfflineStore(db, A2).outbox.countPending()).toBe(1)
   })
   it('a partition with only synced commands and re-fetchable data can be purged without the decision', async () => {
     await fill(A1, { unsynced: 0, synced: 2 })
-    expect(await purgePartition(db, A1)).toEqual({ outbox: 2, drafts: 0, snapshot: 1, meta: 1 })
+    expect(await purgePartition(db, A1)).toEqual({ outbox: 2, drafts: 0, snapshot: 1, meta: 1, binding: 0 })
     expect(await listPartitions(db)).toEqual([])
   })
 })
+
+describe('purge and the cached binding', () => {
+  const org = (id: string) => ({ id, name: 'Salão', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' })
+  it('removes the binding of the purged partition only when it names that organization', async () => {
+    await fill(A1, { unsynced: 0 })
+    await saveBinding(db, { deviceUserId: USER_1, organization: org(ORG_A), verifiedAt: T })
+    await saveBinding(db, { deviceUserId: USER_2, organization: org(ORG_B), verifiedAt: T })
+    expect((await purgePartition(db, A1)).binding).toBe(1)
+    expect(await readBinding(db, USER_1)).toBeNull()
+    expect((await purgePartition(db, A2)).binding).toBe(0)                 // USER_2 is bound to ORG_B, not ORG_A
+    expect(await readBinding(db, USER_2)).not.toBeNull()
+  })
+})
+

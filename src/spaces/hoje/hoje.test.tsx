@@ -101,3 +101,30 @@ describe('Hoje · local work (Offline 3)', () => {
   })
 })
 
+describe('Hoje · offline (Offline 4)', () => {
+  it('server figures as last read carry their time; local work stays a separate row', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <OrganizationContext.Provider value={org}>
+          <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, bindingSource: 'cache', storage: 'ready',
+            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
+            <MemoryRouter><HojePage /></MemoryRouter>
+          </OfflineRuntimeContext.Provider>
+        </OrganizationContext.Provider>
+      </QueryClientProvider>,
+    )
+    expect((await screen.findByTestId('hoje-updated')).textContent).toMatch(/^Atualizado às \d{2}:\d{2}$/)
+    expect(screen.getByTestId('count-line').textContent).toBe('Ainda não há serviços registados hoje.')     // not 1
+    expect(screen.getByRole('button', { name: /1 registo por enviar/ })).toBeTruthy()
+  })
+  it('online: no "Atualizado" line', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <OrganizationContext.Provider value={org}><MemoryRouter><HojePage /></MemoryRouter></OrganizationContext.Provider>
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('count-line')
+    expect(screen.queryByTestId('hoje-updated')).toBeNull()
+  })
+})
+

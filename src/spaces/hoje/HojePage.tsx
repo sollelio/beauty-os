@@ -8,7 +8,7 @@ import { countMarkedToBuy, stockKeys } from '../../modules/stock/api'
 import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
-import { useOfflineRuntime } from '../../shared/offline/runtime'
+import { isOfflineMode, useOfflineRuntime } from '../../shared/offline/runtime'
 import { pendingLine } from '../../shared/ui/offlineCopy'
 import { SyncStatusSheet } from '../../shared/ui/OfflineStatus'
 import { formatTime, formatToday } from '../../shared/time'
@@ -26,7 +26,9 @@ export function HojePage() {
   const toBuy = useQuery({ queryKey: stockKeys.toBuy, queryFn: countMarkedToBuy })
   const chooser = useSheet<true>()
   const syncSheet = useSheet<true>()
-  const pending = pendingLine(useOfflineRuntime().local)
+  const runtime = useOfflineRuntime()
+  const pending = pendingLine(runtime.local)
+  const offline = isOfflineMode(runtime)
 
   return (
     <main className="app-main">
@@ -85,6 +87,10 @@ export function HojePage() {
       {summary.data && (
         <>
           <p className="note num" data-testid="count-line">{countLine(summary.data, org.timezone)}</p>
+          {offline && summary.dataUpdatedAt > 0 && (
+            // the server's figures as last read; work saved on this phone is counted apart, above
+            <p className="support num" data-testid="hoje-updated">Atualizado às {formatTime(new Date(summary.dataUpdatedAt).toISOString(), org.timezone)}</p>
+          )}
           {summary.data.recent.length > 0 && (
             <section className="stack" aria-label="Recentes">
               <span className="label">Recentes</span>

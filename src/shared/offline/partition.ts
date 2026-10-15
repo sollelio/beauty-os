@@ -3,7 +3,7 @@
 // binding and never synchronized under it; here they can only be counted, and removed by an explicit purge. A purge
 // that would discard work not yet on the server (unsynced commands, unconfirmed drafts) requires the caller to say so —
 // the decision belongs to a person (ADR-0010 §10), the user-facing review comes in a later slice.
-import { partitionRange, promised, STORES, transact } from './db'
+import { BINDING_STORE, partitionRange, promised, STORES, transact } from './db'
 import { OfflineStorageError } from './errors'
 import { assertPartition } from './validate'
 import type { DraftState, OutboxState, Partition } from './types'
@@ -48,7 +48,7 @@ export async function findForeignPartitions(db: IDBDatabase, active: Partition |
   return (await listPartitions(db)).filter((p) => !a || !same(p, a))
 }
 
-export type PurgeResult = { outbox: number; drafts: number; snapshot: number; meta: number }
+export type PurgeResult = { outbox: number; drafts: number; snapshot: number; meta: number; binding: number }
 
 /**
  * Removes every record of one partition, in one transaction. Refused with UNSYNCED_WORK (nothing removed) while the
@@ -57,7 +57,7 @@ export type PurgeResult = { outbox: number; drafts: number; snapshot: number; me
 export function purgePartition(db: IDBDatabase, partition: Partition, { discardUnsyncedWork = false } = {}): Promise<PurgeResult> {
   const p = assertPartition(partition)
   const range = partitionRange(p)
-  return transact(db, [...STORES], 'readwrite', async (tx) => {
+  return transact(db, [...STORES, BINDING_STORE], 'readwrite', async (tx) => {
     const outbox = (await promised(tx.objectStore('outbox').getAll(range))) as { state: OutboxState }[]
     const drafts = (await promised(tx.objectStore('drafts').getAll(range))) as { state: DraftState }[]
     const unsynced = outbox.filter((r) => r.state !== 'synced').length, pending = drafts.filter((r) => r.state === 'draft').length
@@ -68,8 +68,14 @@ export function purgePartition(db: IDBDatabase, partition: Partition, { discardU
       outbox: outbox.length, drafts: drafts.length,
       snapshot: await promised(tx.objectStore('snapshot').count(range)),
       meta: await promised(tx.objectStore('meta').count(range)),
+      binding: 0,
     }
     for (const store of STORES) await promised(tx.objectStore(store).delete(range))
+    // the cached binding of this principal goes too when it names this organization
+    const binding = tx.objectStore(BINDING_STORE)
+    const cached = (await promised(binding.get(p.deviceUserId))) as { organization?: { id?: string } } | undefined
+    result.binding = cached?.organization?.id === p.organizationId ? 1 : 0
+    if (result.binding) await promised(binding.delete(p.deviceUserId))
     return result
   })
 }

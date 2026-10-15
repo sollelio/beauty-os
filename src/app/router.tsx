@@ -7,6 +7,7 @@ import { AdvanceFlow } from '../spaces/equipa/AdvanceFlow'
 import { ExpenseFlow } from '../spaces/dinheiro/ExpenseFlow'
 import { PurchaseFlow } from '../spaces/dinheiro/PurchaseFlow'
 import { PrivateGate, PrivateHome } from './PrivateGate'
+import { RequireConnection } from './RequireConnection'
 import { PrivateEntryPage } from '../spaces/privado/PrivateEntryPage'
 import { EquipaPage } from '../spaces/privado/EquipaPage'
 import { SituationPage } from '../spaces/privado/SituationPage'
@@ -52,10 +53,10 @@ export const router = createBrowserRouter([
           { path: 'stock/passagem', element: <HandoffPage /> },
           { path: 'stock/rever', element: <ReviewPage /> },
           { path: 'registos/anular/:kind/:recordId', element: <CancelRecordFlow /> },
-          { path: 'privado/entrar', element: <PrivateEntryPage /> },
+          { path: 'privado/entrar', element: <RequireConnection title="Área privada"><PrivateEntryPage /></RequireConnection> },
           {
             path: 'privado',
-            element: <PrivateGate />,
+            element: <RequireConnection title="Área privada"><PrivateGate /></RequireConnection>,
             children: [
               { index: true, element: <PrivateHome /> },
               { path: 'equipa', element: <EquipaPage /> },

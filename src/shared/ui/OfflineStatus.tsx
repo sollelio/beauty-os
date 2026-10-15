@@ -26,7 +26,8 @@ export function NeedsConnection({ message, children }: { message: string; childr
 
 export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
   const org = useOrganization()
-  const { connectivity, local } = useOfflineRuntime()
+  const { connectivity, local, sync, syncNow } = useOfflineRuntime()
+  const busy = sync.status === 'checking' || sync.status === 'syncing'
   const last = local?.lastSuccessfulSyncAt
   const waiting = local ? local.outboxPending - local.outboxFailed - local.outboxConflicts : 0
   const rows: [string, string | number][] = [
@@ -41,9 +42,15 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
     <BottomSheet labelledBy="sync-status-title" onDismiss={onDismiss}>
       <h2 id="sync-status-title" className="sheet-title">Neste telemóvel</h2>
       <p className="support">Registos guardados neste telemóvel que ainda não chegaram ao servidor.</p>
+      {local && local.outboxConflicts > 0 && (
+        <p className="notice notice-warning">Alguns registos não foram aceites pelo servidor e precisam de revisão. Continuam guardados neste telemóvel.</p>
+      )}
       <dl className="row-group value-list" data-testid="sync-status">
         {rows.map(([k, v]) => <div key={k} className="row value-row"><dt>{k}</dt><dd className="num">{v}</dd></div>)}
       </dl>
+      {connectivity === 'online' && local && waiting + local.outboxFailed > 0 && (
+        <button className="btn btn-primary" onClick={() => void syncNow()} disabled={busy}>{busy ? 'A enviar…' : 'Enviar agora'}</button>
+      )}
       <button className="btn btn-secondary" onClick={onDismiss}>Fechar</button>
     </BottomSheet>
   )

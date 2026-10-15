@@ -1,14 +1,15 @@
 // Registar serviço (Slice 01 §4): Quem fez o serviço? → Que serviço? → Valor e pagamento → Sucesso.
 // Steps are history entries and a typed value is never dropped silently (useFlow, the mobile back contract).
+// Offline (ADR-0010, Offline 4): the same steps from the salon data kept on this device (at most 48 hours old); the
+// service is saved on this phone and sent when there is a connection — never shown as registered before that.
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { listServices, catalogueKeys, type CatalogueService } from '../../modules/catalogue/api'
-import {
-  listCapturePeople, listFrequentServices, listPaymentMethods, servicesKeys,
-  type CapturePerson, type RecordServiceInput,
-} from '../../modules/services/api'
+import type { CatalogueService } from '../../modules/catalogue/api'
+import { listFrequentServices, servicesKeys, type CapturePerson, type RecordServiceInput } from '../../modules/services/api'
+import { useCaptureData, type CaptureBlock } from '../../modules/services/useCaptureData'
+import type { QueueFailure } from '../../modules/services/useRecordService'
 import { checkPayment, choiceLabel, effectiveChoice, MIXED, paymentParts, type PaymentChoice, type PaymentMode } from '../../shared/payment'
 import { useRecordService } from '../../modules/services/useRecordService'
 import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
@@ -35,13 +36,12 @@ export function RecordServiceFlow() {
   const [method, setMethod] = useState<PaymentChoice>(null)
   const [mixed, setMixed] = useState<[string, string]>(['', ''])
 
-  const people = useQuery({ queryKey: servicesKeys.people, queryFn: listCapturePeople })
-  const methods = useQuery({ queryKey: servicesKeys.paymentMethods, queryFn: listPaymentMethods })
+  const data = useCaptureData()
 
   const typed = editing ? wholeUnitsToMinor(priceDigits, org) : null
   const valueMinor = service ? (typed ?? service.default_price_minor) : null
   // the organization's own active methods (codes and labels are tenant data); the first is preselected
-  const methodList = methods.data ?? []
+  const methodList = data.paymentMethods
   const choice = effectiveChoice(method, methodList)
   const mode: PaymentMode = choice === MIXED ? 'mixed' : 'single'
   const mixedMinor: [number | null, number | null] = [wholeUnitsToMinor(mixed[0], org), wholeUnitsToMinor(mixed[1], org)]
@@ -73,6 +73,25 @@ export function RecordServiceFlow() {
     flow.leaveTo('/')
   }
 
+  if (flow.completed && person && service && record.queued) {
+    return (
+      <AppScreen actions={
+        <BottomActionBar>
+          <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>
+          <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
+        </BottomActionBar>
+      }>
+        <div className="stack center success" data-testid="saved-on-device">
+          <span aria-hidden className="success-mark success-mark-local"><Icon name="clock" size={34} strokeWidth={2.5} /></span>
+          <h2>Guardado neste telemóvel</h2>
+          <p className="support">Será enviado quando houver ligação.</p>
+          <p className="note">{service.name} · {person.display_name} · {choiceLabel(choice, methodList)}</p>
+          <p className="note num">{formatMoney(valueMinor ?? 0, org)} · às {formatTime(record.queued.occurredAt, org.timezone)}</p>
+        </div>
+      </AppScreen>
+    )
+  }
+
   if (flow.completed && person && service && record.result) {
     const methodText = choiceLabel(choice, methodList)
     return (
@@ -98,7 +117,7 @@ export function RecordServiceFlow() {
       <span className="bar-summary">
         {service.name} · {person.display_name} · {valueMinor !== null ? formatMoney(valueMinor, org) : '—'}
       </span>
-      {record.status === 'error' ? (
+      {record.status === 'error' && !(record.queueFailure === 'missing' || record.queueFailure === 'stale') ? (
         <>
           <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input}>Tentar novamente</button>
           <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
@@ -118,9 +137,10 @@ export function RecordServiceFlow() {
       {step === 1 && (
         <section className="stack">
           <h2>Quem fez o serviço?</h2>
-          {people.isError && <div className="notice notice-error" role="alert">Não foi possível carregar a equipa.</div>}
+          {data.blocked && <div className="notice notice-neutral" role="status" data-testid="offline-blocked">{BLOCKED[data.blocked]}</div>}
+          {data.errors.people && <div className="notice notice-error" role="alert">Não foi possível carregar a equipa.</div>}
           <div className="tiles">
-            {people.data?.map((p) => (
+            {data.people.map((p) => (
               <button key={p.id} className="tile" aria-current={p.id === person?.id || undefined}
                 onClick={() => { if (p.id !== person?.id) { setPerson(p); setService(null) } flow.goTo(2) }}>
                 <strong>{p.display_name}</strong>
@@ -133,7 +153,7 @@ export function RecordServiceFlow() {
 
       {step === 2 && person && (
         // Re-entering the chosen service keeps its draft (an edited value survives back); another service starts from its own price.
-        <ServiceStep person={person} selectedId={service?.id ?? null}
+        <ServiceStep person={person} selectedId={service?.id ?? null} catalogue={data.services} catalogueError={data.errors.services} offline={data.offline}
           draftValue={typed !== null && service && typed !== service.default_price_minor ? typed : null} onChangePerson={() => flow.goTo(1)}
           onPick={(s) => { if (s.id !== service?.id) { setService(s); setEditing(false); setPriceDigits('') } flow.goTo(3) }} />
       )}
@@ -165,11 +185,14 @@ export function RecordServiceFlow() {
               {valueMinor === 0 && <div className="notice notice-warning">Valor zero. Confirme que este serviço não foi cobrado.</div>}
             </div>
 
-            {methods.isError && <div className="notice notice-error" role="alert">Não foi possível carregar as formas de pagamento.</div>}
+            {data.errors.paymentMethods && <div className="notice notice-error" role="alert">Não foi possível carregar as formas de pagamento.</div>}
             <PaymentFields label="Forma de pagamento" methods={methodList} choice={choice} onChoice={setMethod}
               mixed={mixed} onMixed={setMixed} sentence={choice === MIXED ? check.sentence : null} symbol={org.currency_symbol} />
           </section>
 
+          {record.status === 'error' && record.queueFailure && (
+            <div className="notice notice-error" role="alert">{QUEUE_FAILURE[record.queueFailure]}</div>
+          )}
           {record.status === 'error' && record.error && (
             <div className="notice notice-error" role="alert">
               {record.error.kind === 'network'
@@ -184,22 +207,33 @@ export function RecordServiceFlow() {
   )
 }
 
+const BLOCKED: Record<CaptureBlock, string> = {
+  missing: 'Sem ligação. Para registar serviços sem ligação, este telemóvel precisa de ter aberto o Beauty OS com ligação nas últimas 48 horas.',
+  stale: 'Sem ligação. Os dados do salão neste telemóvel têm mais de 48 horas: é preciso ligação para os atualizar antes de registar.',
+  unavailable: 'Sem ligação. Este telemóvel não consegue guardar registos sem ligação.',
+}
+const QUEUE_FAILURE: Record<QueueFailure, string> = {
+  storage: 'Não foi possível guardar neste telemóvel. Os dados continuam aqui.',
+  missing: BLOCKED.missing,
+  stale: BLOCKED.stale,
+}
+
 // `draftValue`: the chosen service's edited value (null when it is still the habitual price), shown on its row so a step
-// back does not look like the edit was lost.
-function ServiceStep({ person, selectedId, draftValue, onChangePerson, onPick }: {
-  person: CapturePerson; selectedId: string | null; draftValue: number | null; onChangePerson: () => void; onPick: (s: CatalogueService) => void
+// back does not look like the edit was lost. Offline there is no "frequentes" list: the full catalogue kept on the device.
+function ServiceStep({ person, selectedId, draftValue, catalogue, catalogueError, offline, onChangePerson, onPick }: {
+  person: CapturePerson; selectedId: string | null; draftValue: number | null; catalogue: CatalogueService[]; catalogueError: boolean
+  offline: boolean; onChangePerson: () => void; onPick: (s: CatalogueService) => void
 }) {
   const org = useOrganization()
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
-  const catalogue = useQuery({ queryKey: catalogueKeys.services, queryFn: listServices })
-  const frequent = useQuery({ queryKey: servicesKeys.frequent(person.id), queryFn: () => listFrequentServices(person.id) })
+  const frequent = useQuery({ queryKey: servicesKeys.frequent(person.id), queryFn: () => listFrequentServices(person.id), enabled: !offline })
 
   const q = query.trim().toLowerCase()
-  const hasFrequent = (frequent.data?.length ?? 0) > 0
+  const hasFrequent = !offline && (frequent.data?.length ?? 0) > 0
   const list = q
-    ? (catalogue.data ?? []).filter((s) => s.name.toLowerCase().includes(q))
-    : hasFrequent && !showAll ? frequent.data ?? [] : catalogue.data ?? []
+    ? catalogue.filter((s) => s.name.toLowerCase().includes(q))
+    : hasFrequent && !showAll ? frequent.data ?? [] : catalogue
 
   return (
     <section className="stack">
@@ -209,7 +243,7 @@ function ServiceStep({ person, selectedId, draftValue, onChangePerson, onPick }:
         <input type="search" enterKeyHint="search" placeholder="Procurar serviço" value={query} onChange={(e) => setQuery(e.target.value)} />
       </Field>
       {!q && hasFrequent && !showAll && <span className="label">Frequentes de {person.display_name}</span>}
-      {(catalogue.isError || frequent.isError) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
+      {(catalogueError || (!offline && frequent.isError)) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
       {list.length > 0 && (
         <ListGroup>
           {list.map((s) => {
