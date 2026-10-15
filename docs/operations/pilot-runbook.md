@@ -100,3 +100,21 @@ PIN 6 digits · confirmation (one-shot grant) 2 minutes · private area 5 minute
 ## 7. Corrections (07 D8)
 
 A mistaken record is cancelled, never edited or deleted: *Corrigir este registo* on the success screen (or ⋯ in a person's history, or *Anular* in Fecho → Dinheiro do período) → reason → a person with `records.correct` confirms → the original stays in the history as *anulado* and stops counting; record the right value again through the normal flow. Only while the record's period is *Aberto*. After approval: annul the approval first (only before payments); with payments or a closed period there is no correction yet.
+
+## 8. Offline V1 (ADR-0010)
+
+- **What works without a connection** on a phone that opened Beauty OS with a connection in the last 48 hours: the app
+  opens (installed, from the home screen), *Registar serviço* (kept on the phone, sent once when the connection
+  returns), and *Adiantamento / Despesa / Compra* as drafts — they become records only when someone confirms them with
+  a PIN, online. Everything private (*Área privada*, Fecho, Negócio, Gestão), Anular, Stock and Lista need a connection.
+- **Preparing a phone:** enroll it (§3), open Registar serviço once with a connection, install it to the home screen,
+  and open it from the icon.
+- **Never clear the browser's data** (or uninstall the app) on a phone that shows *por enviar*, *por confirmar com PIN*
+  or *para rever*: that work exists only on the phone and cannot be recovered from the server.
+- ***Para rever*:** what the server refused (inactive person/service/payment, a closed or approved period, a capture
+  older than 48 hours or in the future). The salon decides on the phone: *Registar novamente* (a new record now) or
+  *Descartar*. Nothing is changed or moved automatically.
+- **Fecho waits for a phone:** §3, *A phone blocks Fecho*.
+- **A phone's clock is wrong:** services it saves offline may come back as *A hora guardada está no futuro* (or older
+  than 48 hours); set the phone to automatic date and time.
+

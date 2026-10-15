@@ -145,7 +145,12 @@ export function OfflineRuntimeProvider({
   const reportSyncNow = useCallback(async () => {
     if (!partition || !reportSync || !timeZone || serverBinding !== 'bound' || getConnectivity() !== 'online') return false
     try {
-      await reportSync(await buildSyncReport(createOfflineStore(await getDb(), partition), timeZone))
+      const store = createOfflineStore(await getDb(), partition)
+      const sent = Date.now()
+      const answer = await reportSync(await buildSyncReport(store, timeZone)) as { reported_at?: unknown } | null | undefined
+      // the server's clock as seen from here (Offline 8): what the drafts' 48-hour pre-check uses; never a capture time
+      const server = typeof answer?.reported_at === 'string' ? Date.parse(answer.reported_at) : NaN
+      if (Number.isFinite(server)) await store.meta.set('lastServerTimeOffsetMs', Math.round(server - (sent + Date.now()) / 2)).catch(() => {})
       setSyncReport({ at: new Date().toISOString(), failed: false })
       return true
     } catch {

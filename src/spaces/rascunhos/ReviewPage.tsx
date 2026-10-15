@@ -123,7 +123,7 @@ export function ReviewPage() {
       {ask?.kind === 'foreign' && (
         <ConfirmDialog title="Apagar o trabalho da ligação anterior?" safeLabel="Manter" destructiveLabel="Apagar"
           onSafe={() => setAsk(null)} onDestructive={() => { act.mutate({ op: 'foreign' }); setAsk(null) }}>
-          Estes registos nunca chegaram ao servidor por esta ligação e não vão ser enviados. Apagar remove-os só deste telemóvel; não muda nada no servidor. Não pode ser desfeito.
+          Este trabalho não foi enviado por esta ligação e não vai ser. Apagar remove-o só deste telemóvel; não muda nada no servidor. Não pode ser desfeito.
         </ConfirmDialog>
       )}
     </AppScreen>

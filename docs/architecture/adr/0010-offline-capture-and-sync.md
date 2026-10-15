@@ -32,6 +32,8 @@ Findings this decision rests on (code, 2026-10-15):
 
 This list is not broadened during implementation without a later architecture decision.
 
+**Pilot-scope amendment (Sollelio, 2026-10-15, Offline 8).** After the implementation and hardening review, three rows above are **deferred from the Offline V1 pilot scope** and remain possible Offline V2 candidates: the **read-only cached Hoje** (offline, Hoje shows its offline note and the local counts, never server figures as zero), the **read-only cached Stock overview** (offline, Stock / Lista / Mercado show their load error under *Sem ligação*), and **starting a Mercado trip offline**. Compra offline is unchanged: it is the Offline 6 draft, confirmed online with the PIN. **Known limitation:** `navigator.onLine` is only a browser signal — with Wi-Fi connected but the backend unreachable, an online save fails with a retryable network error and is **never** turned into a new offline intent (its outcome is uncertain; a second intent could duplicate it); the recovery is the genuine offline path (no connection, or the cached binding after a relaunch without reaching the server). Server-reachability / failover detection is deferred.
+
 ### 2. Capture time
 
 For the four operational capture commands (`record_service`, `record_advance`, `record_expense`, `record_purchase`):
@@ -146,4 +148,6 @@ Offline is always visible and calm. Global: **"Sem ligação"**. Offline service
 - Fully offline movements (would need a defensible offline verification model).
 - Background Sync.
 - Moving the Mercado trip from localStorage to IndexedDB.
+- Read-only cached Hoje and Stock overview; starting a Mercado trip offline (pilot-scope amendment, Offline 8).
+- Server-reachability / failover detection beyond `navigator.onLine` (Offline 8).
 - The check-in transport, cadence and storage of device sync state (Offline 7 design).

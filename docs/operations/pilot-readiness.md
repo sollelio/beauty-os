@@ -1,4 +1,4 @@
-# Pilot readiness (updated 2026-10-07)
+# Pilot readiness (updated 2026-10-15)
 
 Baseline `7e285ed` + pilot corrections. Statuses: READY · BLOCKED — OWNER INPUT · BLOCKED — TECHNICAL ·
 DEFERRED BEFORE PRODUCTION · NOT REQUIRED.
@@ -21,5 +21,9 @@ DEFERRED BEFORE PRODUCTION · NOT REQUIRED.
 | Production environment (Supabase Prod) | DEFERRED BEFORE PRODUCTION | Not created yet | Next step |
 | Netlify / domain | DEFERRED BEFORE PRODUCTION | Not configured yet | Next step |
 | Dev test pollution | NOT REQUIRED | Dev only; seeds never go to production | — |
+| Offline V1 (Offline 1–8) | READY ON DEV — browser evidence | Cold start offline, Registar serviço offline (sent once), movement drafts confirmed online with the PIN, review of refused work, device sync reports and the Fecho block, operator revocation: DB tests and Chromium mobile-emulation runs against Dev (2026-10-15) | Physical validation below; production rollout ([production-checkpoint](production-checkpoint.md#offline-v1-rollout-plan-prepared-not-executed)) |
+| Offline V1 on a physical Android phone | OPEN | Not run on a real phone yet (installation, airplane mode, real closes) | [offline-device-validation](offline-device-validation.md) §A, before the pilot uses offline |
+| Offline V1 on a physical iPhone (Safari) | OPEN — PILOT GATE if iPhones are used | No device available; iOS storage and home-screen behaviour unverified | [offline-device-validation](offline-device-validation.md) §B |
+| Offline V1 in Production | DEFERRED BEFORE PRODUCTION | Migrations `20261015000100`, `20261016000100` and the offline frontend are on `dev` only | Rollout plan, explicit approval |
 
 **Remaining before the pilot:** production setup (Supabase Prod, Netlify/domain, CAPTCHA keys) and the real salon's data and configuration.

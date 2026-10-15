@@ -250,6 +250,16 @@ describe('device sync report (Offline 7)', () => {
     expect(reportSync).not.toHaveBeenCalled()
     expect(latest.syncReport).toEqual({ at: null, failed: false })
   })
+  it('the server time of an answered report is kept as the offset from this phone\'s clock (Offline 8); no answer, no offset', async () => {
+    const ahead = 3 * 60 * 60 * 1000                                       // this phone's clock is 3 hours behind the server
+    const reportSync = vi.fn(async () => ({ reported_at: new Date(Date.now() + ahead).toISOString() }))
+    mount({ reportSync })
+    await waitFor(() => expect(latest.syncReport.at).not.toBeNull())
+    const db = await openDb()
+    const offset = await createOfflineStore(db, A1).meta.get('lastServerTimeOffsetMs')
+    expect(Math.abs(offset! - ahead)).toBeLessThan(2000)
+    db.close()
+  })
   it('a report that cannot reach the server is marked failed, not sent', async () => {
     const reportSync = vi.fn(async () => { throw new Error('Failed to fetch') })
     mount({ reportSync })

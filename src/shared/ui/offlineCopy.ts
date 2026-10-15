@@ -1,5 +1,5 @@
-// Offline V1 wording (ADR-0010 §11). Until Registar serviço works offline (Offline 4), nothing here says that work is
-// kept on the device in general; counts describe only what is actually stored.
+// Offline V1 wording (ADR-0010 §11): "Sem ligação" is the connection only; counts describe only what is actually
+// stored on this device, kept apart — services to send, movements to confirm with a PIN, and what needs review.
 import type { LocalStatus } from '../offline/status'
 
 export const OFFLINE_TITLE = 'Sem ligação'

@@ -88,3 +88,60 @@ identical Dev schema's test suite.
 Load the real salon data and enroll the salon's Android phone per `salao-agradavel-onboarding.md` and `salao-agradavel-onboarding.sql`, which supersede `pilot-permissions.sql` for Salão Agradável (07 D8 update, 2026-10-13: Marcelina, display name Merce, reads and confirms payments only; Duart is not onboarded). Nothing of this has been done: real Salão Agradável onboarding is still pending.
 
 Device support for the pilot stays **Android only** (Android Chrome validated); iOS Safari physical validation is still deferred until hardware is available, and remains a gate before pilot sign-off.
+
+## Offline V1 rollout plan (prepared, not executed)
+
+Prepared in Offline 8 (2026-10-15). **Nothing below has been run against Prod.** Each step follows: inspect → review
+evidence → dry run / non-mutating check → review again → explicit mutation (approved) → smoke.
+
+**What moves.** Database: `20261015000100_capture_time` (Offline 1) and `20261016000100_offline_period_sync`
+(Offline 7). Frontend: `dev` (`61c58e6` … the Offline 8 commit) merged into `main`. Prod's migration history after
+Business Health is not recorded here: `20261013000100_catalogue_management` (Gestão, already on `main`) may or may not
+be on Prod — **inspect first**; if missing, it goes first (it is independent of the offline migrations).
+
+**Order and dependencies.** `catalogue_management` (if missing) → `capture_time` → `offline_period_sync`.
+`capture_time` drops and recreates the four capture commands with an extra, defaulted `p_occurred_at` (no overload).
+`offline_period_sync` patches `approve_period` / `close_period` by inserting the sync check after their
+`STALE_REVIEW` line and **aborts the whole migration** if that line is not found exactly once — it must run on the
+same function bodies Dev has (the schema diff below proves it).
+
+**Never to Prod:** every file in `supabase/seeds/` — in particular `18_offline_capture.sql` (organizations O / P / Q,
+PINs, multi-use code) and `19_offline_period_sync.sql` (*Teste Offline Sync*, 1 095 periods, a revoked device, code
+`TEST-ORG-SYNC-2026`). Use the seed-free working copy (`seeds: []`); never `--include-seed`.
+
+**Compatibility.**
+- *Old frontend + new database (the window between the two steps): safe.* Capture calls without `p_occurred_at` keep
+  today's behaviour and fingerprints; no device ever reports, so no device is offline-capable and approve / close are
+  unchanged. Only difference: the distinct inactive codes (`PERSON_INACTIVE`, …) show the old generic message.
+- *New frontend + old database: not safe for offline work.* Queued services call `record_service` with
+  `p_occurred_at` → function not found → kept and retried, never sent; sync reports fail silently; the Fecho gate's
+  read fails (the server, old, does not block). Online capture still works. Therefore **database first**.
+
+**Steps.**
+1. Inspect (read-only, linked to the seed-free copy): `supabase migration list` against Prod; `select count(*)` of
+   organizations, devices, enrollment codes, periods; a schema dump of `public` / `private`. Record the result here.
+2. Review: the dump against Dev's at the matching migration; the exact list of migrations still to apply.
+3. Dry run: `supabase db push --dry-run` from the seed-free copy: it must list only the migrations above.
+4. Review again, then — with explicit approval — `supabase db push` (no seed).
+5. Database smoke (no rows created): history equals Dev's; schema dump identical to Dev's (0 differing lines);
+   `report_device_sync` and `fecho_sync_status` executable only by `authenticated`, refused without a session
+   (`42501`); `private.device_sync_reports` with RLS on and no browser grants; `approve_period` and `close_period`
+   contain `require_period_sync_safe`; `record_service` has one signature, with `p_occurred_at`; `anon` executes no
+   function.
+6. Frontend: fast-forward `main` to the reviewed `dev` commit; Netlify production deploy.
+7. Frontend smoke (automated, no CAPTCHA solved, nothing created): app loads at `https://beauty.sollelio.com`; bundle
+   has the Prod URL, one publishable key, no Dev reference; `/sw.js` served with `Cache-Control: no-cache` and a
+   precache list of static files only; `/manifest.webmanifest` served; SPA deep links; no runtime errors.
+8. Offline smoke on Prod happens only with the real salon phone, during onboarding, with the salon's agreement
+   (runbook §8 preparation, then one offline service sent once) — not with synthetic data.
+
+**No synthetic data in Prod** (after step 4 and after onboarding): no organization named `Teste%`; no period labelled
+`Sync %`; no enrollment code for `TEST-ORG-%` (compare `code_hash` with the hashes of the seed codes); no device with
+`offline_capable_at` before the salon's phone was enrolled; `private.device_sync_reports` empty until the salon's phone
+reports.
+
+**Rollback.** Migrations are forward-only. Rolling back the frontend is safe **only before any phone has reported**
+(no `offline_capable_at` set). After that, the old frontend never reports again, so every later period stays blocked
+until the phone is revoked (which disconnects it) or a reviewed database change clears `offline_capable_at`; and
+anything queued on the phone is invisible to the old frontend (kept, not sent). After the pilot starts using offline,
+**fix forward**.
