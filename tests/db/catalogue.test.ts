@@ -100,7 +100,7 @@ describe('services: history stays as recorded', () => {
     expect(offered).not.toContain(SVC)
     const rec = await dev.rpc('record_service', { p_command_id: crypto.randomUUID(), p_person_id: PRO, p_service_id: SVC, p_value_minor: 650000,
       p_payments: [{ method_id: CASH, amount_minor: 650000 }] })
-    expect(rec.error?.message).toBe('CROSS_TENANT_REFERENCE')
+    expect(rec.error?.message).toBe('SERVICE_INACTIVE')
     expect((await dev.from('service_records').select('value_minor').eq('id', RECORD).single()).data!.value_minor).toBe(450000)
     expect(await service(SVC)).toEqual({ name: 'Serviço G Histórico', default_price_minor: 650000, active: false })
     await setService(SVC, 'Serviço G Histórico', 650000, true)                 // reactivation brings it back
