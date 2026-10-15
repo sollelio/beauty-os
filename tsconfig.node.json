@@ -21,6 +21,7 @@
   },
   "include": [
     "vite.config.ts",
+    "pwa/**/*.ts",
     "vitest.db.config.ts",
     "tests/**/*.ts"
   ]

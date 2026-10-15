@@ -6,6 +6,7 @@ import { OrganizationContext } from '../modules/org/OrganizationContext'
 import { refreshCaptureSnapshot, serviceDrainer } from '../modules/services/offline'
 import { servicesKeys } from '../modules/services/api'
 import { toAppError } from '../shared/errors'
+import { getConnectivity } from '../shared/offline/connectivity'
 import type { SyncOutcome } from '../shared/offline/coordinator'
 import { useCachedBinding, useDevicePrincipal } from '../shared/offline/identity'
 import { OfflineRuntimeProvider } from '../shared/offline/OfflineRuntimeProvider'
@@ -18,7 +19,8 @@ import { EnrollmentScreen } from '../spaces/dispositivo/EnrollmentScreen'
 export function DeviceGate() {
   const queryClient = useQueryClient()
   const principal = useDevicePrincipal(watchDevicePrincipal, readStoredPrincipal)
-  const ctx = useQuery({ queryKey: orgKeys.deviceContext, queryFn: getDeviceContext })
+  // offline, fail fast to the cached binding instead of retrying a request that cannot succeed
+  const ctx = useQuery({ queryKey: orgKeys.deviceContext, queryFn: getDeviceContext, retry: (n) => getConnectivity() === 'online' && n < 1 })
   const noServer = !ctx.data && ((ctx.isPending && ctx.fetchStatus === 'paused') || (ctx.isError && toAppError(ctx.error).kind === 'network'))
   const cached = useCachedBinding(principal, noServer)
   const onDrained = useCallback((outcome: SyncOutcome) => {

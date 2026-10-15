@@ -78,7 +78,11 @@ export function HojePage() {
         </nav>
       </section>
 
-      {summary.isError && (
+      {summary.isError && offline && !summary.data && (
+        // no server figures on this device (e.g. opened without a connection): say so, never show 0 as if it were true
+        <p className="note" data-testid="hoje-offline-note">Sem ligação: os registos de hoje aparecem quando houver ligação.</p>
+      )}
+      {summary.isError && !offline && (
         <div className="notice notice-error" role="alert">
           Não foi possível carregar os registos de hoje. <button className="link-btn" onClick={() => summary.refetch()}>Tentar novamente</button>
         </div>

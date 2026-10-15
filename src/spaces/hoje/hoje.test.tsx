@@ -128,3 +128,25 @@ describe('Hoje · offline (Offline 4)', () => {
   })
 })
 
+describe('Hoje · opened without a connection (Offline 5)', () => {
+  it('no server figures: a calm note, no error, no zero; local work still shown apart', async () => {
+    const { getHojeSummary } = await import('../../modules/services/api')
+    vi.mocked(getHojeSummary).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <OrganizationContext.Provider value={org}>
+          <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, bindingSource: 'cache', storage: 'ready',
+            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
+            <MemoryRouter><HojePage /></MemoryRouter>
+          </OfflineRuntimeContext.Provider>
+        </OrganizationContext.Provider>
+      </QueryClientProvider>,
+    )
+    expect((await screen.findByTestId('hoje-offline-note')).textContent).toBe('Sem ligação: os registos de hoje aparecem quando houver ligação.')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByTestId('count-line')).toBeNull()
+    expect(screen.queryByText(/Ainda não há serviços/)).toBeNull()
+    expect(screen.getByRole('button', { name: /1 registo por enviar/ })).toBeTruthy()
+  })
+})
+

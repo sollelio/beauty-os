@@ -17,6 +17,11 @@ export default tseslint.config(
     },
   },
   {
+    files: ['pwa/sw.js'],                          // the service worker template (a classic script; build placeholders)
+    extends: [js.configs.recommended],
+    languageOptions: { ecmaVersion: 2022, sourceType: 'script', globals: { ...globals.serviceworker, __BEAUTY_OS_PRECACHE__: 'readonly' } },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     extends: [js.configs.recommended],
     languageOptions: { globals: globals.node },

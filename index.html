@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Beauty OS</title>
     <!-- Installable web app: identity, colours and icons from the Sollelio Beauty OS brand package v0.1 (dark app icon,
-         Precision Violet accent). No service worker: nothing is cached and the app does not work offline. -->
+         Precision Violet accent). A static-shell service worker (/sw.js, ADR-0010 §7) lets the installed app open
+         without a connection; it caches only this build's static files, never data. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#11152D" />
     <link rel="icon" href="/favicon.ico" sizes="32x32 64x64" />

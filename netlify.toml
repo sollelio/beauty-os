@@ -12,3 +12,9 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# The static-shell service worker (ADR-0010 §7) must always be revalidated, so a new deployment is found.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

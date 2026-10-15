@@ -6,6 +6,7 @@ import { router } from './router'
 import { createQueryClient } from '../shared/query/queryClient'
 import { ConfigError, readSupabaseConfig } from '../shared/config/env'
 import { ConfigErrorScreen } from './ConfigErrorScreen'
+import { registerServiceWorker } from './registerServiceWorker'
 import './base.css'
 
 const root = createRoot(document.getElementById('root')!)
@@ -19,6 +20,7 @@ try {
       </QueryClientProvider>
     </StrictMode>,
   )
+  registerServiceWorker()
 } catch (error) {
   if (!(error instanceof ConfigError)) throw error
   root.render(<ConfigErrorScreen message={error.message} />)
