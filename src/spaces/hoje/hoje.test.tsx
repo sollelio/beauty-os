@@ -69,7 +69,7 @@ describe('Hoje', () => {
 
 describe('Hoje · local work (Offline 3)', () => {
   const local = (over: Partial<LocalStatus>): LocalStatus => ({ schemaVersion: 1, outboxPending: 0, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0,
-    lastSuccessfulSyncAt: null, foreign: { partitions: 2, unsyncedWork: 9 }, ...over })
+    draftsReview: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 2, unsyncedWork: 9 }, ...over })
   const withLocal = (l: LocalStatus | null) => render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <OrganizationContext.Provider value={org}>
@@ -90,11 +90,14 @@ describe('Hoje · local work (Offline 3)', () => {
     await screen.findByText('Ainda não há serviços registados hoje.')
     expect(screen.queryByText(/por enviar/)).toBeNull()
   })
-  it('one row with the local count, apart from the server figures; it opens the status sheet', async () => {
-    withLocal(local({ outboxPending: 2, draftsPending: 1 }))
+  it('services to send and movements to confirm are separate rows, apart from the server figures', async () => {
+    withLocal(local({ outboxPending: 2, draftsPending: 3, draftsReview: 1 }))
     const row = await screen.findByRole('button', { name: /2 registos por enviar/ })
-    expect(row.textContent).toContain('1 movimento por confirmar com PIN')
-    expect((await screen.findByTestId('count-line')).textContent).not.toContain('2 registos')
+    expect(row.textContent).not.toMatch(/confirmar/)
+    const drafts = screen.getByRole('link', { name: /3 por confirmar com PIN/ })
+    expect(drafts.getAttribute('href')).toBe('/rascunhos')
+    expect(drafts.textContent).toContain('1 precisa de revisão')
+    expect((await screen.findByTestId('count-line')).textContent).not.toMatch(/2 registos|3/)
     fireEvent.click(row)
     expect(await screen.findByRole('heading', { name: 'Neste telemóvel' })).toBeTruthy()
     expect(within(screen.getByTestId('sync-status')).getByText('Por enviar').nextSibling?.textContent).toBe('2')
@@ -107,7 +110,7 @@ describe('Hoje · offline (Offline 4)', () => {
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <OrganizationContext.Provider value={org}>
           <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, bindingSource: 'cache', storage: 'ready',
-            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
+            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, draftsReview: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
             <MemoryRouter><HojePage /></MemoryRouter>
           </OfflineRuntimeContext.Provider>
         </OrganizationContext.Provider>
@@ -136,7 +139,7 @@ describe('Hoje · opened without a connection (Offline 5)', () => {
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <OrganizationContext.Provider value={org}>
           <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, bindingSource: 'cache', storage: 'ready',
-            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
+            local: { schemaVersion: 2, outboxPending: 1, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, draftsReview: 0, lastSuccessfulSyncAt: null, foreign: { partitions: 0, unsyncedWork: 0 } } }}>
             <MemoryRouter><HojePage /></MemoryRouter>
           </OfflineRuntimeContext.Provider>
         </OrganizationContext.Provider>

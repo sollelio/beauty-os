@@ -26,10 +26,12 @@ export async function listPurchaseOrigins(): Promise<PurchaseOrigin[]> {
   return data
 }
 
-export async function recordPurchase(commandId: string, grantId: string, input: RecordPurchaseInput): Promise<RecordPurchaseResult> {
+/** `occurredAt`: only for a draft confirmed online (its capture time, ADR-0010 §3); omitted, the server's time. */
+export async function recordPurchase(commandId: string, grantId: string, input: RecordPurchaseInput, occurredAt?: string): Promise<RecordPurchaseResult> {
   const { data, error } = await getSupabase().rpc('record_purchase', {
     p_command_id: commandId, p_grant_id: grantId, p_lines: input.lines,
     p_salon_amount_minor: input.salonAmountMinor, p_contributions: input.contributions, p_origin_id: input.originId,
+    ...(occurredAt ? { p_occurred_at: occurredAt } : {}),
   })
   if (error) throw toAppError(error)
   return data as RecordPurchaseResult

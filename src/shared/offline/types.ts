@@ -58,7 +58,7 @@ export type NewDraft = Pick<Draft, 'draftId' | 'type' | 'payload' | 'capturedAt'
 
 // ---------- snapshot: previously synced public operational lists, dated (ADR-0010 §1, §6) ----------
 export const SNAPSHOT_GROUPS = [
-  'services', 'people', 'paymentMethods', 'expenseCategories', 'purchaseOrigins', 'products', 'unitWords', 'hojeSummary',
+  'services', 'people', 'paymentMethods', 'expenseCategories', 'purchaseOrigins', 'products', 'unitWords', 'purchasePeople', 'hojeSummary',
 ] as const
 export type SnapshotGroup = (typeof SNAPSHOT_GROUPS)[number]
 

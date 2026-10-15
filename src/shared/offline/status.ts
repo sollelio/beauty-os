@@ -11,8 +11,14 @@ export type LocalStatus = {
   outboxFailed: number
   outboxConflicts: number
   draftsPending: number             // drafts waiting for the online PIN confirmation
+  draftsReview: number              // of those, the ones the server did not accept (need review)
   lastSuccessfulSyncAt: string | null
   foreign: { partitions: number; unsyncedWork: number }   // other bindings' data on this device: counted, never shown
+}
+
+async function draftCounts(store: ReturnType<typeof createOfflineStore>) {
+  const pending = (await store.drafts.list()).filter((d) => d.state === 'draft')
+  return { draftsPending: pending.length, draftsReview: pending.filter((d) => (d.payload as { review?: unknown }).review).length }
 }
 
 export async function readLocalStatus(db: IDBDatabase, partition: Partition): Promise<LocalStatus> {
@@ -25,7 +31,7 @@ export async function readLocalStatus(db: IDBDatabase, partition: Partition): Pr
     outboxPending: byState.local + byState.syncing + byState.failed + byState.conflict,
     outboxFailed: byState.failed,
     outboxConflicts: byState.conflict,
-    draftsPending: await store.drafts.countPending(),
+    ...(await draftCounts(store)),
     lastSuccessfulSyncAt: await store.meta.get('lastSuccessfulSyncAt'),
     foreign: { partitions: foreign.length, unsyncedWork: foreign.reduce((n, p) => n + p.outboxUnsynced + p.draftsPending, 0) },
   }

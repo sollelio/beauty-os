@@ -9,7 +9,7 @@ import { countLine } from './countLine'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { formatMoney } from '../../shared/money'
 import { isOfflineMode, useOfflineRuntime } from '../../shared/offline/runtime'
-import { pendingLine } from '../../shared/ui/offlineCopy'
+import { pendingRows } from '../../shared/ui/offlineCopy'
 import { SyncStatusSheet } from '../../shared/ui/OfflineStatus'
 import { formatTime, formatToday } from '../../shared/time'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
@@ -27,7 +27,7 @@ export function HojePage() {
   const chooser = useSheet<true>()
   const syncSheet = useSheet<true>()
   const runtime = useOfflineRuntime()
-  const pending = pendingLine(runtime.local)
+  const pending = pendingRows(runtime.local)
   const offline = isOfflineMode(runtime)
 
   return (
@@ -48,11 +48,13 @@ export function HojePage() {
         </ListGroup>
       </nav>
 
-      {pending && (
+      {(pending.send || pending.confirm) && (
+        // work on this phone, never mixed into the server's figures: services to send, movements to confirm with PIN
         <section className="stack" aria-label="Neste telemóvel">
           <ListGroup>
-            <ListRow as="button" onClick={() => syncSheet.open(true)} leading={<RowIcon name="clock" tone="quiet" />} chevron
-              title={pending.title} subtitle={pending.subtitle ?? undefined} />
+            {pending.send && <ListRow as="button" onClick={() => syncSheet.open(true)} leading={<RowIcon name="clock" tone="quiet" />} chevron title={pending.send} />}
+            {pending.confirm && <ListRow as="link" to="/rascunhos" leading={<RowIcon name="lock" tone="quiet" />} chevron title={pending.confirm}
+              subtitle={pending.confirmReview ?? undefined} />}
           </ListGroup>
         </section>
       )}

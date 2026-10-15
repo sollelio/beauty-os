@@ -1,6 +1,7 @@
 // Offline V1 status UI (ADR-0010 §11): a calm global "Sem ligação" while the browser is offline, a guard for areas
 // that need a connection, and a small status sheet with counts and dates only — never record content.
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { useConnectivity } from '../offline/connectivity'
 import { useOfflineRuntime } from '../offline/runtime'
@@ -26,6 +27,7 @@ export function NeedsConnection({ message, children }: { message: string; childr
 
 export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
   const org = useOrganization()
+  const navigate = useNavigate()
   const { connectivity, local, sync, syncNow } = useOfflineRuntime()
   const busy = sync.status === 'checking' || sync.status === 'syncing'
   const last = local?.lastSuccessfulSyncAt
@@ -34,15 +36,15 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
     ['Ligação', connectivity === 'offline' ? OFFLINE_TITLE : 'Com ligação'],
     ['Por enviar', waiting],
     ...(local && local.outboxFailed > 0 ? [['Envio falhou', local.outboxFailed] as [string, number]] : []),
-    ...(local && local.outboxConflicts > 0 ? [['Precisam de revisão', local.outboxConflicts] as [string, number]] : []),
     ...(local && local.draftsPending > 0 ? [['Por confirmar com PIN', local.draftsPending] as [string, number]] : []),
+    ...(local && local.outboxConflicts + local.draftsReview > 0 ? [['Para rever', local.outboxConflicts + local.draftsReview] as [string, number]] : []),
     ['Último envio', last ? `${formatDayShort(last, org.timezone)}, ${formatTime(last, org.timezone)}` : 'Ainda nenhum'],
   ]
   return (
     <BottomSheet labelledBy="sync-status-title" onDismiss={onDismiss}>
       <h2 id="sync-status-title" className="sheet-title">Neste telemóvel</h2>
       <p className="support">Registos guardados neste telemóvel que ainda não chegaram ao servidor.</p>
-      {local && local.outboxConflicts > 0 && (
+      {local && local.outboxConflicts + local.draftsReview > 0 && (
         <p className="notice notice-warning">Alguns registos não foram aceites pelo servidor e precisam de revisão. Continuam guardados neste telemóvel.</p>
       )}
       <dl className="row-group value-list" data-testid="sync-status">
@@ -50,6 +52,9 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
       </dl>
       {connectivity === 'online' && local && waiting + local.outboxFailed > 0 && (
         <button className="btn btn-primary" onClick={() => void syncNow()} disabled={busy}>{busy ? 'A enviar…' : 'Enviar agora'}</button>
+      )}
+      {local && local.draftsPending > 0 && (
+        <button className="btn btn-secondary" onClick={() => navigate('/rascunhos')}>Ver por confirmar com PIN</button>
       )}
       <button className="btn btn-secondary" onClick={onDismiss}>Fechar</button>
     </BottomSheet>

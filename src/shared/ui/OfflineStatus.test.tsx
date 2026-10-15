@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
 import { INACTIVE_RUNTIME, OfflineRuntimeContext } from '../offline/runtime'
 import type { LocalStatus } from '../offline/status'
-import { pendingLine, PRIVATE_NEEDS_CONNECTION } from './offlineCopy'
+import { pendingRows, PRIVATE_NEEDS_CONNECTION } from './offlineCopy'
 import { ConnectivityBanner, NeedsConnection, SyncStatusSheet } from './OfflineStatus'
 
 let online = true
@@ -15,7 +15,7 @@ afterEach(() => { online = true })
 
 const org = { id: 'o', name: 'Org', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
 const local = (over: Partial<LocalStatus> = {}): LocalStatus => ({
-  schemaVersion: 1, outboxPending: 0, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, lastSuccessfulSyncAt: null,
+  schemaVersion: 1, outboxPending: 0, outboxFailed: 0, outboxConflicts: 0, draftsPending: 0, draftsReview: 0, lastSuccessfulSyncAt: null,
   foreign: { partitions: 0, unsyncedWork: 0 }, ...over,
 })
 
@@ -41,11 +41,13 @@ describe('Sem ligação', () => {
 
 describe('local work', () => {
   it('a row only when something is pending', () => {
-    expect(pendingLine(null)).toBeNull()
-    expect(pendingLine(local())).toBeNull()
-    expect(pendingLine(local({ outboxPending: 1 }))).toEqual({ title: '1 registo por enviar', subtitle: null })
-    expect(pendingLine(local({ outboxPending: 3, draftsPending: 2 }))).toEqual({ title: '3 registos por enviar', subtitle: '2 movimentos por confirmar com PIN' })
-    expect(pendingLine(local({ draftsPending: 1 }))).toEqual({ title: '1 movimento por confirmar com PIN', subtitle: null })
+    const none = { send: null, confirm: null, confirmReview: null }
+    expect(pendingRows(null)).toEqual(none)
+    expect(pendingRows(local())).toEqual(none)
+    expect(pendingRows(local({ outboxPending: 1 }))).toEqual({ ...none, send: '1 registo por enviar' })
+    // never combined: services to send and movements to confirm with PIN are counted apart
+    expect(pendingRows(local({ outboxPending: 3, draftsPending: 2 }))).toEqual({ send: '3 registos por enviar', confirm: '2 por confirmar com PIN', confirmReview: null })
+    expect(pendingRows(local({ draftsPending: 1, draftsReview: 1 }))).toEqual({ send: null, confirm: '1 por confirmar com PIN', confirmReview: '1 precisa de revisão' })
   })
   it('the status sheet shows counts and dates only', () => {
     online = false
@@ -58,8 +60,8 @@ describe('local work', () => {
       </OrganizationContext.Provider></MemoryRouter>,
     )
     const rows = [...screen.getByTestId('sync-status').querySelectorAll('div')].map((d) => [d.querySelector('dt')!.textContent, d.querySelector('dd')!.textContent])
-    expect(rows).toEqual([['Ligação', 'Sem ligação'], ['Por enviar', '2'], ['Envio falhou', '1'], ['Precisam de revisão', '1'],
-      ['Por confirmar com PIN', '2'], ['Último envio', '15 out, 09:30']])
+    expect(rows).toEqual([['Ligação', 'Sem ligação'], ['Por enviar', '2'], ['Envio falhou', '1'], ['Por confirmar com PIN', '2'],
+      ['Para rever', '1'], ['Último envio', '15 out, 09:30']])
     expect(document.body.textContent).not.toMatch(/payload|outbox|draft|sync|partition|minor/i)
   })
 })

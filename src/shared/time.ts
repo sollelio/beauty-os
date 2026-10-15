@@ -18,3 +18,10 @@ export function formatDayShort(isoOrDate: string, timeZone: string): string {
   const [, m, d] = (/^\d{4}-\d{2}-\d{2}$/.test(isoOrDate) ? isoOrDate : dayKey(isoOrDate, timeZone)).split('-')
   return `${Number(d)} ${MONTHS[Number(m) - 1]}`
 }
+
+/** "hoje às 09:30", or "14 out às 18:05" for another day (a draft confirmed later keeps its capture time). */
+export function formatWhen(iso: string, timeZone: string, now: Date = new Date()): string {
+  const day = dayKey(iso, timeZone) === dayKey(now.toISOString(), timeZone) ? 'hoje' : formatDayShort(iso, timeZone)
+  return `${day} às ${formatTime(iso, timeZone)}`
+}
+

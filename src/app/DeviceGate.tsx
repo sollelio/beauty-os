@@ -4,13 +4,21 @@ import { Outlet } from 'react-router'
 import { getDeviceContext, orgKeys, readStoredPrincipal, watchDevicePrincipal } from '../modules/org/api'
 import { OrganizationContext } from '../modules/org/OrganizationContext'
 import { refreshCaptureSnapshot, serviceDrainer } from '../modules/services/offline'
+import { refreshMovementSnapshot } from '../modules/movements/snapshot'
 import { servicesKeys } from '../modules/services/api'
 import { toAppError } from '../shared/errors'
 import { getConnectivity } from '../shared/offline/connectivity'
 import type { SyncOutcome } from '../shared/offline/coordinator'
 import { useCachedBinding, useDevicePrincipal } from '../shared/offline/identity'
 import { OfflineRuntimeProvider } from '../shared/offline/OfflineRuntimeProvider'
+import type { OfflineStore } from '../shared/offline/store'
 import { EnrollmentScreen } from '../spaces/dispositivo/EnrollmentScreen'
+
+// The public lists kept for offline capture: Registar serviço's, and the movement drafts' (each refreshed on its own)
+const refreshSnapshots = async (store: OfflineStore) => {
+  const results = await Promise.allSettled([refreshCaptureSnapshot(store), refreshMovementSnapshot(store)])
+  if (results.every((r) => r.status === 'rejected')) throw (results[0] as PromiseRejectedResult).reason
+}
 
 // Unbound devices see nothing but enrollment; the database enforces the same rule (ADR-0009).
 // Without a connection (ADR-0010, Offline 4), a device previously bound opens on its last-known binding — public
@@ -52,7 +60,7 @@ export function DeviceGate() {
   return (
     <OfflineRuntimeProvider organization={organization} principal={principal} bindingSource={ctx.data ? 'server' : 'cache'}
       serverBinding={ctx.data ? (ctx.data.bound ? 'bound' : 'unbound') : 'unknown'}
-      drain={serviceDrainer} refreshSnapshot={refreshCaptureSnapshot} onDrained={onDrained}>
+      drain={serviceDrainer} refreshSnapshot={refreshSnapshots} onDrained={onDrained}>
       {organization ? (
         <OrganizationContext.Provider value={organization}>
           <Outlet />

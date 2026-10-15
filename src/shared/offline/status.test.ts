@@ -32,7 +32,7 @@ describe('local status', () => {
     await s.meta.set('lastSuccessfulSyncAt', '2026-10-15T08:00:00.000Z')
     await seed(B2, ['local', 'local', 'local'], 1)
     expect(await readLocalStatus(db, A1)).toEqual({
-      schemaVersion: db.version, outboxPending: 4, outboxFailed: 1, outboxConflicts: 1, draftsPending: 2,
+      schemaVersion: db.version, outboxPending: 4, outboxFailed: 1, outboxConflicts: 1, draftsPending: 2, draftsReview: 0,
       lastSuccessfulSyncAt: '2026-10-15T08:00:00.000Z', foreign: { partitions: 1, unsyncedWork: 4 },
     })
   })

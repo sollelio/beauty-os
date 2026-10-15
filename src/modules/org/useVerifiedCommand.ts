@@ -3,7 +3,7 @@
 // server consumes only that exact grant. If it is no longer valid (expired, used, or superseded by anyone's later
 // verification) the command returns VERIFICATION_REQUIRED and the same confirmer is verified again — another
 // person's verification can never authorize this retry. An already-committed command replays without a grant.
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { newCommandId } from '../../shared/commandId'
 import { toAppError } from '../../shared/errors'
@@ -11,8 +11,13 @@ import { verifyPerson } from './api'
 
 export type VerifiedArgs<I> = { input: I; confirmerId: string; secret: string }
 
-export function useVerifiedCommand<I, R>(run: (commandId: string, grantId: string, input: I) => Promise<R>) {
+/** `intent`: where the command id comes from instead of this screen's memory — e.g. a draft that stores it before the
+ *  command is sent, so a retry after leaving the screen still reuses it (Offline 6). */
+export function useVerifiedCommand<I, R>(run: (commandId: string, grantId: string, input: I) => Promise<R>,
+  opts: { intent?: (input: I) => Promise<string> } = {}) {
   const intent = useRef<{ id: string; key: string } | null>(null)
+  const external = useRef(opts.intent)
+  useEffect(() => { external.current = opts.intent })
   const grant = useRef<{ confirmerId: string; grantId: string } | null>(null)
 
   const commandIdFor = useCallback((input: I) => {
@@ -23,7 +28,7 @@ export function useVerifiedCommand<I, R>(run: (commandId: string, grantId: strin
 
   const mutation = useMutation({
     mutationFn: async ({ input, confirmerId, secret }: VerifiedArgs<I>) => {
-      const id = commandIdFor(input)
+      const id = external.current ? await external.current(input) : commandIdFor(input)
       const verify = async () => {
         grant.current = null
         grant.current = { confirmerId, grantId: await verifyPerson(confirmerId, secret) }

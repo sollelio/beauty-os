@@ -8,12 +8,12 @@ export const PRIVATE_NEEDS_CONNECTION = 'A área privada precisa de ligação.'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-/** The Hoje row for local work, or null when there is none. */
-export function pendingLine(local: LocalStatus | null): { title: string; subtitle: string | null } | null {
-  if (!local) return null
-  const sent = local.outboxPending, drafts = local.draftsPending
-  const confirm = drafts > 0 ? `${plural(drafts, 'movimento', 'movimentos')} por confirmar com PIN` : null
-  if (sent > 0) return { title: `${plural(sent, 'registo', 'registos')} por enviar`, subtitle: confirm }
-  if (confirm) return { title: confirm, subtitle: null }
-  return null
+/** Hoje's rows for local work, kept apart: services waiting to be sent, and movements waiting for a PIN (Offline 6). */
+export function pendingRows(local: LocalStatus | null): { send: string | null; confirm: string | null; confirmReview: string | null } {
+  if (!local) return { send: null, confirm: null, confirmReview: null }
+  return {
+    send: local.outboxPending > 0 ? `${plural(local.outboxPending, 'registo', 'registos')} por enviar` : null,
+    confirm: local.draftsPending > 0 ? `${local.draftsPending} por confirmar com PIN` : null,
+    confirmReview: local.draftsReview > 0 ? `${local.draftsReview} ${local.draftsReview === 1 ? 'precisa' : 'precisam'} de revisão` : null,
+  }
 }

@@ -4,26 +4,30 @@
 // and the bought plan entries leave the list only after the purchase is recorded. The human state is never touched.
 // Steps and the add/line sheet are history entries; lines — and a half-typed line in its sheet — are never dropped
 // without "Descartar?" (the mobile back contract).
+// Offline (ADR-0010 §3, Offline 6): the same steps from the device's lists; the last step saves a draft on this phone
+// (no PIN). From Modo mercado the trip is kept as it is: it ends only when the purchase really exists — when that
+// draft is confirmed online (same rule as above). A draft (?rascunho=…) is confirmed with the live confirmer/PIN and
+// its original capture time.
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
 import { ConfirmerPicker } from '../../modules/org/ConfirmerPicker'
 import { isPinError } from '../../modules/org/verifyMessages'
 import { useVerifiedCommand } from '../../modules/org/useVerifiedCommand'
-import { listPeople, peopleKeys } from '../../modules/org/api'
-import { listProducts, listUnitWords, stockKeys, updateStock } from '../../modules/stock/api'
+import { updateStock } from '../../modules/stock/api'
 import { boughtItems, clearTrip, endedPlanIds, isSubstituted, loadTrip, type Trip } from '../../modules/stock/trip'
 import type { ReviewLine } from '../stock/ReviewPage'
-import {
-  listPurchaseOrigins, purchasingKeys, recordPurchase, type RecordPurchaseInput, type RecordPurchaseResult,
-} from '../../modules/purchasing/api'
+import { recordPurchase, type RecordPurchaseInput, type RecordPurchaseResult } from '../../modules/purchasing/api'
+import type { MovementDraft, PurchaseForm as PurchaseDraftForm } from '../../modules/movements/drafts'
+import { useDraftActions, useDraftParam, useMovementData } from '../../modules/movements/useMovement'
+import { DraftLoading, DraftMissing, DraftNotes, DraftSaved, DraftSaveStep } from '../rascunhos/DraftUi'
+import { draftFailure, MOVEMENT_BLOCKED } from '../rascunhos/copy'
 import { contributionState, payersText } from '../../modules/purchasing/contributions'
 import { formatMoney, minorToWholeUnits, wholeUnitsToMinor } from '../../shared/money'
-import { formatTime } from '../../shared/time'
+import { formatWhen } from '../../shared/time'
 import { AmountField } from '../../shared/ui/AmountField'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
-import { captureFailure } from '../../shared/periodLock'
 import { AppBar, AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { Field } from '../../shared/ui/Field'
@@ -48,31 +52,51 @@ type PersonRow = { personId: string; name: string; digits: string }
 const plural = (n: number) => `${n} ${n === 1 ? 'produto' : 'produtos'}`
 
 export function PurchaseFlow() {
+  const d = useDraftParam('purchase')
+  const lists = useMovementData('purchase')
+  // a draft opens on its last step: wait for its lists, or the step would look incomplete and fall back to the first
+  if (d.status === 'loading' || (d.status === 'ready' && lists.loading)) return <DraftLoading title="Compra" />
+  if (d.status === 'missing') return <DraftMissing title="Compra" />
+  return <PurchaseForm key={d.draftId ?? 'new'} draft={d.draft} />
+}
+
+const linesFromDraft = (f: PurchaseDraftForm, toDigits: (minor: number) => string): Line[] => f.lines.map((l) => ({
+  key: l.key, productId: l.productId, name: l.name, unitWord: l.unitWord, quantity: l.quantity, costDigits: toDigits(l.costMinor), insteadOf: l.insteadOf,
+}))
+
+function PurchaseForm({ draft }: { draft: MovementDraft<'purchase'> | null }) {
   const org = useOrganization()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const command = useVerifiedCommand<RecordPurchaseInput, RecordPurchaseResult>(recordPurchase)
+  const lists = useMovementData('purchase')
+  const drafts = useDraftActions('purchase', draft)
+  const command = useVerifiedCommand<RecordPurchaseInput, RecordPurchaseResult>(drafts.wrapRun(recordPurchase), { intent: drafts.intent })
+  const saved = drafts.save
+  const offline = lists.offline
+  const f = draft?.payload.form
+  const toDigits = (minor: number) => String(minorToWholeUnits(minor, org))
 
   const fromTrip = Boolean((useLocation().state as { fromTrip?: boolean } | null)?.fromTrip)
-  const [trip, setTrip] = useState<Trip | null>(() => (fromTrip ? loadTrip(org.id) : null))
+  const [trip, setTrip] = useState<Trip | null>(() => (fromTrip && !draft ? loadTrip(org.id) : null))
   const [reviewLines, setReviewLines] = useState<ReviewLine[] | null>(null)
-  const [lines, setLines] = useState<Line[]>(() => linesFromTrip(trip))
+  const [lines, setLines] = useState<Line[]>(() => (f ? linesFromDraft(f, toDigits) : linesFromTrip(trip)))
+  const [askDiscard, setAskDiscard] = useState(false)
   const sheets = useSheet<Sheet>()
   const sheet = sheets.current
   const [query, setQuery] = useState('')
   const [lastAdded, setLastAdded] = useState<string | null>(null)
-  const [salonDigits, setSalonDigits] = useState<string | null>(null)
-  const [rows, setRows] = useState<PersonRow[]>([])
+  const [salonDigits, setSalonDigits] = useState<string | null>(f && f.salonMinor !== null ? toDigits(f.salonMinor) : null)
+  const [rows, setRows] = useState<PersonRow[]>(f ? f.contributors.map((c) => ({ personId: c.personId, name: c.name, digits: toDigits(c.amountMinor) })) : [])
   const [pickingPerson, setPickingPerson] = useState(false)
-  const [originId, setOriginId] = useState<string | null>(null)
+  const [originId, setOriginId] = useState<string | null>(f?.originId ?? null)
   const [confirmerId, setConfirmerId] = useState<string | null>(null)
   const [secret, setSecret] = useState('')
   const [askLineBack, setAskLineBack] = useState(false)
 
-  const products = useQuery({ queryKey: stockKeys.products, queryFn: listProducts })
-  const unitWords = useQuery({ queryKey: stockKeys.unitWords, queryFn: listUnitWords })
-  const people = useQuery({ queryKey: peopleKeys.all, queryFn: listPeople })
-  const origins = useQuery({ queryKey: purchasingKeys.origins, queryFn: listPurchaseOrigins })
+  const products = lists.data.products ?? []
+  const unitWords = lists.data.unitWords ?? []
+  const people = lists.data.purchasePeople ?? []
+  const origins = lists.data.purchaseOrigins ?? []
 
   const lineCost = (l: Line) => wholeUnitsToMinor(l.costDigits, org) ?? 0
   const totalMinor = lines.reduce((s, l) => s + lineCost(l), 0)
@@ -82,8 +106,7 @@ export function PurchaseFlow() {
     rows.map((r) => ({ personId: r.personId, name: r.name, amountMinor: wholeUnitsToMinor(r.digits, org) })),
     org,
   )
-  const origin = origins.data?.find((o) => o.id === originId) ?? null
-  const hasData = lines.length > 0
+  const origin = origins.find((o) => o.id === originId) ?? null
 
   const input: RecordPurchaseInput | null = lines.length > 0 && totalMinor > 0 && contrib.valid ? {
     lines: lines.map((l) => l.productId
@@ -93,10 +116,18 @@ export function PurchaseFlow() {
     contributions: rows.map((r) => ({ person_id: r.personId, amount_minor: wholeUnitsToMinor(r.digits, org) ?? 0 })),
     originId,
   } : null
+  const form: PurchaseDraftForm | null = input ? {
+    lines: lines.map((l) => ({ key: l.key, productId: l.productId, name: l.name, unitWord: l.unitWord, quantity: l.quantity, costMinor: lineCost(l), insteadOf: l.insteadOf ?? null })),
+    salonMinor: salonDigits === null ? null : contrib.salonMinor,
+    contributors: rows.map((r) => ({ personId: r.personId, name: r.name, amountMinor: wholeUnitsToMinor(r.digits, org) ?? 0 })),
+    originId,
+    tripPlanIds: f ? f.tripPlanIds : trip ? endedPlanIds(trip) : null,
+  } : null
+  const hasData = draft ? JSON.stringify(form) !== JSON.stringify(f) : lines.length > 0
 
   const linesReady = lines.length > 0 && totalMinor > 0 && !lines.some((l) => l.costDigits === '')
   const lineDirty = sheet?.stage === 'line' && lineChanged(sheet.line, sheet.draft)
-  const flow = useFlow({ steps: 3, parent: trip ? '/stock/mercado' : '/', dirty: hasData, sheetDirty: lineDirty,
+  const flow = useFlow({ steps: 3, parent: draft ? '/rascunhos' : trip ? '/stock/mercado' : '/', dirty: hasData, sheetDirty: lineDirty,
     reachable: (n) => (n === 2 ? linesReady : input !== null) })
   const step = flow.step
 
@@ -122,15 +153,32 @@ export function PurchaseFlow() {
           // The plan for what was bought ends (list membership only — state, level and reserve stay as marked).
           void Promise.allSettled(ended.map((id) => updateStock(id, { on_list: false })))
             .then(() => queryClient.invalidateQueries({ queryKey: ['stock'] }))
+        } else if (f?.tripPlanIds) {
+          // a draft saved from Modo mercado: the purchase exists now, so its plan entries end — and the trip on this
+          // device too, when it is still that same trip (nothing newer in it)
+          const ended = f.tripPlanIds
+          const current = loadTrip(org.id)
+          if (current && endedPlanIds(current).every((id) => ended.includes(id))) clearTrip(org.id)
+          void Promise.allSettled(ended.map((id) => updateStock(id, { on_list: false })))
+            .then(() => queryClient.invalidateQueries({ queryKey: ['stock'] }))
         }
         void queryClient.invalidateQueries({ queryKey: ['stock'] })            // catalogue, bought today, purchase history
       },
     })
   }
+  function saveDraft() {
+    if (!form) return
+    saved.mutate({ form, display: { title: plural(lines.length), amount_minor: totalMinor } }, { onSuccess: () => flow.finish() })
+  }
   function startOver() {
-    command.reset()
+    command.reset(); saved.reset()
     setReviewLines(null); setLines([]); setSalonDigits(null); setRows([]); setOriginId(null); setConfirmerId(null); setSecret(''); setLastAdded(null)
-    flow.restart()
+    if (draft || trip) navigate('/dinheiro/compra', { replace: true }); else flow.restart()
+  }
+
+  if (flow.completed && saved.data) {
+    return <DraftSaved summary={`${plural(lines.length)} · ${formatMoney(totalMinor, org)}`} when={formatWhen(saved.data.capturedAt, org.timezone)}
+      onHoje={() => { saved.reset(); flow.leaveTo('/') }} onAnother={startOver} anotherLabel="Guardar outra compra" />
   }
 
   if (flow.completed && command.result) {
@@ -146,7 +194,7 @@ export function PurchaseFlow() {
           <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
           <h2>Compra registada com sucesso.</h2>
           <p className="note num">{plural(r.line_count)} · {formatMoney(r.total_minor, org)} · {payersText(r.salon_amount_minor, r.contributors)}</p>
-          <p className="note num">Hoje às {formatTime(r.occurred_at, org.timezone)}</p>
+          <p className="note num">{capitalized(formatWhen(r.occurred_at, org.timezone))}</p>
           <span className="notice notice-success">Registada no histórico de {plural(r.line_count)}</span>
           <button className="link-btn" onClick={() => navigate(`/registos/anular/purchase/${r.purchase_id}`)}>Corrigir este registo</button>
         </div>
@@ -164,8 +212,8 @@ export function PurchaseFlow() {
 
   const err = command.status === 'error' ? command.error : null
   const q = query.trim()
-  const matches = (products.data ?? []).filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
-  const exists = (products.data ?? []).some((p) => p.name.toLowerCase() === q.toLowerCase()) || lines.some((l) => l.name.toLowerCase() === q.toLowerCase())
+  const matches = products.filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+  const exists = products.some((p) => p.name.toLowerCase() === q.toLowerCase()) || lines.some((l) => l.name.toLowerCase() === q.toLowerCase())
 
   const footer = step === 1 ? (
     <BottomActionBar>
@@ -184,12 +232,16 @@ export function PurchaseFlow() {
       <span className="bar-summary">{plural(lines.length)} · {formatMoney(totalMinor, org)}</span>
       <button className="btn btn-primary btn-tall" disabled={!input} onClick={() => flow.goTo(3)}>Continuar</button>
     </BottomActionBar>
+  ) : step === 3 && input && offline ? (
+    <BottomActionBar>
+      <button className="btn btn-primary btn-tall" onClick={saveDraft} disabled={saved.isPending}>{saved.isPending ? 'A guardar…' : 'Guardar neste telemóvel'}</button>
+    </BottomActionBar>
   ) : step === 3 && input ? (
     <BottomActionBar>
       {err?.kind === 'network' ? (
         <>
           <button className="btn btn-primary btn-tall" onClick={confirm}>Tentar novamente</button>
-          <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
+          <button className="btn btn-secondary" onClick={flow.exit}>{draft ? 'Sair (o rascunho fica guardado)' : 'Sair sem guardar'}</button>
         </>
       ) : (
         <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!confirmerId || !secret || command.status === 'pending'}>
@@ -198,6 +250,18 @@ export function PurchaseFlow() {
       )}
     </BottomActionBar>
   ) : undefined
+
+  const summary = input && (
+    <dl className="kv-card">
+      <div><dt>Produtos</dt><dd>{plural(lines.length)}</dd></div>
+      <div><dt>Total</dt><dd className="num">{formatMoney(totalMinor, org)}</dd></div>
+      <div><dt>Quem pagou</dt><dd className="num">
+        {[...(contrib.salonMinor > 0 ? [`Salão ${formatMoney(contrib.salonMinor, org)}`] : []), ...rows.map((r) => `${r.name} ${formatMoney(wholeUnitsToMinor(r.digits, org) ?? 0, org)}`)].join(' · ')}
+      </dd></div>
+      <div><dt>Onde</dt><dd>{origin?.label ?? '—'}</dd></div>
+      {draft && <div><dt>Guardado</dt><dd className="num">{formatWhen(draft.capturedAt, org.timezone)}</dd></div>}
+    </dl>
+  )
 
   return (
     <AppScreen
@@ -208,6 +272,7 @@ export function PurchaseFlow() {
         <>
           <section className="stack">
             <h2>O que comprou?</h2>
+            {lists.blocked && <div className="notice notice-neutral" role="status" data-testid="offline-blocked">{MOVEMENT_BLOCKED[lists.blocked]}</div>}
             {trip && <div className="lock-note"><span>Pré-preenchido pela lista de compras. Ajuste as quantidades e introduza o que pagou por cada linha.</span></div>}
             {lines.length === 0 && <p className="note">Ainda não há produtos nesta compra.</p>}
             {lines.length > 0 && (
@@ -249,7 +314,7 @@ export function PurchaseFlow() {
               ))}
               {pickingPerson ? (
                 <div className="wrap">
-                  {people.data?.filter((p) => !rows.some((r) => r.personId === p.id)).map((p) => (
+                  {people.filter((p) => !rows.some((r) => r.personId === p.id)).map((p) => (
                     <button key={p.id} className="chip" onClick={() => { setRows((rs) => [...rs, { personId: p.id, name: p.display_name, digits: '' }]); setPickingPerson(false) }}>{p.display_name}</button>
                   ))}
                   <button className="link-btn" onClick={() => setPickingPerson(false)}>Cancelar</button>
@@ -259,33 +324,34 @@ export function PurchaseFlow() {
               )}
               <span className="support num" data-testid="contribution-sentence">{contrib.sentence}</span>
             </div>
-            <SegmentedControl label="Onde comprou (opcional)" options={(origins.data ?? []).map((o) => ({ id: o.id, label: o.label }))}
+            <SegmentedControl label="Onde comprou (opcional)" options={origins.map((o) => ({ id: o.id, label: o.label }))}
               value={originId} onChange={(id) => setOriginId(originId === id ? null : id)} />
           </section>
         </>
       )}
 
-      {step === 3 && input && (
+      {step === 3 && input && offline && (
+        <DraftSaveStep what="a compra">
+          {summary}
+          {saved.isError && <div className="notice notice-error" role="alert">Não foi possível guardar neste telemóvel. Os dados continuam aqui.</div>}
+        </DraftSaveStep>
+      )}
+
+      {step === 3 && input && !offline && (
         <>
           <section className="stack stack-loose">
             <h2>Confirmação necessária</h2>
             <p className="note">Esta compra tem de ser confirmada por uma pessoa autorizada.</p>
-            <dl className="kv-card">
-              <div><dt>Produtos</dt><dd>{plural(lines.length)}</dd></div>
-              <div><dt>Total</dt><dd className="num">{formatMoney(totalMinor, org)}</dd></div>
-              <div><dt>Quem pagou</dt><dd className="num">
-                {[...(contrib.salonMinor > 0 ? [`Salão ${formatMoney(contrib.salonMinor, org)}`] : []), ...rows.map((r) => `${r.name} ${formatMoney(wholeUnitsToMinor(r.digits, org) ?? 0, org)}`)].join(' · ')}
-              </dd></div>
-              <div><dt>Onde</dt><dd>{origin?.label ?? '—'}</dd></div>
-            </dl>
+            <DraftNotes draft={draft} />
+            {summary}
             <div className="lock-note"><LockIcon /><span>Fica no histórico com data, hora e quem confirmou. Entra em Dinheiro e fica no histórico dos produtos em Stock.</span></div>
             <ConfirmerPicker confirmerId={confirmerId} onConfirmer={setConfirmerId} secret={secret} onSecret={setSecret} error={err} />
             {err?.kind === 'network' && <div className="notice notice-error" role="alert">Não foi possível guardar. Os dados continuam aqui.</div>}
-            {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{captureFailure(err, 'Não foi possível guardar esta compra.')}</div>}
+            {err && err.kind !== 'network' && !isPinError(err) && <div className="notice notice-error" role="alert">{draftFailure(err, 'Não foi possível guardar esta compra.')}</div>}
+            {draft && <button className="link-btn self-start" onClick={() => setAskDiscard(true)}>Descartar rascunho</button>}
           </section>
         </>
       )}
-
       {sheet?.stage === 'search' && (
         <BottomSheet labelledBy="add-title" onDismiss={sheets.close}>
           <div className="row-between">
@@ -323,7 +389,7 @@ export function PurchaseFlow() {
       )}
 
       {sheet?.stage === 'line' && (
-        <LineSheet line={sheet.line} editing={sheet.editing} unitWords={unitWords.data ?? []} symbol={org.currency_symbol}
+        <LineSheet line={sheet.line} editing={sheet.editing} unitWords={unitWords} symbol={org.currency_symbol}
           onChange={(line) => sheets.update({ ...sheet, line })}
           onBack={() => (lineDirty ? setAskLineBack(true) : lineBack(sheet.editing))} onSave={(l) => saveLine(l, sheet.editing)} />
       )}
@@ -334,7 +400,9 @@ export function PurchaseFlow() {
           onDiscard={() => { if (askLineBack) { setAskLineBack(false); lineBack(sheet.editing) } else flow.discard.confirm() }} />
       )}
 
-      <DiscardSheet open={flow.discard.open && flow.discard.reason === 'leave'} title="Descartar esta compra?" onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+      <DiscardSheet open={flow.discard.open && flow.discard.reason === 'leave'} title={draft ? 'Sair sem guardar as alterações?' : 'Descartar esta compra?'} onDiscard={flow.discard.confirm} onKeep={flow.discard.cancel} />
+      <DiscardSheet open={askDiscard} title="Descartar este rascunho?" detail="Só é apagado deste telemóvel. Nada foi registado."
+        onKeep={() => setAskDiscard(false)} onDiscard={() => { setAskDiscard(false); drafts.discard.mutate(undefined, { onSuccess: () => flow.finishTo('/rascunhos') }) }} />
     </AppScreen>
   )
 }
@@ -373,3 +441,5 @@ function LineSheet({ line, editing, unitWords, symbol, onChange: setLine, onBack
     </BottomSheet>
   )
 }
+
+const capitalized = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
