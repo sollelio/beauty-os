@@ -96,7 +96,7 @@ Targeted factual corrections only; layout, navigation and structure unchanged.
 | Component | Design | Implemented |
 |---|---|---|
 | Brand Splash | Approved (corrected) | **L1 on `dev`** — `index.html` overlay (official artwork inlined from `sollelio-brand-assets/beauty-os-v0.1/`), `src/app/bootBrand.ts`, `src/app/BootBrandGate.tsx`; held only by `DeviceGate`'s loading states. Real-device and iOS validation pending (§1 release gates) |
-| Interactive Guide | Approved (corrected) | No |
+| Interactive Guide | Approved (corrected) | **L4a on `dev`** — the Registar serviço screens extracted unchanged into props-only parts (`src/spaces/servicos/RecordServiceViews.tsx`), rendered by `RecordServiceFlow`; the guide itself (L4b) is not implemented |
 | Help Center, entry row | Approved (corrected) | **L2 on `dev`** — the *Ajuda* row at the end of Hoje; lazy routes `/ajuda`, `/ajuda/:tema`, `/ajuda/:tema/passos` under `DeviceGate` (`src/spaces/ajuda/`); 12 written topics verified against the implementation, pending Hélio's copy approval; a topic lists only usable content (animation and tutorial appear when L3/L4 deliver them); a failed help load shows a retry and «Voltar ao Hoje» |
 | Microanimations | Approved (corrected) | **L3 on `dev`** — Misto (Registar um serviço; example amounts for AOA and EUR only — any other currency gets a still explanation without amounts), Stock and Sem ligação, on those three topics only (`src/spaces/ajuda/demos.tsx`, `microanimations.css`, primitive `src/shared/ui/Microanimation.tsx`); played only on «Ver», once, replayable; static frames under reduced motion; text equivalent for screen readers; Misto sentences from the app's own payment check in the organization's currency; in the precached help chunk |
 

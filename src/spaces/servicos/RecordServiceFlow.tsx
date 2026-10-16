@@ -2,6 +2,8 @@
 // Steps are history entries and a typed value is never dropped silently (useFlow, the mobile back contract).
 // Offline (ADR-0010, Offline 4): the same steps from the salon data kept on this device (at most 48 hours old); the
 // service is saved on this phone and sent when there is a connection — never shown as registered before that.
+// The screens' markup lives in RecordServiceViews (props only, shared with the Interactive Guide, L4a); this component
+// keeps every hook, the operational state, the record and data notices, and what each action does.
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -12,17 +14,12 @@ import { useCaptureData, type CaptureBlock } from '../../modules/services/useCap
 import type { QueueFailure } from '../../modules/services/useRecordService'
 import { checkPayment, choiceLabel, effectiveChoice, MIXED, paymentParts, type PaymentChoice, type PaymentMode } from '../../shared/payment'
 import { useRecordService } from '../../modules/services/useRecordService'
-import { formatMoney, wholeUnitsToMinor } from '../../shared/money'
-import { formatTime } from '../../shared/time'
+import { wholeUnitsToMinor } from '../../shared/money'
 import { captureFailure } from '../../shared/periodLock'
-import { AmountField } from '../../shared/ui/AmountField'
-import { AppBar, AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
+import { AppBar, AppScreen } from '../../shared/ui/AppShell'
 import { DiscardSheet } from '../../shared/ui/DiscardSheet'
-import { Field } from '../../shared/ui/Field'
-import { Icon } from '../../shared/ui/Icon'
-import { ListGroup, ListRow } from '../../shared/ui/ListRow'
 import { useFlow } from '../../shared/ui/navigation'
-import { PaymentFields } from '../../shared/ui/PaymentFields'
+import { PersonStep, ServiceConfirmBar, ServiceOutcomeActions, ServicePicker, ServiceRecorded, ServiceSavedOnDevice, ValuePaymentStep } from './RecordServiceViews'
 
 export function RecordServiceFlow() {
   const org = useOrganization()
@@ -75,59 +72,28 @@ export function RecordServiceFlow() {
 
   if (flow.completed && person && service && record.queued) {
     return (
-      <AppScreen actions={
-        <BottomActionBar>
-          <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>
-          <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
-        </BottomActionBar>
-      }>
-        <div className="stack center success" data-testid="saved-on-device">
-          <span aria-hidden className="success-mark success-mark-local"><Icon name="clock" size={34} strokeWidth={2.5} /></span>
-          <h2>Guardado neste telemóvel</h2>
-          <p className="support">Será enviado quando houver ligação.</p>
-          <p className="note">{service.name} · {person.display_name} · {choiceLabel(choice, methodList)}</p>
-          <p className="note num">{formatMoney(valueMinor ?? 0, org)} · às {formatTime(record.queued.occurredAt, org.timezone)}</p>
-        </div>
+      <AppScreen actions={<ServiceOutcomeActions onAnother={startOver} onLeave={leave} />}>
+        <ServiceSavedOnDevice serviceName={service.name} personName={person.display_name} methodLabel={choiceLabel(choice, methodList)}
+          valueMinor={valueMinor ?? 0} occurredAt={record.queued.occurredAt} format={org} />
       </AppScreen>
     )
   }
 
   if (flow.completed && person && service && record.result) {
-    const methodText = choiceLabel(choice, methodList)
+    const recordId = record.result.record_id
     return (
-      <AppScreen actions={
-        <BottomActionBar>
-          <button className="btn btn-primary btn-tall" onClick={startOver}>Registar outro serviço</button>
-          <button className="btn btn-secondary" onClick={leave}>Voltar a Hoje</button>
-        </BottomActionBar>
-      }>
-        <div className="stack center success">
-          <span aria-hidden className="success-mark"><Icon name="check" size={34} strokeWidth={2.5} /></span>
-          <h2>Serviço registado com sucesso.</h2>
-          <p className="note">{service.name} · {person.display_name} · {methodText}</p>
-          <p className="note num">Hoje às {formatTime(record.result.occurred_at, org.timezone)}</p>
-          <button className="link-btn" onClick={() => navigate(`/registos/anular/service/${record.result!.record_id}`)}>Corrigir este registo</button>
-        </div>
+      <AppScreen actions={<ServiceOutcomeActions onAnother={startOver} onLeave={leave} />}>
+        <ServiceRecorded serviceName={service.name} personName={person.display_name} methodLabel={choiceLabel(choice, methodList)}
+          occurredAt={record.result.occurred_at} format={org} onCorrect={() => navigate(`/registos/anular/service/${recordId}`)} />
       </AppScreen>
     )
   }
 
+  // a failure that can be retried here; a missing or stale offline snapshot cannot (its notice says why)
+  const retry = record.status === 'error' && !(record.queueFailure === 'missing' || record.queueFailure === 'stale')
   const footer = step === 3 && person && service && (
-    <BottomActionBar>
-      <span className="bar-summary">
-        {service.name} · {person.display_name} · {valueMinor !== null ? formatMoney(valueMinor, org) : '—'}
-      </span>
-      {record.status === 'error' && !(record.queueFailure === 'missing' || record.queueFailure === 'stale') ? (
-        <>
-          <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input}>Tentar novamente</button>
-          <button className="btn btn-secondary" onClick={flow.exit}>Sair sem guardar</button>
-        </>
-      ) : (
-        <button className="btn btn-primary btn-tall" onClick={confirm} disabled={!input || record.status === 'pending'}>
-          {record.status === 'pending' ? 'A guardar…' : 'Confirmar serviço'}
-        </button>
-      )}
-    </BottomActionBar>
+    <ServiceConfirmBar serviceName={service.name} personName={person.display_name} valueMinor={valueMinor} format={org}
+      state={retry ? 'retry' : record.status === 'pending' ? 'pending' : 'ready'} canConfirm={!!input} onConfirm={confirm} onExit={flow.exit} />
   )
   return (
     <AppScreen
@@ -135,20 +101,11 @@ export function RecordServiceFlow() {
       actions={footer || undefined}>
 
       {step === 1 && (
-        <section className="stack">
-          <h2>Quem fez o serviço?</h2>
+        <PersonStep people={data.people} selectedId={person?.id ?? null}
+          onPick={(p) => { if (p.id !== person?.id) { setPerson(p); setService(null) } flow.goTo(2) }}>
           {data.blocked && <div className="notice notice-neutral" role="status" data-testid="offline-blocked">{BLOCKED[data.blocked]}</div>}
           {data.errors.people && <div className="notice notice-error" role="alert">Não foi possível carregar a equipa.</div>}
-          <div className="tiles">
-            {data.people.map((p) => (
-              <button key={p.id} className="tile" aria-current={p.id === person?.id || undefined}
-                onClick={() => { if (p.id !== person?.id) { setPerson(p); setService(null) } flow.goTo(2) }}>
-                <strong>{p.display_name}</strong>
-                <span className="support">{p.capabilities.join(' · ')}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        </PersonStep>
       )}
 
       {step === 2 && person && (
@@ -160,35 +117,10 @@ export function RecordServiceFlow() {
 
       {step === 3 && person && service && (
         <>
-          <section className="stack stack-loose">
-            <h2>Valor e pagamento</h2>
-            <div className="stack stack-tight">
-              <span className="label">Valor</span>
-              {!editing ? (
-                <div className="row-between">
-                  <span className="amount num">{formatMoney(service.default_price_minor, org)}</span>
-                  <button className="link-btn" onClick={() => { setEditing(true); setPriceDigits('') }}>Editar</button>
-                </div>
-              ) : (
-                <>
-                  <AmountField label="Valor" hideLabel autoFocus value={priceDigits} onChange={setPriceDigits} symbol={org.currency_symbol}
-                    placeholder={String(service.default_price_minor / 10 ** org.currency_exponent)} />
-                  <div className="row-between">
-                    <span className="support num">Habitual: {formatMoney(service.default_price_minor, org)}</span>
-                    <button className="link-btn" onClick={() => { setEditing(false); setPriceDigits('') }}>Repor</button>
-                  </div>
-                </>
-              )}
-              {valueMinor !== null && valueMinor !== service.default_price_minor && valueMinor > 0 && (
-                <span className="support">Valor diferente do habitual. Fica registado no histórico.</span>
-              )}
-              {valueMinor === 0 && <div className="notice notice-warning">Valor zero. Confirme que este serviço não foi cobrado.</div>}
-            </div>
-
-            {data.errors.paymentMethods && <div className="notice notice-error" role="alert">Não foi possível carregar as formas de pagamento.</div>}
-            <PaymentFields label="Forma de pagamento" methods={methodList} choice={choice} onChoice={setMethod}
-              mixed={mixed} onMixed={setMixed} sentence={choice === MIXED ? check.sentence : null} symbol={org.currency_symbol} />
-          </section>
+          <ValuePaymentStep defaultPriceMinor={service.default_price_minor} editing={editing} priceDigits={priceDigits} valueMinor={valueMinor}
+            format={org} onEdit={() => { setEditing(true); setPriceDigits('') }} onReset={() => { setEditing(false); setPriceDigits('') }}
+            onPriceDigits={setPriceDigits} methods={methodList} methodsError={data.errors.paymentMethods} choice={choice} onChoice={setMethod}
+            mixed={mixed} onMixed={setMixed} sentence={choice === MIXED ? check.sentence : null} />
 
           {record.status === 'error' && record.queueFailure && (
             <div className="notice notice-error" role="alert">{QUEUE_FAILURE[record.queueFailure]}</div>
@@ -218,46 +150,17 @@ const QUEUE_FAILURE: Record<QueueFailure, string> = {
   stale: BLOCKED.stale,
 }
 
-// `draftValue`: the chosen service's edited value (null when it is still the habitual price), shown on its row so a step
-// back does not look like the edit was lost. Offline there is no "frequentes" list: the full catalogue kept on the device.
+// The person's frequent services (online only) around the ServicePicker. Offline there is no "frequentes" list: the full
+// catalogue kept on the device.
 function ServiceStep({ person, selectedId, draftValue, catalogue, catalogueError, offline, onChangePerson, onPick }: {
   person: CapturePerson; selectedId: string | null; draftValue: number | null; catalogue: CatalogueService[]; catalogueError: boolean
   offline: boolean; onChangePerson: () => void; onPick: (s: CatalogueService) => void
 }) {
   const org = useOrganization()
-  const [query, setQuery] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const frequent = useQuery({ queryKey: servicesKeys.frequent(person.id), queryFn: () => listFrequentServices(person.id), enabled: !offline })
-
-  const q = query.trim().toLowerCase()
-  const hasFrequent = !offline && (frequent.data?.length ?? 0) > 0
-  const list = q
-    ? catalogue.filter((s) => s.name.toLowerCase().includes(q))
-    : hasFrequent && !showAll ? frequent.data ?? [] : catalogue
-
   return (
-    <section className="stack">
-      <h2>Que serviço?</h2>
-      <div><button className="chip" onClick={onChangePerson} aria-label={`Mudar profissional: ${person.display_name}`}>{person.display_name}<Icon name="edit" size={16} /></button></div>
-      <Field label="Procurar serviço" hideLabel leading={<Icon name="search" />}>
-        <input type="search" enterKeyHint="search" placeholder="Procurar serviço" value={query} onChange={(e) => setQuery(e.target.value)} />
-      </Field>
-      {!q && hasFrequent && !showAll && <span className="label">Frequentes de {person.display_name}</span>}
-      {(catalogueError || (!offline && frequent.isError)) && <div className="notice notice-error" role="alert">Não foi possível carregar o catálogo.</div>}
-      {list.length > 0 && (
-        <ListGroup>
-          {list.map((s) => {
-            const edited = s.id === selectedId && draftValue !== null
-            return (
-              <ListRow key={s.id} as="button" onClick={() => onPick(s)} current={s.id === selectedId} title={s.name}
-                subtitle={edited ? <><strong className="num">{formatMoney(draftValue, org)}</strong><span className="num"> · Habitual: {formatMoney(s.default_price_minor, org)}</span></> : undefined}
-                trailing={edited ? undefined : <span className="row-value num muted">{formatMoney(s.default_price_minor, org)}</span>} />
-            )
-          })}
-        </ListGroup>
-      )}
-      {q && list.length === 0 && <span className="support">Sem resultados para «{query.trim()}».</span>}
-      {!q && hasFrequent && !showAll && <button className="link-btn" onClick={() => setShowAll(true)}>Ver o catálogo completo</button>}
-    </section>
+    <ServicePicker person={person} selectedId={selectedId} draftValue={draftValue} catalogue={catalogue}
+      frequent={offline ? null : frequent.data ?? null} loadError={catalogueError || (!offline && frequent.isError)} format={org}
+      onChangePerson={onChangePerson} onPick={onPick} />
   )
 }
