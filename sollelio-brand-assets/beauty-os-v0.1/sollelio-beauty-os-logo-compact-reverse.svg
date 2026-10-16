@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 112" role="img" aria-label="Beauty OS by Sollelio reversed">
+  <rect width="500" height="112" fill="#11152D"/>
+  <g transform="translate(7 7)">
+    <path fill="#FFFFFF" d="M8 8h34c4 0 6 2 6 6v17c0 6-3 10-8 13L8 58V8Z"/>
+    <path fill="#9A7CF0" d="M58 8h26c5 0 8 3 8 8v20L60 50c-5 2-8-1-8-6V18c0-7 2-10 6-10Z"/>
+    <path fill="#FFFFFF" d="M8 66l32-14c5-2 8 1 8 6v24c0 7-3 10-10 10H16c-5 0-8-3-8-8V66Z"/>
+    <path fill="#FFFFFF" d="M60 56l32-14v42c0 5-3 8-8 8H58c-4 0-6-2-6-6V69c0-6 3-10 8-13Z"/>
+  </g>
+  <text x="128" y="63" fill="#FFFFFF" font-family="Rubik, Arial, sans-serif" font-size="54" font-weight="400" letter-spacing="-1.2">Beauty OS</text>
+  <text x="130" y="96" fill="#9A7CF0" font-family="Rubik, Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="3.6">SOLLELIO</text>
+</svg>

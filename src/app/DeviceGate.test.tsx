@@ -24,6 +24,8 @@ import { useOfflineRuntime } from '../shared/offline/runtime'
 import { createOfflineStore } from '../shared/offline/store'
 import { DeviceGate } from './DeviceGate'
 import { RequireConnection } from './RequireConnection'
+import { BOOT_BRAND_ID } from './bootBrand'
+import { BootBrandGate } from './BootBrandGate'
 
 const ORG = '00000000-0000-4000-8000-0000000000f6'
 const org = { id: ORG, name: 'Teste Offline O', timezone: 'Africa/Luanda', currency_code: 'AOA', currency_exponent: 2, currency_symbol: 'Kz' }
@@ -41,7 +43,8 @@ function mount(path = '/') {
     { index: true, element: <Home /> },
     { path: 'privado/entrar', element: <RequireConnection title="Área privada"><p>Entrar com PIN</p></RequireConnection> },
   ] }], { initialEntries: [path] })
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>)
+  // as main.tsx: the Brand Splash gate around the app (a no-op when no brand is painted)
+  return render(<BootBrandGate><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider></BootBrandGate>)
 }
 
 beforeEach(() => {
@@ -102,5 +105,68 @@ describe('online answers', () => {
     await waitFor(async () => expect(await readBinding(db, user)).toBeNull())
     expect((await screen.findByTestId('held-elsewhere')).textContent).toMatch(/Há 1 registo guardado/)
     expect(await createOfflineStore(db, { organizationId: ORG, deviceUserId: user }).outbox.countPending()).toBe(1)
+  })
+})
+
+// Learning experience L1 · the Brand Splash painted by index.html stays only while DeviceGate is really loading, and
+// leaves at every startup outcome — never over a usable screen or an error.
+describe('Brand Splash during startup', () => {
+  const brand = () => document.getElementById(BOOT_BRAND_ID)
+  const gone = async () => waitFor(() => expect(brand() === null || brand()!.classList.contains('bb-leaving')).toBe(true))
+  beforeEach(() => {
+    const el = document.createElement('div')
+    el.id = BOOT_BRAND_ID
+    document.body.prepend(el)
+  })
+  afterEach(() => brand()?.remove())
+
+  it('stays while the device context is still loading (and «A carregar…» stays the accessible status)', async () => {
+    vi.mocked(getDeviceContext).mockReturnValue(new Promise(() => {}))
+    mount()
+    expect(await screen.findByText('A carregar…')).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(brand()!.classList.contains('bb-leaving')).toBe(false)
+  })
+  it('first time, never enrolled: leaves on «Ligar este dispositivo»', async () => {
+    vi.mocked(readStoredPrincipal).mockReturnValue(null)
+    vi.mocked(watchDevicePrincipal).mockImplementation((cb) => { cb(null); return () => {} })
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: false })
+    mount()
+    expect(await screen.findByText('Ligar este dispositivo')).toBeTruthy()
+    await gone()
+  })
+  it('enrolled, online: leaves on Hoje', async () => {
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org })
+    mount()
+    await screen.findByTestId('home')
+    await gone()
+  })
+  it('enrolled, offline with the cached binding: leaves on Hoje', async () => {
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+    online = false
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount()
+    expect((await screen.findByTestId('home')).textContent).toContain('cache')
+    await gone()
+  })
+  it('offline without a cached binding: leaves on «precisa de ligação»', async () => {
+    online = false
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount()
+    expect(await screen.findByText(/precisa de ligação para abrir o Beauty OS/)).toBeTruthy()
+    await gone()
+  })
+  it('revoked binding: leaves on enrollment', async () => {
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: false })
+    mount()
+    expect(await screen.findByText('Ligar este dispositivo')).toBeTruthy()
+    await gone()
+  })
+  it('the server answers with an error: leaves on «Não foi possível ligar ao servidor»', async () => {
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('unexpected', 'boom'))
+    mount()
+    expect(await screen.findByText('Não foi possível ligar ao servidor.')).toBeTruthy()
+    await gone()
   })
 })

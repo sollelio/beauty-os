@@ -13,6 +13,7 @@ import { useCachedBinding, useDevicePrincipal } from '../shared/offline/identity
 import { OfflineRuntimeProvider } from '../shared/offline/OfflineRuntimeProvider'
 import type { OfflineStore } from '../shared/offline/store'
 import { EnrollmentScreen } from '../spaces/dispositivo/EnrollmentScreen'
+import { BootPending } from './BootBrandGate'
 
 // The public lists kept for offline capture: Registar serviço's, and the movement drafts' (each refreshed on its own)
 const refreshSnapshots = async (store: OfflineStore) => {
@@ -43,7 +44,8 @@ export function DeviceGate() {
     if (outcome.result.stopped === 'unbound' || outcome.result.stopped === 'principal_changed') void queryClient.invalidateQueries({ queryKey: orgKeys.deviceContext })
   }, [queryClient])
 
-  if (noServer && cached.isPending) return <main className="app-main"><p className="muted">A carregar…</p></main>
+  // the two loading states hold the Brand Splash (index.html) until an outcome below is reached
+  if (noServer && cached.isPending) return <main className="app-main"><p className="muted">A carregar…</p><BootPending /></main>
   if (noServer && !cached.data) {
     return (
       <main className="app-main">
@@ -52,7 +54,7 @@ export function DeviceGate() {
       </main>
     )
   }
-  if (!noServer && ctx.isPending) return <main className="app-main"><p className="muted">A carregar…</p></main>
+  if (!noServer && ctx.isPending) return <main className="app-main"><p className="muted">A carregar…</p><BootPending /></main>
   if (!noServer && ctx.isError) {
     return (
       <main className="app-main">

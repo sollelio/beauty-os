@@ -87,7 +87,7 @@ Targeted factual corrections only; layout, navigation and structure unchanged.
 
 - **Package:** *Sollelio Beauty OS — Brand Assets v0.1* (Precision Violet), supplied by Sollelio as `sollelio-beauty-os-brand-assets-v0.1.zip` (35 entries; SHA-256 `589b410125748db318a75611ad0f8fba1552e110d5cfb3014b242155ccf206d6`). Its README defines the architecture (Sollelio → Sollelio Beauty OS → tenants), the palette (Mineral Indigo `#3030A8`, Precision Violet `#7657D6`, Violet on dark `#9A7CF0`, Warm Graphite, Warm Off-white, Midnight Indigo, White) and the usage rules (compact lockup only where the Sollelio context is established; splash short and non-blocking; tenant names and logos never inside the Beauty OS logo; no gradients, shadows, salon imagery or `B`/`BOS` monogram).
 - **Not version-controlled.** The package exists only outside the repository. The repository holds only what the PWA slice copied into `public/` (favicons, the isolated symbol as `favicon.svg`, the dark 192/512 icons byte-identical; maskable and Apple variants derived) and the masterbrand package in `sollelio-brand-assets/`.
-- **Canonical location** (`Decided`, 2026-10-16): `sollelio-brand-assets/beauty-os-v0.1/` — the whole package, unmodified, with its README (non-runtime; CLAUDE.md: brand assets live in `sollelio-brand-assets/`). Not yet added: importing it is L1 preparation (§7).
+- **Canonical location** (`Decided`, 2026-10-16): `sollelio-brand-assets/beauty-os-v0.1/` — the whole package, unmodified, with its README (non-runtime; CLAUDE.md: brand assets live in `sollelio-brand-assets/`). Added unmodified in L1 (34 files; the symbol, the compact outlined lockup and the README pinned by SHA-256 in `tests/pwa/pwa.test.ts`).
 - **Needed by L1:** `sollelio-beauty-os-symbol.svg` (SHA-256 prefix `0a9674443d239316`, = `public/favicon.svg`) and `sollelio-beauty-os-logo-compact-outlined.svg` (`f5cf66bec696e367`; typography outlined, no font dependency). Reference only: `sollelio-beauty-os-splash-light-outlined.svg`, `brand-preview-sheet.png`, `manifest-colours.json`, `README.md`. L2–L4b need no brand asset (Help carries no brand mark).
 - **Accent and lockup status:** the brand package v0.1 is approved (Sollelio, 2026-10-15; 05 §2): product name *Sollelio Beauty OS* / *Beauty OS*, the Precision Violet accent **plane of the symbol**, and the lockups. Separately and still `Open`: the **UI** accent token (the app keeps Indigo) and the **UI** typeface. See 00 §1 and 05 §6.
 
@@ -95,7 +95,7 @@ Targeted factual corrections only; layout, navigation and structure unchanged.
 
 | Component | Design | Implemented |
 |---|---|---|
-| Brand Splash | Approved (corrected) | No — the app shows a bare «A carregar…» |
+| Brand Splash | Approved (corrected) | **L1 on `dev`** — `index.html` overlay (official artwork inlined from `sollelio-brand-assets/beauty-os-v0.1/`), `src/app/bootBrand.ts`, `src/app/BootBrandGate.tsx`; held only by `DeviceGate`'s loading states. Real-device and iOS validation pending (§1 release gates) |
 | Interactive Guide | Approved (corrected) | No |
 | Help Center, entry row, microanimations | Approved (corrected) | No — the app has no help route, copy or icon |
 

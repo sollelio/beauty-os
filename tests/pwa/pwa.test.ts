@@ -3,6 +3,7 @@
 // Icons and favicons are the Sollelio Beauty OS brand package v0.1 (Precision Violet; manifest-colours.json): the dark
 // app icon as supplied (192/512), and for maskable / Apple the same artwork full-bleed (public/icons/icon-maskable.svg).
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 
@@ -89,6 +90,61 @@ describe('index.html install metadata', () => {
     expect(corner(pub('icons/icon-192.png'))).toBe(6)
     expect(corner(pub('icons/icon-512.png'))).toBe(6)
     for (const f of ['icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']) expect(corner(pub(f)), f).toBe(2)
+  })
+})
+
+// Learning experience L1 · Brand Splash: the official compact lockup painted by index.html while the app really loads.
+describe('Brand Splash (learning experience L1)', () => {
+  const pkg = (f: string) => join(root, 'sollelio-brand-assets/beauty-os-v0.1', f)
+  const sha256 = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex')
+  const overlay = /<div id="boot-brand"[\s\S]*?(?=<div id="root">)/.exec(html)?.[0] ?? ''
+  const style = /<style>([\s\S]*?)<\/style>/.exec(html)?.[1] ?? ''
+
+  it('the official Beauty OS package v0.1 is in the repository, unmodified (the two files the splash uses, pinned)', () => {
+    expect(readdirSync(join(root, 'sollelio-brand-assets/beauty-os-v0.1'))).toHaveLength(34)
+    expect(sha256(pkg('sollelio-beauty-os-symbol.svg'))).toBe('0a9674443d2393161c9b840c7c0616cea2a811737eff6a7a8ed64c1d47688165')
+    expect(sha256(pkg('sollelio-beauty-os-logo-compact-outlined.svg'))).toBe('f5cf66bec696e367ed9e55c5151ed2142392558617f53e1a5c1e0167baa57c10')
+    expect(sha256(pkg('README.md'))).toBe('049888a530a25f3af01f55f9491573778b727f9a956ff6d4670a7604a2930a70')
+    expect(readFileSync(pub('favicon.svg'))).toEqual(readFileSync(pkg('sollelio-beauty-os-symbol.svg')))
+  })
+  it('paints the official artwork, never redrawn: the symbol planes and the outlined compact lockup, in its own placement', () => {
+    const symbol = readFileSync(pkg('sollelio-beauty-os-symbol.svg'), 'utf8')
+    const lockup = readFileSync(pkg('sollelio-beauty-os-logo-compact-outlined.svg'), 'utf8')
+    const planes = (svg: string) => [...svg.matchAll(/<path[^>]*?fill="(#[0-9A-Fa-f]{6})" d="([^"]+)"/g)].map((m) => [m[1], m[2]])
+    expect(planes(overlay)).toEqual(planes(symbol))
+    const words = (svg: string) => [...svg.matchAll(/<path(?![^>]*fill=)[^>]*?\sd="([^"]+)"/g)].map((m) => m[1])
+    expect(words(overlay)).toEqual(words(lockup))                                     // every wordmark path, in order
+    expect(words(overlay)).toHaveLength(16)
+    expect(overlay).toContain(`viewBox="${/viewBox="([^"]+)"/.exec(lockup)![1]}"`)
+    expect(overlay).toContain('<g transform="translate(7,7)">')                       // the lockup's symbol placement
+    expect(lockup).toContain('transform="translate(7,7)"')
+    for (const fill of ['fill:#25272b', 'fill:#7657d6']) { expect(lockup).toContain(fill); expect(overlay).toContain(fill) }
+  })
+  it('sits over the app from the first paint, never blocks a tap, is hidden from assistive technology, matches the launch ground', () => {
+    expect(html.indexOf('id="boot-brand"')).toBeLessThan(html.indexOf('id="root"'))
+    expect(overlay).toContain('aria-hidden="true"')
+    expect(style).toMatch(/#boot-brand \{[^}]*position: fixed;[^}]*pointer-events: none;/)
+    expect(style).toContain(`html, body { background: ${manifest.background_color}; }`)
+    expect(style).toMatch(new RegExp(`#boot-brand \\{[^}]*background: ${manifest.background_color};`))
+  })
+  it('needs nothing from the network: no external resource, font, image or script in the splash', () => {
+    for (const part of [overlay, style]) {
+      expect(part).not.toMatch(/\bsrc=|\bhref=|url\(|@import|@font-face|https?:\/\/|<script|<img/)
+    }
+  })
+  it('reduced motion: the static final frame, and leaving is instant', () => {
+    expect(style).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none; opacity: 1; transform: none;[\s\S]*#boot-brand\.bb-leaving \{ display: none; \}/)
+  })
+  it('presentation only: no timer and no minimum anywhere in the boot code; only DeviceGate\'s loading states hold it', () => {
+    for (const f of ['src/app/bootBrand.ts', 'src/app/BootBrandGate.tsx']) {
+      expect(readFileSync(join(root, f), 'utf8'), f).not.toMatch(/setTimeout|setInterval|requestAnimationFrame|\bMIN_\w*|minDuration/)
+    }
+    expect(html).not.toMatch(/setTimeout|setInterval/)
+    const defining = ['bootBrand.ts', 'BootBrandGate.tsx'].map((f) => join(root, 'src/app', f))
+    const holders = walk(join(root, 'src')).filter((p) => /\.tsx?$/.test(p) && !/\.test\.tsx?$/.test(p) && !defining.includes(p)
+      && /<BootPending \/>/.test(readFileSync(p, 'utf8')))
+    expect(holders.map((p) => p.slice(root.length + 1))).toEqual(['src/app/DeviceGate.tsx'])
+    expect(readFileSync(join(root, 'src/app/DeviceGate.tsx'), 'utf8').match(/<BootPending \/>/g)).toHaveLength(2)
   })
 })
 

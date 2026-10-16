@@ -31,6 +31,14 @@ describe('production build', () => {
     expect(sw).not.toMatch(/__BEAUTY_OS_/)
     expect(sw).toMatch(/const VERSION = "[0-9a-f]{16}"/)
   })
+  it('the Brand Splash ships inside the precached shell ("/"), before the app root, with nothing to fetch', () => {
+    const html = readFileSync(join(out, 'index.html'), 'utf8')
+    expect(html).toContain('<div id="boot-brand" aria-hidden="true">')
+    expect(html.indexOf('id="boot-brand"')).toBeLessThan(html.indexOf('id="root"'))
+    expect(html).toContain('class="bb-plane bb-p2" fill="#7657D6"')
+    expect(precacheOf(readFileSync(join(out, 'sw.js'), 'utf8'))).toContain('/')
+    expect(existsSync(join(out, 'sollelio-brand-assets'))).toBe(false)              // the package is a source, never shipped
+  })
 })
 
 describe('shell manifest', () => {
