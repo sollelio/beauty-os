@@ -53,12 +53,12 @@ describe('Ajuda · home and topics', () => {
     expect(screen.getByText('Esta ajuda fica guardada neste telemóvel e funciona sem ligação.')).toBeTruthy()
     expect(screen.getByRole('link', { name: /Registar um serviço/ }).getAttribute('href')).toBe('/ajuda/registar-servico')
   })
-  it('a topic lists only the content that can be used today: the written steps — nothing about future animations or tutorials', () => {
-    mount(['/ajuda/registar-servico'])
-    expect(screen.getByRole('heading', { level: 2, name: 'Registar um serviço' })).toBeTruthy()
+  it('a topic lists only the content that can be used today: here the written steps — nothing about future animations or tutorials', () => {
+    mount(['/ajuda/despesa'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Registar uma despesa' })).toBeTruthy()
     const steps = screen.getByRole('link', { name: /Passo a passo/ })
-    expect(steps.getAttribute('href')).toBe('/ajuda/registar-servico/passos')
-    expect(steps.textContent).toContain('5 passos · funciona sem ligação')
+    expect(steps.getAttribute('href')).toBe('/ajuda/despesa/passos')
+    expect(steps.textContent).toContain('4 passos · funciona sem ligação')
     expect(screen.getAllByRole('link').filter((a) => a.closest('.row-group'))).toEqual([steps])
     expect(screen.queryByText(/Animação|Tutorial|Ainda não disponível|em breve/i)).toBeNull()
     expect(screen.queryByText(/pede o PIN de uma pessoa com permissão/)).toBeNull()   // not a private topic
@@ -174,10 +174,14 @@ describe('Ajuda · isolation and content', () => {
   })
   it('its code imports only React, the router, the shared UI primitives and its own content', () => {
     const sources = import.meta.glob(['./*.ts', './*.tsx', '!./*.test.tsx'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-    expect(Object.keys(sources).sort()).toEqual(['./HelpPages.tsx', './lazy.tsx', './topics.ts'])
+    expect(Object.keys(sources).sort()).toEqual(['./HelpPages.tsx', './demos.tsx', './lazy.tsx', './topics.ts'])
     for (const [file, text] of Object.entries(sources)) {
       for (const [, from] of text.matchAll(/from '([^']+)'/g)) {
-        expect(from, file).toMatch(/^(react|react-router|\.\.\/\.\.\/shared\/ui\/[A-Za-z]+|\.\/topics|\.\/HelpPages)$/)
+        // L3 adds, for the Misto demonstration only: the device's organization settings already in memory (currency),
+        // and the app's pure money formatting and payment check — never an access layer, the server or storage
+        const allowed = /^(react|react-router|\.\.\/\.\.\/shared\/ui\/[A-Za-z]+|\.\/topics|\.\/HelpPages|\.\/demos)$/.test(from!)
+          || (file === './demos.tsx' && /^\.\.\/\.\.\/(modules\/org\/OrganizationContext|shared\/money|shared\/payment)$/.test(from!))
+        expect(allowed, `${file} imports ${from}`).toBe(true)
       }
       for (const [, dyn] of text.matchAll(/import\('([^']+)'\)/g)) {
         expect(dyn, file).toBe('./HelpPages')                                   // the lazy chunk, nothing else

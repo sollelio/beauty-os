@@ -50,6 +50,13 @@ describe('production build', () => {
     expect(help).toContain('Trabalhar sem ligação')
     expect(readFileSync(join(out, entryJs), 'utf8')).not.toContain('Trabalhar sem ligação')   // the content stays in the help chunk
     expect(urls.some((u) => /^\/assets\/HelpPages-[\w-]+\.css$/.test(u))).toBe(true)
+    // L3: the microanimations ride in the same precached help chunk (offline), never in the entry
+    expect(help).toContain('O que acontece sem ligação')
+    expect(help).toContain('microanim-stage')
+    expect(readFileSync(join(out, entryJs), 'utf8')).not.toContain('microanim-stage')
+    const helpCss = readFileSync(join(out, urls.find((u) => /^\/assets\/HelpPages-[\w-]+\.css$/.test(u))!), 'utf8')
+    expect(helpCss).toContain('.is-playing')
+    expect(helpCss).not.toMatch(/infinite/)
   })
 })
 

@@ -2,11 +2,12 @@
 // corrected in L0). Common to every salon: no tenant data, no prices, no currency, no names — only how the product
 // works, checked against the implementation (labels in «» are the app's own; ajuda.test.tsx verifies each one exists).
 // Private workflows are explained generically: the help never reads or shows protected data.
-// Only written steps exist today; animations (L3) and interactive tutorials (L4) are added to a topic when they exist
-// (the topic page lists only content that can be used).
+// Every topic has written steps; three also have a microanimation (L3, demos.tsx). Interactive tutorials (L4) are added
+// to a topic when they exist (the topic page lists only content that can be used).
 import type { IconName } from '../../shared/ui/Icon'
 
 export type HelpGroup = 'daily' | 'offline' | 'private'
+export type HelpAnimation = 'misto' | 'stock' | 'offline'
 
 export type HelpTopic = {
   id: string
@@ -16,6 +17,7 @@ export type HelpTopic = {
   summary: string
   steps: string[]
   tip?: string
+  animation?: HelpAnimation
 }
 
 export const GROUP_LABEL: Record<HelpGroup, string> = {
@@ -26,7 +28,7 @@ export const GROUP_LABEL: Record<HelpGroup, string> = {
 
 export const TOPICS: readonly HelpTopic[] = [
   {
-    id: 'registar-servico', group: 'daily', icon: 'plus',
+    id: 'registar-servico', group: 'daily', icon: 'plus', animation: 'misto',
     title: 'Registar um serviço',
     summary: 'Entre clientes, em três passos. Sem PIN e sem conta.',
     steps: [
@@ -75,7 +77,7 @@ export const TOPICS: readonly HelpTopic[] = [
     tip: 'Uma compra nunca muda sozinha o estado do stock: esse é marcado por pessoas, no Stock. Sem ligação, a compra fica «por confirmar com PIN» e só passa a registo depois dessa confirmação, com ligação.',
   },
   {
-    id: 'stock', group: 'daily', icon: 'list',
+    id: 'stock', group: 'daily', icon: 'list', animation: 'stock',
     title: 'Marcar o stock e preparar a compra',
     summary: 'Estado aproximado, marcado pela equipa. Sem contagem automática.',
     steps: [
@@ -99,7 +101,7 @@ export const TOPICS: readonly HelpTopic[] = [
     tip: 'Anular precisa de ligação. O registo anulado fica no histórico, com quem anulou e quando.',
   },
   {
-    id: 'sem-ligacao', group: 'offline', icon: 'clock',
+    id: 'sem-ligacao', group: 'offline', icon: 'clock', animation: 'offline',
     title: 'Trabalhar sem ligação',
     summary: 'O que fica guardado neste telemóvel e o que precisa de ligação.',
     steps: [
