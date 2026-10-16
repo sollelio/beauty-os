@@ -2,8 +2,8 @@
 // corrected in L0). Common to every salon: no tenant data, no prices, no currency, no names — only how the product
 // works, checked against the implementation (labels in «» are the app's own; ajuda.test.tsx verifies each one exists).
 // Private workflows are explained generically: the help never reads or shows protected data.
-// Every topic has written steps; three also have a microanimation (L3, demos.tsx). Interactive tutorials (L4) are added
-// to a topic when they exist (the topic page lists only content that can be used).
+// Every topic has written steps; three also have a microanimation (L3, demos.tsx); «Registar um serviço» also has the
+// interactive tutorial (L4b, guia/). The topic page lists only content that can be used.
 import type { IconName } from '../../shared/ui/Icon'
 
 export type HelpGroup = 'daily' | 'offline' | 'private'
@@ -18,6 +18,8 @@ export type HelpTopic = {
   steps: string[]
   tip?: string
   animation?: HelpAnimation
+  /** The interactive guide (L4b): only «Registar um serviço» has one. */
+  tutorial?: boolean
 }
 
 export const GROUP_LABEL: Record<HelpGroup, string> = {
@@ -28,7 +30,7 @@ export const GROUP_LABEL: Record<HelpGroup, string> = {
 
 export const TOPICS: readonly HelpTopic[] = [
   {
-    id: 'registar-servico', group: 'daily', icon: 'plus', animation: 'misto',
+    id: 'registar-servico', group: 'daily', icon: 'plus', animation: 'misto', tutorial: true,
     title: 'Registar um serviço',
     summary: 'Entre clientes, em três passos. Sem PIN e sem conta.',
     steps: [

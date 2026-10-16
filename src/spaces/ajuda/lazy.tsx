@@ -10,6 +10,8 @@ const pages = () => import('./HelpPages')
 export const HelpHome = lazy(() => pages().then((m) => ({ default: m.HelpHome })))
 export const HelpTopicPage = lazy(() => pages().then((m) => ({ default: m.HelpTopicPage })))
 export const HelpStepsPage = lazy(() => pages().then((m) => ({ default: m.HelpStepsPage })))
+// the interactive guide (L4b): its own chunk, precached with the shell like the help
+export const HelpTutorialPage = lazy(() => import('./guia/ServiceGuide').then((m) => ({ default: m.ServiceGuidePage })))
 
 export function HelpLayout() {
   return <Suspense fallback={<main className="app-main"><Skeleton rows={4} label="A carregar a ajuda" /></main>}><Outlet /></Suspense>

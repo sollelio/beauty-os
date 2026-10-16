@@ -1,0 +1,48 @@
+/* Interactive Guide (learning experience L4b; Guide V4): the learning layer around the real Registar serviço screens —
+   the demonstration band, the one-element highlight and the compact coach. Scoped to .guide; the app's tokens only.
+   The band sits with the app's own bar in one sticky top block, and the coach under the app's own action bar in one
+   sticky bottom block, so the app bar and the action bar look and behave as in the app and the coach never covers
+   them. Under reduced motion: a static highlight, no entrance. */
+.guide-top { position: sticky; top: 0; z-index: 20; background: var(--ground); }
+.guide-top .app-bar { position: static; padding-top: 0; }
+.guide-dock { position: sticky; bottom: 0; z-index: 20; }
+.guide-dock .bottom-bar { position: static; padding-bottom: 0.75rem; }
+
+.guide-band { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: calc(0.4375rem + env(safe-area-inset-top)) 1rem 0.4375rem; background: var(--ink); color: #fff; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.guide-band span { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--line-strong); }
+
+.guide-coach { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3) calc(var(--s-2) + env(safe-area-inset-bottom)) var(--s-4); background: var(--surface); border-top: 2px solid var(--ink); animation: guide-coach-in 150ms var(--ease); }
+.guide-coach-head { display: flex; align-items: center; gap: 0.625rem; min-height: 2rem; }
+.guide-dots { display: flex; gap: var(--s-1); }
+.guide-dots span { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--line-strong); }
+.guide-dots span.on { background: var(--accent); }
+.guide-coach-step { flex: 1; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.guide-coach-text { margin: 0; font-size: 0.9375rem; line-height: 1.4; color: var(--ink); }
+.guide-coach-note { margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--ground); color: var(--ink); font-size: var(--t-support); line-height: 1.4; }
+.guide-coach-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); }
+.guide-coach-btn { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 0 0.625rem; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--accent); font-weight: 600; font-size: 0.9375rem; }
+.guide-coach-btn:active:not([disabled]) { background: var(--accent-tint); }
+.guide-coach-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.guide-coach-btn[disabled] { color: var(--line-strong); cursor: default; }
+.guide-coach-btn-quiet { min-height: 2rem; padding: 0 var(--s-2); color: var(--muted); font-size: 0.8125rem; }
+
+/* the step's one control: a ring around it (3px accent + tint halo) that never moves it; inside a clipped list group the
+   ring is drawn inward */
+.guide [data-guide-target] { position: relative; z-index: 1; box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px var(--accent-tint); animation: guide-pulse 2s var(--ease) infinite; scroll-margin: 9rem 0 15rem; }
+.guide .row[data-guide-target] { z-index: auto; box-shadow: inset 0 0 0 3px var(--accent); animation: none; }
+@keyframes guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px var(--accent-tint); }
+  50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 10px var(--accent-tint); }
+}
+@keyframes guide-coach-in { from { opacity: 0; } to { opacity: 1; } }
+
+.guide-intro { gap: var(--s-4); }
+.guide-mark { width: 3.5rem; height: 3.5rem; border-radius: var(--r-md); background: var(--accent-tint); color: var(--accent); display: grid; place-items: center; }
+.guide-keys { gap: var(--s-3); color: var(--muted); font-size: var(--t-support); }
+.guide-keys p { margin: 0; display: flex; gap: var(--s-2); align-items: flex-start; }
+.guide-key { flex: 0 0 auto; display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--ground); border: 1px solid var(--line-strong); color: var(--ink); }
+.guide-key-coach { background: var(--ink); border-color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .guide [data-guide-target], .guide-coach { animation: none; }
+}

@@ -35,7 +35,7 @@ import { FinancePage } from '../spaces/negocio/FinancePage'
 import { InsightsPage } from '../spaces/negocio/InsightsPage'
 import { GestaoPage } from '../spaces/gestao/GestaoPage'
 import { ProductEditPage, ServiceEditPage } from '../spaces/gestao/EditPage'
-import { HelpHome, HelpLayout, HelpLoadError, HelpStepsPage, HelpTopicPage } from '../spaces/ajuda/lazy'   // Ajuda (L2): public, under DeviceGate only
+import { HelpHome, HelpLayout, HelpLoadError, HelpStepsPage, HelpTopicPage, HelpTutorialPage } from '../spaces/ajuda/lazy'   // Ajuda (L2–L4b): public, under DeviceGate only
 
 export const router = createBrowserRouter([
   {
@@ -62,6 +62,7 @@ export const router = createBrowserRouter([
             { index: true, element: <HelpHome /> },
             { path: ':tema', element: <HelpTopicPage /> },
             { path: ':tema/passos', element: <HelpStepsPage /> },
+            { path: ':tema/tutorial', element: <HelpTutorialPage /> },
           ] },
           { path: 'privado/entrar', element: <RequireConnection title="Área privada"><PrivateEntryPage /></RequireConnection> },
           {

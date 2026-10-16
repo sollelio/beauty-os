@@ -32,11 +32,11 @@ describe('availability', () => {
   it('exactly three topics have an animation: Registar um serviço (Misto), Stock, Trabalhar sem ligação', () => {
     expect(TOPICS.filter((t) => t.animation).map((t) => [t.id, t.animation])).toEqual([['registar-servico', 'misto'], ['stock', 'stock'], ['sem-ligacao', 'offline']])
   })
-  it('the «Animação» block appears on those three topics only; the interactive tutorial nowhere yet', () => {
+  it('the «Animação» block appears on those three topics only; the interactive tutorial (L4b) only on Registar um serviço', () => {
     for (const t of TOPICS) {
       const { unmount } = open(t.id)
       expect(screen.queryAllByText(/^Animação ·/).length, t.id).toBe(t.animation ? 1 : 0)
-      expect(screen.queryByText(/Tutorial/), t.id).toBeNull()
+      expect(screen.queryAllByText(/Tutorial/).length, t.id).toBe(t.id === 'registar-servico' ? 1 : 0)
       unmount()
     }
   })
@@ -60,14 +60,8 @@ describe('playing', () => {
     expect(stage()).not.toBe(first)                                                  // a fresh stage: the animation restarts
     expect(stage()!.classList.contains('is-playing')).toBe(true)
   })
-  it('its stage CSS has no infinite animation and runs only under .is-playing', () => {
-    const css = Object.values(import.meta.glob('./microanimations.css', { query: '?raw', import: 'default', eager: true }) as Record<string, string>)[0]!
-    expect(css).not.toMatch(/infinite|animation-iteration-count/)
-    for (const rule of css.match(/[^{}]+\{[^}]*\banimation:[^}]*\}/g) ?? []) {
-      if (/@keyframes|prefers-reduced-motion|none !important/.test(rule)) continue
-      expect(rule.trim(), rule).toMatch(/^\.is-playing /)
-    }
-  })
+  // The stage CSS (no infinite animation; every animation only under .is-playing) is checked on the built CSS in
+  // tests/pwa/build.test.ts: Vitest does not load CSS in jsdom (a raw CSS import is empty here).
 })
 
 describe('reduced motion and accessibility', () => {

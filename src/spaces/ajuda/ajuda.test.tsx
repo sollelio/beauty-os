@@ -35,7 +35,7 @@ describe('Ajuda · access', () => {
     expect(gate.children!.some((c) => c.path === 'ajuda')).toBe(true)
     expect(root.children!.some((c) => c.path === 'ajuda')).toBe(false)              // never beside the gate
     const ajuda = gate.children!.find((c) => c.path === 'ajuda')!
-    expect(ajuda.children!.map((c) => c.index ? 'index' : c.path)).toEqual(['index', ':tema', ':tema/passos'])
+    expect(ajuda.children!.map((c) => c.index ? 'index' : c.path)).toEqual(['index', ':tema', ':tema/passos', ':tema/tutorial'])   // L4b: the guide too
     expect(ajuda.errorElement).toBeTruthy()                                         // a failed help load stays in the app
     const privado = gate.children!.find((c) => c.path === 'privado')!
     expect(privado.children!.some((c) => c.path?.startsWith('ajuda'))).toBe(false)  // public, never inside the private area
@@ -179,12 +179,14 @@ describe('Ajuda · isolation and content', () => {
       for (const [, from] of text.matchAll(/from '([^']+)'/g)) {
         // L3 adds, for the Misto demonstration only: the device's organization settings already in memory (currency),
         // and the app's pure money formatting and payment check — never an access layer, the server or storage
+        // L4b adds, for the topic page only, whether the guide is offered in this currency (guia/data, tested in guia/)
         const allowed = /^(react|react-router|\.\.\/\.\.\/shared\/ui\/[A-Za-z]+|\.\/topics|\.\/HelpPages|\.\/demos)$/.test(from!)
           || (file === './demos.tsx' && /^\.\.\/\.\.\/(modules\/org\/OrganizationContext|shared\/money|shared\/payment)$/.test(from!))
+          || (file === './HelpPages.tsx' && from === './guia/data')
         expect(allowed, `${file} imports ${from}`).toBe(true)
       }
       for (const [, dyn] of text.matchAll(/import\('([^']+)'\)/g)) {
-        expect(dyn, file).toBe('./HelpPages')                                   // the lazy chunk, nothing else
+        expect(['./HelpPages', './guia/ServiceGuide'], file).toContain(dyn)     // the lazy chunks (help, guide), nothing else
       }
       expect(text, file).not.toMatch(/localStorage|sessionStorage|indexedDB|getSupabase|supabase|fetch\(|navigator\.storage|useQuery|useOrganization/)
     }

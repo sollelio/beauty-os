@@ -13,6 +13,7 @@ import { useAppBack } from '../../shared/ui/navigation'
 import { EmptyState } from '../../shared/ui/states'
 import { findTopic, GROUP_LABEL, searchTopics, TOPICS, type HelpGroup, type HelpTopic } from './topics'
 import { TopicAnimation } from './demos'
+import { useGuideData } from './guia/data'
 import './ajuda.css'
 
 const tone = (g: HelpGroup) => (g === 'private' ? 'quiet' : g === 'offline' ? 'warning' : 'accent')
@@ -89,6 +90,7 @@ function TopicMissing({ onBack }: { onBack: () => void }) {
 export function HelpTopicPage() {
   const back = useAppBack('/ajuda')
   const topic = findTopic(useParams().tema)
+  const guide = useGuideData()                       // the tutorial is offered only in a currency with example prices
   if (!topic) return <TopicMissing onBack={back} />
 
   return (
@@ -103,13 +105,19 @@ export function HelpTopicPage() {
           <span>Na app, este passo pede o PIN de uma pessoa com permissão. A ajuda explica só como funciona.</span>
         </div>
       )}
-      {/* The topic's content types — only those usable today: the written steps, the microanimation where one exists
-          (L3), and later the interactive tutorial (L4); nothing is shown for what is not available. */}
+      {/* The topic's content types — only those usable here: the written steps, the microanimation where one exists
+          (L3), the interactive tutorial where one exists (L4b); nothing is shown for what is not available. */}
       <ListGroup aria-label="Conteúdos">
         <ListRow as="link" to={`/ajuda/${topic.id}/passos`} leading={<RowIcon name="list" tone="quiet" />} chevron
           title="Passo a passo" subtitle={`${topic.steps.length} passos · funciona sem ligação`} />
       </ListGroup>
       {topic.animation && <TopicAnimation id={topic.animation} />}
+      {topic.tutorial && guide && (
+        <ListGroup aria-label="Tutorial">
+          <ListRow as="link" to={`/ajuda/${topic.id}/tutorial`} leading={<RowIcon name="help" tone="quiet" />} chevron
+            title="Tutorial interativo" subtitle="Cerca de 1 minuto · funciona sem ligação · nada fica registado" />
+        </ListGroup>
+      )}
     </AppScreen>
   )
 }

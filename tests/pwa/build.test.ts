@@ -57,6 +57,25 @@ describe('production build', () => {
     const helpCss = readFileSync(join(out, urls.find((u) => /^\/assets\/HelpPages-[\w-]+\.css$/.test(u))!), 'utf8')
     expect(helpCss).toContain('.is-playing')
     expect(helpCss).not.toMatch(/infinite/)
+    // every microanimation step animates only once the person taps «Ver» (.is-playing); reduced motion stops them all
+    const animated = [...helpCss.matchAll(/([^{}]+)\{[^{}]*animation:([^;}]+)/g)].filter(([, , value]) => !/^\s*none/.test(value!))
+    expect(animated.length).toBeGreaterThan(0)
+    for (const [, selector] of animated) expect(selector!.trim()).toMatch(/^\.is-playing /)
+    expect(helpCss).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\{\.microanim-stage \*\{animation:none!important\}\}/)
+  })
+  it('the Interactive Guide (L4b) is its own precached chunk with its CSS; its only endless motion is the approved highlight pulse, stopped under reduced motion', () => {
+    const html = readFileSync(join(out, 'index.html'), 'utf8')
+    const entryJs = /src="(\/assets\/[^"]+\.js)"/.exec(html)![1]!
+    const urls = precacheOf(readFileSync(join(out, 'sw.js'), 'utf8'))
+    const js = urls.filter((u) => /^\/assets\/ServiceGuide-[\w-]+\.js$/.test(u)), css = urls.filter((u) => /^\/assets\/ServiceGuide-[\w-]+\.css$/.test(u))
+    expect(js).toHaveLength(1)
+    expect(css).toHaveLength(1)
+    expect(readFileSync(join(out, js[0]!), 'utf8')).toContain('Demonstração terminada')
+    expect(readFileSync(join(out, entryJs), 'utf8')).not.toContain('Demonstração terminada')     // never in the entry
+    const guideCss = readFileSync(join(out, css[0]!), 'utf8')
+    expect(guideCss.match(/infinite/g)).toHaveLength(1)
+    expect(guideCss).toMatch(/\.guide \[data-guide-target\]\{[^}]*animation:guide-pulse 2s/)
+    expect(guideCss).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\{\.guide \[data-guide-target\],\.guide-coach\{animation:none\}\}/)
   })
 })
 
