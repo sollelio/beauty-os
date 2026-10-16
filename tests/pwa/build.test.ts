@@ -39,6 +39,18 @@ describe('production build', () => {
     expect(precacheOf(readFileSync(join(out, 'sw.js'), 'utf8'))).toContain('/')
     expect(existsSync(join(out, 'sollelio-brand-assets'))).toBe(false)              // the package is a source, never shipped
   })
+  it('Ajuda (L2) is its own chunk, kept out of the entry and precached with the shell, so it opens offline', () => {
+    const html = readFileSync(join(out, 'index.html'), 'utf8')
+    const entryJs = /src="(\/assets\/[^"]+\.js)"/.exec(html)![1]!
+    const urls = precacheOf(readFileSync(join(out, 'sw.js'), 'utf8'))
+    const chunks = urls.filter((u) => /^\/assets\/HelpPages-[\w-]+\.js$/.test(u))
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0]).not.toBe(entryJs)
+    const help = readFileSync(join(out, chunks[0]!), 'utf8')
+    expect(help).toContain('Trabalhar sem ligação')
+    expect(readFileSync(join(out, entryJs), 'utf8')).not.toContain('Trabalhar sem ligação')   // the content stays in the help chunk
+    expect(urls.some((u) => /^\/assets\/HelpPages-[\w-]+\.css$/.test(u))).toBe(true)
+  })
 })
 
 describe('shell manifest', () => {

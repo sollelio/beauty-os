@@ -111,6 +111,12 @@ export function HojePage() {
           )}
         </>
       )}
+      {/* Ajuda (learning experience L2): one quiet row after everything operational; written help, also offline */}
+      <nav aria-label="Ajuda">
+        <ListGroup>
+          <ListRow as="link" to="/ajuda" leading={<RowIcon name="help" tone="quiet" />} title="Ajuda" subtitle="Passo a passo do Beauty OS" chevron />
+        </ListGroup>
+      </nav>
       {syncSheet.current && <SyncStatusSheet onDismiss={syncSheet.close} />}
       {chooser.current && (
         // choosing replaces the sheet's history entry with the flow, so back from the flow returns to Hoje

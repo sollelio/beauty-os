@@ -1,0 +1,7 @@
+/* Ajuda (learning experience L2): only what the help screens add, on the app's tokens (src/app/base.css). Loaded with
+   the help chunk, so the rest of the app is unchanged. */
+.help-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-4); }
+.help-steps li { display: flex; gap: var(--s-3); align-items: flex-start; }
+.help-step-n { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; margin-top: 0.0625rem; border-radius: 50%; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent); font-size: var(--t-overline); font-weight: 700; font-variant-numeric: tabular-nums; }
+.help-note { display: flex; gap: var(--s-2); align-items: flex-start; }
+.help-note svg { flex: 0 0 auto; margin-top: 0.1875rem; }

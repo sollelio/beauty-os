@@ -42,6 +42,7 @@ function mount(path = '/') {
   const router = createMemoryRouter([{ path: '/', element: <DeviceGate />, children: [
     { index: true, element: <Home /> },
     { path: 'privado/entrar', element: <RequireConnection title="Área privada"><p>Entrar com PIN</p></RequireConnection> },
+    { path: 'ajuda', element: <p>Ajuda pública</p> },
   ] }], { initialEntries: [path] })
   // as main.tsx: the Brand Splash gate around the app (a no-op when no brand is painted)
   return render(<BootBrandGate><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider></BootBrandGate>)
@@ -105,6 +106,27 @@ describe('online answers', () => {
     await waitFor(async () => expect(await readBinding(db, user)).toBeNull())
     expect((await screen.findByTestId('held-elsewhere')).textContent).toMatch(/Há 1 registo guardado/)
     expect(await createOfflineStore(db, { organizationId: ORG, deviceUserId: user }).outbox.countPending()).toBe(1)
+  })
+})
+
+// Learning experience L2 · the help is public on an enrolled device only (ADR-0009: unbound devices see nothing but enrollment).
+describe('Ajuda behind the device gate', () => {
+  it('never enrolled, or revoked: /ajuda shows enrollment, not the help', async () => {
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: false })
+    mount('/ajuda')
+    expect(await screen.findByText('Ligar este dispositivo')).toBeTruthy()
+    expect(screen.queryByText('Ajuda pública')).toBeNull()
+  })
+  it('enrolled: the help opens, online or on the cached binding offline, with no PIN', async () => {
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org })
+    const view = mount('/ajuda')
+    expect(await screen.findByText('Ajuda pública')).toBeTruthy()
+    view.unmount()
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+    online = false
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount('/ajuda')
+    expect(await screen.findByText('Ajuda pública')).toBeTruthy()
   })
 })
 

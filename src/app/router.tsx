@@ -35,6 +35,7 @@ import { FinancePage } from '../spaces/negocio/FinancePage'
 import { InsightsPage } from '../spaces/negocio/InsightsPage'
 import { GestaoPage } from '../spaces/gestao/GestaoPage'
 import { ProductEditPage, ServiceEditPage } from '../spaces/gestao/EditPage'
+import { HelpHome, HelpLayout, HelpLoadError, HelpStepsPage, HelpTopicPage } from '../spaces/ajuda/lazy'   // Ajuda (L2): public, under DeviceGate only
 
 export const router = createBrowserRouter([
   {
@@ -57,6 +58,11 @@ export const router = createBrowserRouter([
           { path: 'registos/anular/:kind/:recordId', element: <CancelRecordFlow /> },
           { path: 'rascunhos', element: <DraftsPage /> },
           { path: 'rever', element: <OfflineReviewPage /> },
+          { path: 'ajuda', element: <HelpLayout />, errorElement: <HelpLoadError />, children: [
+            { index: true, element: <HelpHome /> },
+            { path: ':tema', element: <HelpTopicPage /> },
+            { path: ':tema/passos', element: <HelpStepsPage /> },
+          ] },
           { path: 'privado/entrar', element: <RequireConnection title="Área privada"><PrivateEntryPage /></RequireConnection> },
           {
             path: 'privado',

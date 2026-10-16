@@ -40,6 +40,16 @@ describe('Hoje', () => {
     expect(await screen.findByText('Ainda não há serviços registados hoje.')).toBeTruthy()
   })
 
+  it('Ajuda (L2): one quiet row, the last thing on Hoje, after everything operational', () => {
+    const { container } = renderIt()
+    const help = screen.getByRole('navigation', { name: 'Ajuda' })
+    expect(within(help).getAllByRole('link').map(href)).toEqual(['/ajuda'])
+    expect(within(help).getByRole('link').textContent).toContain('Ajuda')
+    const navs = [...container.querySelectorAll('nav')].map((n) => n.getAttribute('aria-label'))
+    expect(navs).toEqual(['Outras ações', 'Privado', 'Ajuda'])
+    expect(container.querySelector('main')!.lastElementChild).toBe(help)
+  })
+
   it('Despesa ou compra opens the chooser, which can be cancelled', () => {
     renderIt()
     fireEvent.click(screen.getByRole('button', { name: 'Despesa ou compra' }))
