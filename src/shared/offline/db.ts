@@ -10,7 +10,10 @@ export const OFFLINE_DB_NAME = 'beauty-os-offline'
 export const STORES = ['outbox', 'drafts', 'snapshot', 'meta'] as const
 /** The last-known operational binding, keyed by the device principal (it names the organization). */
 export const BINDING_STORE = 'binding'
-export type StoreName = (typeof STORES)[number] | typeof BINDING_STORE
+/** The organization's logo files (Tenant Identity T2), keyed [organizationId, deviceUserId, size]. Not operational work:
+ *  outside STORES, never counted as a foreign partition's data, and removed as soon as the binding is not this one. */
+export const LOGO_STORE = 'logos'
+export type StoreName = (typeof STORES)[number] | typeof BINDING_STORE | typeof LOGO_STORE
 
 export type UpgradeStep = (db: IDBDatabase, tx: IDBTransaction) => void
 
@@ -29,6 +32,10 @@ export const UPGRADE_STEPS: readonly UpgradeStep[] = [
   // 2 · Offline 4: the cached operational binding (organization of a device principal), for an offline start
   (db) => {
     db.createObjectStore(BINDING_STORE, { keyPath: 'deviceUserId' })
+  },
+  // 3 · Tenant Identity T2: the bound organization's logo files, for Hoje, «Este telemóvel» and «Limiar» offline
+  (db) => {
+    db.createObjectStore(LOGO_STORE, { keyPath: [...PARTITION_KEY, 'size'] })
   },
 ]
 export const OFFLINE_DB_VERSION = UPGRADE_STEPS.length

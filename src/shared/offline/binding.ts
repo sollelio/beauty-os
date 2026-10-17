@@ -10,6 +10,8 @@ import { assertIso, assertSafeObject, assertUuid, isIsoInstant, isUuid } from '.
 export type PublicOrganization = {
   id: string; name: string; timezone: string
   currency_code: string; currency_exponent: number; currency_symbol: string
+  /** the logo reference (version and presentation geometry), so an offline start finds the cached logo */
+  logo?: { version: number; ring?: { color: string; radius: number; width: number }; iris?: number } | null
 }
 export type CachedBinding = { deviceUserId: string; organization: PublicOrganization; verifiedAt: string }
 
@@ -22,8 +24,20 @@ function checkOrganization(o: unknown): PublicOrganization {
       || !Number.isSafeInteger(x.currency_exponent) || x.currency_exponent < 0 || x.currency_exponent > 4) {
     throw malformed('binding organization does not match its contract')
   }
-  // exactly the public fields: nothing else from the device context is kept
-  return { id: x.id, name: x.name, timezone: x.timezone, currency_code: x.currency_code, currency_exponent: x.currency_exponent, currency_symbol: x.currency_symbol }
+  // exactly the public fields: nothing else from the device context is kept (a malformed logo reference is dropped)
+  const logo = checkLogo(x.logo)
+  return { id: x.id, name: x.name, timezone: x.timezone, currency_code: x.currency_code, currency_exponent: x.currency_exponent, currency_symbol: x.currency_symbol,
+    ...(logo ? { logo } : {}) }
+}
+
+const fraction = (v: unknown, max: number) => typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= max
+/** The logo reference as the server writes it (admin_set_organization_logo), or null. */
+export function checkLogo(l: unknown): PublicOrganization['logo'] {
+  const x = l as NonNullable<PublicOrganization['logo']> | null | undefined
+  if (!x || !Number.isSafeInteger(x.version) || x.version < 1) return null
+  const ring = x.ring && typeof x.ring.color === 'string' && /^#[0-9A-F]{6}$/i.test(x.ring.color) && fraction(x.ring.radius, 0.5) && fraction(x.ring.width, 0.1)
+    ? { color: x.ring.color, radius: x.ring.radius, width: x.ring.width } : undefined
+  return { version: x.version, ...(ring ? { ring } : {}), ...(fraction(x.iris, 0.71) ? { iris: x.iris } : {}) }
 }
 
 export async function saveBinding(db: IDBDatabase, binding: CachedBinding): Promise<CachedBinding> {

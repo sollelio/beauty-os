@@ -1,8 +1,13 @@
 // Hoje (Slice 01 §3): primary action, salon-level count line, recent records. No money totals, no per-person totals.
 // Local work not yet on the server (ADR-0010 §11) shows as one row, only when there is some; its counts stay apart
 // from the server's figures.
+// Tenant Identity (T1, T3): the salon line names the organization this phone is bound to and opens «Este telemóvel»;
+// the «Limiar» brand moment is presented here once per enrollment, and replayed from «Este telemóvel».
+import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
+import { readStoredPrincipal } from '../../modules/org/api'
+import { useTenantMark } from '../../modules/org/tenantMark'
 import { getHojeSummary, servicesKeys } from '../../modules/services/api'
 import { countMarkedToBuy, stockKeys } from '../../modules/stock/api'
 import { countLine } from './countLine'
@@ -16,12 +21,23 @@ import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { Icon } from '../../shared/ui/Icon'
 import { ListGroup, ListRow, RowIcon } from '../../shared/ui/ListRow'
 import { useSheet } from '../../shared/ui/navigation'
+import { markPresented, prefersStill, shouldPresent } from './limiar/presentation'
 
 // Capture flows opened from here go back here (history) when they finish or close (useFlow.leaveTo).
 const FROM_HOJE = { from: '/' }
 
+// The moment is its own chunk (never on the start path); if it cannot load, it is simply not shown.
+const BrandMoment = lazy(() => import('./limiar/BrandMoment'))
+class MomentBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch() { this.props.onError() }
+  render() { return this.state.failed ? null : this.props.children }
+}
+
 export function HojePage() {
   const org = useOrganization()
+  const mark = useTenantMark()                             // the organization's logo on this phone, or null (name only)
   const summary = useQuery({ queryKey: servicesKeys.hoje, queryFn: getHojeSummary })
   const toBuy = useQuery({ queryKey: stockKeys.toBuy, queryFn: countMarkedToBuy })
   const chooser = useSheet<true>()
@@ -30,11 +46,41 @@ export function HojePage() {
   const pending = pendingRows(runtime.local)
   const offline = isOfflineMode(runtime)
 
+  // «Limiar»: its own history entry, so Android/browser back skips it like «Saltar»
+  const moment = useSheet<{ still: boolean }>()
+  const [assembling, setAssembling] = useState(false)       // Hoje assembles beneath the moment (motion only)
+  const title = useRef<HTMLHeadingElement>(null)
+  const presented = useRef(false)
+  useEffect(() => {
+    if (presented.current) return
+    presented.current = true
+    const principal = readStoredPrincipal()
+    if (!principal || !shouldPresent(principal, org.id)) return
+    markPresented(principal, org.id)                        // recorded as it starts: never presented twice
+    moment.open({ still: prefersStill() })
+  }, [org.id, moment])
+  // replay from «Este telemóvel»: the sheet's history entry is gone first (the browser's back is asynchronous), then
+  // the moment opens its own
+  const replayQueued = useRef(false)
+  const sheetEntry = (useLocation().state as { sheet?: string } | null)?.sheet
+  useEffect(() => {
+    if (!replayQueued.current || sheetEntry) return
+    replayQueued.current = false
+    moment.open({ still: prefersStill() })
+  }, [sheetEntry, moment])
+  const replay = () => { replayQueued.current = true; syncSheet.close() }
+  const endMoment = () => { moment.close(); title.current?.focus() }
+
   return (
-    <main className="app-main">
+    <>
+    <main className={assembling && moment.current ? 'app-main limiar-run' : 'app-main'}>
       <header className="stack stack-tight">
+        <button type="button" className="tenant-line" onClick={() => syncSheet.open(true)} aria-label={`Este telemóvel: ligado a ${org.name}`}>
+          {mark && <img className="tenant-mark" data-tenant-mark src={mark.src64} alt="" width={32} height={32} />}
+          <span className="tenant-name">{org.name}</span>
+        </button>
         <span className="label">{formatToday(org.timezone)}</span>
-        <h1>Hoje</h1>
+        <h1 ref={title} tabIndex={-1}>Hoje</h1>
       </header>
 
       <Link to="/servicos/registar" state={FROM_HOJE} className="btn btn-primary hoje-cta">
@@ -117,7 +163,7 @@ export function HojePage() {
           <ListRow as="link" to="/ajuda" leading={<RowIcon name="help" tone="quiet" />} title="Ajuda" subtitle="Passo a passo do Beauty OS" chevron />
         </ListGroup>
       </nav>
-      {syncSheet.current && <SyncStatusSheet onDismiss={syncSheet.close} />}
+      {syncSheet.current && <SyncStatusSheet onDismiss={syncSheet.close} onReplay={replay} />}
       {chooser.current && (
         // choosing replaces the sheet's history entry with the flow, so back from the flow returns to Hoje
         <BottomSheet labelledBy="chooser-title" onDismiss={chooser.close}>
@@ -132,5 +178,13 @@ export function HojePage() {
         </BottomSheet>
       )}
     </main>
+    {moment.current && (
+      <MomentBoundary onError={moment.close}>
+        <Suspense fallback={null}>
+          <BrandMoment name={org.name} mark={mark} still={moment.current.still} onDone={endMoment} onRunning={setAssembling} />
+        </Suspense>
+      </MomentBoundary>
+    )}
+    </>
   )
 }

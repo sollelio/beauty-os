@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { useOrganization } from '../../modules/org/OrganizationContext'
+import { useTenantMark } from '../../modules/org/tenantMark'
 import { useConnectivity } from '../offline/connectivity'
 import { useOfflineRuntime } from '../offline/runtime'
 import { formatDayShort, formatTime } from '../time'
@@ -25,14 +26,18 @@ export function NeedsConnection({ message, children }: { message: string; childr
   return <>{children}</>
 }
 
-export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
+/** «Este telemóvel» (Tenant Identity T1): the salon this phone is bound to, and its work not yet on the server. Opened from
+ *  Hoje's salon line (always) and from Hoje's "por enviar" row; `onReplay` offers the Beauty OS presentation again. */
+export function SyncStatusSheet({ onDismiss, onReplay }: { onDismiss: () => void; onReplay?: () => void }) {
   const org = useOrganization()
+  const mark = useTenantMark()
   const navigate = useNavigate()
   const { connectivity, local, sync, syncNow } = useOfflineRuntime()
   const busy = sync.status === 'checking' || sync.status === 'syncing'
   const last = local?.lastSuccessfulSyncAt
   const waiting = local ? local.outboxPending - local.outboxFailed - local.outboxConflicts : 0
-  const rows: [string, string | number][] = [
+  const rows: [string, ReactNode][] = [
+    ['Ligado a', mark ? <span className="tenant-ref"><img src={mark.src32} alt="" width={24} height={24} />{org.name}</span> : org.name],
     ['Ligação', connectivity === 'offline' ? OFFLINE_TITLE : 'Com ligação'],
     ['Por enviar', waiting],
     ...(local && local.outboxFailed > 0 ? [['Envio falhou', local.outboxFailed] as [string, number]] : []),
@@ -42,8 +47,8 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
   ]
   return (
     <BottomSheet labelledBy="sync-status-title" onDismiss={onDismiss}>
-      <h2 id="sync-status-title" className="sheet-title">Neste telemóvel</h2>
-      <p className="support">Registos guardados neste telemóvel que ainda não chegaram ao servidor.</p>
+      <h2 id="sync-status-title" className="sheet-title">Este telemóvel</h2>
+      <p className="support">A que salão está ligado e o que ainda não chegou ao servidor.</p>
       {local && local.outboxConflicts + local.draftsReview > 0 && (
         <p className="notice notice-warning">Alguns registos não foram aceites pelo servidor e precisam de revisão. Continuam guardados neste telemóvel.</p>
       )}
@@ -59,6 +64,7 @@ export function SyncStatusSheet({ onDismiss }: { onDismiss: () => void }) {
       {local && local.draftsPending - local.draftsReview > 0 && (
         <button className="btn btn-secondary" onClick={() => navigate('/rascunhos')}>Ver por confirmar com PIN</button>
       )}
+      {onReplay && <button className="btn btn-secondary" onClick={onReplay}>Ver a apresentação do Beauty OS</button>}
       <button className="btn btn-secondary" onClick={onDismiss}>Fechar</button>
     </BottomSheet>
   )

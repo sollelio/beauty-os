@@ -1,0 +1,69 @@
+/* «Limiar» brand moment (Tenant Identity T3): the approved motion specification. Act 1 (0–1.35 s) the product; act 2
+   (1.35–2.9 s) the threshold and the salon — ring, then heart, then name (or the name alone, without a logo); act 3
+   (2.9–3.65 s) a reading pause; act 4 (3.65–4.46 s) the moment retires, the emblem lands in Hoje's salon line while Hoje
+   assembles beneath, and the small name arrives. Compositor-only: transform, opacity, clip-path, stroke-dashoffset.
+   Curves: the app's (--ease) and one for entrances (--lm-in). Ring colour and size and the reveal radius are the
+   organization's (inline custom properties from its logo reference). */
+.limiar, .limiar-run { --lm-in: cubic-bezier(0.16, 1, 0.3, 1); --lm-hair: #B9B4AA; }
+.limiar { position: fixed; inset: 0; z-index: 90; }                       /* above Hoje, below sheets (100) */
+.limiar::before { content: ''; position: absolute; inset: 0; background: var(--ground); }   /* the moment's own ground, over everything (status banner included) */
+.limiar-stage { position: absolute; left: 0; right: 0; top: max(4rem, 27.5%); display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem; pointer-events: none; }
+.lm-lockup { position: relative; width: 220px; height: 60px; flex: 0 0 auto; }
+.lm-lockup svg { position: absolute; top: 0; height: 60px; overflow: visible; }
+.lm-symbol { left: 0; width: 64px; }
+.lm-words { left: 64px; width: 156px; }
+.lm-hair { display: block; width: 48px; height: 1px; margin-top: 38px; background: var(--lm-hair); }
+.lm-kick { display: block; margin-top: 21px; text-align: center; }
+.lm-salon { display: grid; justify-items: center; width: 100%; }
+.lm-variant { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; }
+.lm-off { visibility: hidden; }                                        /* still running its clock, never shown */
+.lm-emblem { position: relative; width: 160px; height: 160px; margin-top: 24px; transform-origin: 0 0; }
+.lm-ring-svg { position: absolute; inset: 0; width: 160px; height: 160px; overflow: visible; }
+.lm-iris { position: absolute; inset: 0; display: block; width: 160px; height: 160px; }
+.lm-ename { display: block; margin-top: 20px; max-width: 22rem; font-size: var(--t-title-lg); line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; text-align: center; overflow-wrap: anywhere; }
+.lm-name { display: block; margin-top: 32px; max-width: 22rem; font-size: var(--t-display); line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; text-align: center; overflow-wrap: anywhere; }   /* never truncated: the identity moment shows the whole name */
+.lm-skip { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 10px; min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 0.9375rem; font-weight: 600; }
+.lm-skip:active { color: var(--ink); background: var(--line); }
+.lm-skip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.lm-start { position: absolute; left: 1.25rem; right: 1.25rem; bottom: calc(2rem + env(safe-area-inset-bottom)); width: auto; max-width: 37.5rem; margin: 0 auto; }
+.limiar-still .lm-ring-svg { display: none; }                          /* still: the emblem itself, nothing drawn over it */
+
+/* motion (never in the still presentation) */
+.limiar:not(.limiar-still) .lm-ind { clip-path: polygon(-50% 194%, 150% 137%, 150% 300%, -50% 300%); animation: lm-cut 560ms var(--ease) 60ms forwards; }
+.limiar:not(.limiar-still) .lm-vio { opacity: 0; transform-box: fill-box; transform-origin: center; animation: lm-settle 460ms var(--lm-in) 520ms forwards; }
+.limiar:not(.limiar-still) .lm-word { opacity: 0; animation: lm-rise 420ms var(--lm-in) 700ms forwards; }
+.limiar:not(.limiar-still) .lm-desc { clip-path: inset(0 100% 0 0); animation: lm-wipe 380ms var(--ease) 880ms forwards; }
+.limiar:not(.limiar-still) .lm-hair { transform: scaleX(0); animation: lm-hairline 380ms var(--ease) 1350ms forwards, lm-fade 260ms linear 3650ms forwards; }
+.limiar:not(.limiar-still) .lm-kick { opacity: 0; animation: lm-rise 360ms var(--lm-in) 1550ms forwards; }
+.limiar:not(.limiar-still) .lm-name { opacity: 0; animation: lm-rise 480ms var(--lm-in) 1650ms forwards; }
+.limiar:not(.limiar-still) .lm-ring { stroke-dasharray: var(--lm-c); stroke-dashoffset: var(--lm-c); animation: lm-draw 640ms var(--ease) 1650ms forwards; }
+.limiar:not(.limiar-still) .lm-ring-svg { animation: lm-fade 180ms linear 2500ms forwards; }   /* the emblem's own ring stays */
+.limiar:not(.limiar-still) .lm-iris { clip-path: circle(0% at 50% 50%); animation: lm-iris 560ms var(--lm-in) 2100ms forwards; }
+.limiar:not(.limiar-still) .lm-ename { opacity: 0; animation: lm-rise 400ms var(--lm-in) 2550ms forwards; }
+.limiar:not(.limiar-still) .lm-emblem { animation: lm-travel 620ms var(--ease) 3680ms forwards; }
+/* act 4: lockup, threshold and words retire with the moment's ground and «Saltar»; the emblem travels; Hoje is beneath */
+.limiar:not(.limiar-still) :is(.lm-lockup, .lm-retire, .lm-skip), .limiar:not(.limiar-still)::before { animation: lm-fade 260ms linear 3650ms forwards; }
+.limiar:not(.limiar-still) .lm-nameout { animation: lm-fade 200ms linear 3700ms forwards; }
+.lm-retire, .lm-nameout { display: block; }
+
+/* Hoje beneath, while the moment runs: it assembles at 80 ms intervals; the emblem becomes the salon line's mark as it
+   lands (4.3 s) and the name arrives beside it */
+.limiar-run > * { opacity: 0; animation: lm-rise 360ms var(--lm-in) 3900ms forwards; }
+.limiar-run > :nth-child(2) { animation-delay: 3980ms; }
+.limiar-run > :nth-child(3) { animation-delay: 4060ms; }
+.limiar-run > :nth-child(4) { animation-delay: 4140ms; }
+.limiar-run > :nth-child(n+5) { animation-delay: 4220ms; }
+.limiar-run .tenant-name { opacity: 0; animation: lm-rise 260ms var(--lm-in) 4200ms forwards; }
+.limiar-run .tenant-mark { opacity: 0; animation: lm-show 1ms linear 4300ms forwards; }
+@media (prefers-reduced-motion: reduce) { .limiar-run > *, .limiar-run .tenant-name, .limiar-run .tenant-mark { opacity: 1; animation: none; } }
+
+@keyframes lm-cut { to { clip-path: polygon(-50% -46%, 150% -103%, 150% 300%, -50% 300%); } }
+@keyframes lm-settle { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: none; } }
+@keyframes lm-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes lm-wipe { to { clip-path: inset(0 0 0 0); } }
+@keyframes lm-hairline { to { transform: scaleX(1); } }
+@keyframes lm-draw { to { stroke-dashoffset: 0; } }
+@keyframes lm-iris { to { clip-path: circle(var(--lm-iris) at 50% 50%); } }
+@keyframes lm-travel { to { transform: translate(var(--lm-tx, 0px), var(--lm-ty, 0px)) scale(var(--lm-s, 1)); } }
+@keyframes lm-fade { to { opacity: 0; } }
+@keyframes lm-show { to { opacity: 1; } }

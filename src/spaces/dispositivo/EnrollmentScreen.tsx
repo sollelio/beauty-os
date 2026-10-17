@@ -2,9 +2,10 @@
 import { useCallback, useState } from 'react'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { useQueryClient } from '@tanstack/react-query'
-import { enrollDevice, orgKeys } from '../../modules/org/api'
+import { enrollDevice, orgKeys, readStoredPrincipal } from '../../modules/org/api'
 import { toAppError } from '../../shared/errors'
 import { useOfflineRuntime } from '../../shared/offline/runtime'
+import { markEnrolled } from '../hoje/limiar/presentation'
 import { Turnstile } from './Turnstile'
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() || null
@@ -31,6 +32,7 @@ export function EnrollmentScreen() {
     setBusy(true); setError(null)
     try {
       await enrollDevice(code.trim().toUpperCase(), token ?? undefined)
+      markEnrolled(readStoredPrincipal())        // the first Hoje of this binding presents «Limiar» once
       await queryClient.invalidateQueries({ queryKey: orgKeys.deviceContext })
     } catch (err) {
       const a = toAppError(err)

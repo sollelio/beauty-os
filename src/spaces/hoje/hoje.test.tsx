@@ -108,7 +108,7 @@ describe('Hoje · local work (Offline 3)', () => {
     expect(screen.getByRole('link', { name: /2 para rever/ }).getAttribute('href')).toBe('/rever')
     expect((await screen.findByTestId('count-line')).textContent).not.toMatch(/registos por|rever/)
     fireEvent.click(row)
-    expect(await screen.findByRole('heading', { name: 'Neste telemóvel' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Este telemóvel' })).toBeTruthy()
     expect(within(screen.getByTestId('sync-status')).getByText('Por enviar').nextSibling?.textContent).toBe('2')
   })
 })

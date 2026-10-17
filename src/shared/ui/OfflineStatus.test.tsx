@@ -50,7 +50,7 @@ describe('local work', () => {
     expect(pendingRows(local({ outboxPending: 3, outboxConflicts: 1, draftsPending: 2, draftsReview: 1 })))
       .toEqual({ send: '2 registos por enviar', confirm: '1 por confirmar com PIN', review: '2 para rever' })
   })
-  it('the status sheet shows counts and dates only', () => {
+  it('the status sheet names the salon it is bound to, then counts and dates only', () => {
     online = false
     render(
       <MemoryRouter><OrganizationContext.Provider value={org}>
@@ -61,9 +61,26 @@ describe('local work', () => {
       </OrganizationContext.Provider></MemoryRouter>,
     )
     const rows = [...screen.getByTestId('sync-status').querySelectorAll('div')].map((d) => [d.querySelector('dt')!.textContent, d.querySelector('dd')!.textContent])
-    expect(rows).toEqual([['Ligação', 'Sem ligação'], ['Por enviar', '2'], ['Envio falhou', '1'], ['Por confirmar com PIN', '2'],
+    expect(rows).toEqual([['Ligado a', org.name], ['Ligação', 'Sem ligação'], ['Por enviar', '2'], ['Envio falhou', '1'], ['Por confirmar com PIN', '2'],
       ['Para rever', '1'], ['Último envio', '15 out, 09:30']])
+    expect(screen.getByRole('heading', { name: 'Este telemóvel' })).toBeTruthy()
     expect(document.body.textContent).not.toMatch(/payload|outbox|draft|sync|partition|minor/i)
+    // the presentation is offered only where a replay is wired (Hoje); the device and sync actions are unchanged
+    expect(screen.queryByRole('button', { name: 'Ver a apresentação do Beauty OS' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Rever' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ver por confirmar com PIN' })).toBeTruthy()
+  })
+  it('offers the Beauty OS presentation again when Hoje wires a replay', () => {
+    const onReplay = vi.fn()
+    render(
+      <MemoryRouter><OrganizationContext.Provider value={org}>
+        <OfflineRuntimeContext.Provider value={{ ...INACTIVE_RUNTIME, partitionActive: true, storage: 'ready', local: local({}) }}>
+          <SyncStatusSheet onDismiss={() => {}} onReplay={onReplay} />
+        </OfflineRuntimeContext.Provider>
+      </OrganizationContext.Provider></MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Ver a apresentação do Beauty OS' }))
+    expect(onReplay).toHaveBeenCalledTimes(1)
   })
 })
 

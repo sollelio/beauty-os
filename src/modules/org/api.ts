@@ -3,9 +3,18 @@ import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { authStorageKey, getSupabase } from '../../shared/supabase/client'
 import { AppError, toAppError } from '../../shared/errors'
 
+/** The organization's logo reference (Tenant Identity T2): the version of its files in the private logo bucket and the
+ *  brand moment's geometry for it, as fractions of the emblem's width — tenant data, never product design. */
+export type TenantLogo = {
+  version: number
+  ring?: { color: string; radius: number; width: number }
+  iris?: number
+}
 export type Organization = {
   id: string; name: string; timezone: string
   currency_code: string; currency_exponent: number; currency_symbol: string
+  /** null or absent: no logo — the name only */
+  logo?: TenantLogo | null
 }
 export type DeviceContext = { bound: false } | { bound: true; organization: Organization }
 

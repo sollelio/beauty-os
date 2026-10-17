@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BINDING_STORE, OFFLINE_DB_NAME, OFFLINE_DB_VERSION, openOfflineDb, STORES, UPGRADE_STEPS } from './db'
+import { BINDING_STORE, LOGO_STORE, OFFLINE_DB_NAME, OFFLINE_DB_VERSION, openOfflineDb, STORES, UPGRADE_STEPS } from './db'
 import { OfflineStorageError, toStorageError } from './errors'
 import { createOfflineStore } from './store'
 
@@ -18,11 +18,11 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 describe('schema', () => {
   it('opens with an explicit version and creates the partitioned stores (with their indexes) and the binding store', async () => {
     expect(OFFLINE_DB_NAME).toBe('beauty-os-offline')
-    expect(OFFLINE_DB_VERSION).toBe(2)
+    expect(OFFLINE_DB_VERSION).toBe(3)
     const db = await openOfflineDb({ factory: new IDBFactory() })
     expect(db.name).toBe(OFFLINE_DB_NAME)
     expect(db.version).toBe(OFFLINE_DB_VERSION)
-    expect([...db.objectStoreNames].sort()).toEqual([...STORES, BINDING_STORE].sort())
+    expect([...db.objectStoreNames].sort()).toEqual([...STORES, BINDING_STORE, LOGO_STORE].sort())
     const tx = db.transaction([...STORES], 'readonly')
     for (const s of STORES) expect([...tx.objectStore(s).indexNames], s).toContain('partition')
     expect([...tx.objectStore('outbox').indexNames]).toContain('partitionState')
@@ -101,10 +101,27 @@ describe('upgrade from version 1 (Offline 2) to 2 (Offline 4)', () => {
     const kept = item()
     await createOfflineStore(v1, A1).outbox.put(kept)
     v1.close()
-    const v2 = await openOfflineDb({ factory })
+    const v2 = await openOfflineDb({ factory, steps: UPGRADE_STEPS.slice(0, 2) })
     expect(v2.version).toBe(2)
     expect([...v2.objectStoreNames]).toContain(BINDING_STORE)
     expect((await createOfflineStore(v2, A1).outbox.get(kept.commandId))?.state).toBe('local')
+  })
+})
+
+describe('upgrade from version 2 (Offline 4) to 3 (Tenant Identity T2)', () => {
+  it('adds the logo store and keeps queued work and the cached binding', async () => {
+    const factory = new IDBFactory()
+    const v2 = await openOfflineDb({ factory, steps: UPGRADE_STEPS.slice(0, 2) })
+    const kept = item()
+    await createOfflineStore(v2, A1).outbox.put(kept)
+    await new Promise((r) => { v2.transaction(BINDING_STORE, 'readwrite').objectStore(BINDING_STORE).put({ deviceUserId: A1.deviceUserId, marker: 1 }).onsuccess = r })
+    v2.close()
+    const v3 = await openOfflineDb({ factory })
+    expect(v3.version).toBe(3)
+    expect(v3.transaction(LOGO_STORE).objectStore(LOGO_STORE).keyPath).toEqual(['organizationId', 'deviceUserId', 'size'])
+    expect((await createOfflineStore(v3, A1).outbox.get(kept.commandId))?.state).toBe('local')
+    const binding = await new Promise((r) => { const q = v3.transaction(BINDING_STORE).objectStore(BINDING_STORE).get(A1.deviceUserId); q.onsuccess = () => r(q.result) })
+    expect(binding).toEqual({ deviceUserId: A1.deviceUserId, marker: 1 })
   })
 })
 

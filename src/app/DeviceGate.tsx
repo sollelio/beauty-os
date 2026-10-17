@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet } from 'react-router'
 import { getDeviceContext, orgKeys, readStoredPrincipal, reportDeviceSync, watchDevicePrincipal } from '../modules/org/api'
 import { OrganizationContext } from '../modules/org/OrganizationContext'
+import { TenantLogoProvider } from '../modules/org/TenantLogo'
 import { refreshCaptureSnapshot, serviceDrainer } from '../modules/services/offline'
 import { refreshMovementSnapshot } from '../modules/movements/snapshot'
 import { servicesKeys } from '../modules/services/api'
@@ -69,11 +70,14 @@ export function DeviceGate() {
     <OfflineRuntimeProvider organization={organization} principal={principal} bindingSource={ctx.data ? 'server' : 'cache'}
       serverBinding={ctx.data ? (ctx.data.bound ? 'bound' : 'unbound') : 'unknown'}
       drain={serviceDrainer} refreshSnapshot={refreshSnapshots} onDrained={onDrained} reportSync={reportDeviceSync}>
-      {organization ? (
-        <OrganizationContext.Provider value={organization}>
-          <Outlet />
-        </OrganizationContext.Provider>
-      ) : <EnrollmentScreen />}
+      {/* the organization's logo (T2): kept for this binding only; an unbound device keeps none */}
+      <TenantLogoProvider principal={principal} organization={organization}>
+        {organization ? (
+          <OrganizationContext.Provider value={organization}>
+            <Outlet />
+          </OrganizationContext.Provider>
+        ) : <EnrollmentScreen />}
+      </TenantLogoProvider>
     </OfflineRuntimeProvider>
   )
 }
