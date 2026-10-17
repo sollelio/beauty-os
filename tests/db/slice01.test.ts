@@ -10,6 +10,10 @@ const okArgs = (cmd: string, value = 100000) => ({
   p_command_id: cmd, p_person_id: A.person, p_service_id: A.service, p_value_minor: value,
   p_payments: [{ method_id: A.cash, amount_minor: value }],
 })
+// The service history is not readable directly (S3b): devices see today's records through Hoje's summary.
+type HojeRow = { id: string } & Record<string, unknown>
+const hoje = async (c: SupabaseClient) =>
+  (await c.rpc('hoje_service_summary', { p_recent_limit: 1000 })).data as { total: number; recent: HojeRow[] }
 
 beforeAll(async () => {
   pub = client()
@@ -33,11 +37,15 @@ describe('no session (publishable key only)', () => {
 
 describe('unbound anonymous device', () => {
   it('sees no tenant data', async () => {
-    for (const t of ['organizations', 'people', 'services', 'service_records', 'payment_methods']) {
+    for (const t of ['organizations', 'people', 'services', 'payment_methods']) {
       const { data, error } = await unbound.from(t).select('id')
       expect(error).toBeNull()
       expect(data).toEqual([])
     }
+    // the service history is not a table any device can select (S3b): refused, not merely filtered
+    const history = await unbound.from('service_records').select('id')
+    expect(history.error?.code).toBe('42501')
+    expect(history.data).toBeNull()
     expect((await unbound.rpc('device_context')).data).toEqual({ bound: false })
     expect((await unbound.rpc('hoje_service_summary')).data).toBeNull()
   })
@@ -84,11 +92,12 @@ describe('record_service', () => {
     const r = await record(devA, okArgs(cmd))
     expect(r.error).toBeNull()
     const id = r.data.record_id
-    const mine = await devA.from('service_records').select('id, organization_id, value_minor, payment_kind, declared_operator_id').eq('id', id)
-    expect(mine.data).toEqual([{ id, organization_id: A.org, value_minor: 100000, payment_kind: 'single', declared_operator_id: null }])
-    expect((await devB.from('service_records').select('id').eq('id', id)).data).toEqual([])
-    const summary = (await devA.rpc('hoje_service_summary')).data
-    expect(summary.recent.some((x: { id: string }) => x.id === id)).toBe(true)
+    expect((await hoje(devA)).recent.find((x) => x.id === id)).toMatchObject({ value_minor: 100000, payment_kind: 'single', person_name: 'Pessoa Teste A' })
+    expect((await devA.rpc('record_summary', { p_kind: 'service', p_record_id: id })).data)
+      .toMatchObject({ kind: 'service', amount_minor: 100000, person: 'Pessoa Teste A', cancelled: null })
+    expect((await hoje(devB)).recent.map((x) => x.id)).not.toContain(id)
+    expect((await devB.rpc('record_summary', { p_kind: 'service', p_record_id: id })).error?.message).toBe('CROSS_TENANT_REFERENCE')
+    for (const c of [devA, devB]) expect((await c.from('service_records').select('id').eq('id', id)).error?.code).toBe('42501')
   })
 
   it('rejects references from another organization', async () => {
@@ -113,18 +122,19 @@ describe('record_service', () => {
     expect(bad.error?.message).toBe('MIXED_PAYMENT_MISMATCH')
     const good = await record(devA, { ...okArgs(randomUUID()), p_payments: [{ method_id: A.cash, amount_minor: 60000 }, { method_id: A.transfer, amount_minor: 40000 }] })
     expect(good.error).toBeNull()
-    const kind = await devA.from('service_records').select('payment_kind').eq('id', good.data.record_id).single()
-    expect(kind.data?.payment_kind).toBe('mixed')
+    expect((await hoje(devA)).recent.find((x) => x.id === good.data.record_id))
+      .toMatchObject({ payment_kind: 'mixed', method_label: null, value_minor: 100000 })
   })
 
   it('replays the same command_id with the same payload and returns the original result', async () => {
     const cmd = randomUUID()
+    const before = (await hoje(devA)).total
     const first = await record(devA, okArgs(cmd))
     const again = await record(devA, okArgs(cmd))
     expect(again.error).toBeNull()
     expect(again.data.record_id).toBe(first.data.record_id)
     expect(again.data.replayed).toBe(true)
-    expect((await devA.from('service_records').select('id').eq('command_id', cmd)).data).toHaveLength(1)
+    expect((await hoje(devA)).total).toBe(before + 1)                                   // one record
   })
 
   it('rejects the same command_id with a different payload, or from another device', async () => {
@@ -136,9 +146,10 @@ describe('record_service', () => {
 
   it('executes concurrent duplicates once', async () => {
     const cmd = randomUUID()
+    const before = (await hoje(devA)).total
     const results = await Promise.all(Array.from({ length: 6 }, () => record(devA, okArgs(cmd))))
     expect(results.every((r) => r.error === null)).toBe(true)
     expect(new Set(results.map((r) => r.data.record_id)).size).toBe(1)
-    expect((await devA.from('service_records').select('id').eq('command_id', cmd)).data).toHaveLength(1)
+    expect((await hoje(devA)).total).toBe(before + 1)                                   // one record
   })
 })

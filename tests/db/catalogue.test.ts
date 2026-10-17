@@ -28,6 +28,15 @@ async function ok(person: string, fn: string, args: Row): Promise<Row> {
   return r.data
 }
 const service = async (sid: string) => (await dev.from('services').select('name, default_price_minor, active').eq('id', sid).single()).data!
+// The historical record as recorded. The service history is not readable directly (S3b): it is read the way Situação
+// and Fecho read it — record_summary in a private context of a team.finance.read holder (S3a).
+async function historical(): Promise<Row> {
+  expect((await dev.rpc('verify_person', { p_person_id: FINANCE, p_secret: PIN[FINANCE], p_scope: 'private_session' })).data?.ok).toBe(true)
+  const r = await dev.rpc('record_summary', { p_kind: 'service', p_record_id: RECORD })
+  await dev.rpc('end_private_context')
+  expect(r.error, r.error?.message).toBeNull()
+  return r.data
+}
 const product = async (pid: string) => (await dev.from('products').select('name, unit_word, reference_price_minor, active').eq('id', pid).single()).data!
 const setService = (sid: string, name: string, price: number, active = true) =>
   ok(MANAGER, 'catalogue_update_service', { p_service_id: sid, p_name: name, p_price_minor: price, p_active: active })
@@ -89,8 +98,9 @@ describe('services: history stays as recorded', () => {
     expect(r.data).toMatchObject({ before: { price_minor: 500000 }, after: { price_minor: 650000 }, changed_by_person_id: MANAGER })
     expect((await dev.rpc('catalogue_update_service', args)).data.replayed).toBe(true)
     expect((await service(SVC)).default_price_minor).toBe(650000)
-    expect((await dev.from('service_records').select('value_minor, service_id').eq('id', RECORD).single()).data).toEqual({ value_minor: 450000, service_id: SVC })
-    expect((await dev.from('service_record_payments').select('amount_minor').eq('service_record_id', RECORD).single()).data!.amount_minor).toBe(450000)
+    // the same value, still on SVC (its name is unique in the organization), for the same person, not cancelled
+    expect(await historical()).toMatchObject({ amount_minor: 450000, title: 'Serviço G Histórico', person: 'Profissional G', cancelled: null })
+    for (const t of ['service_records', 'service_record_payments']) expect((await dev.from(t).select('*').limit(1)).error?.code, t).toBe('42501')
   })
 
   it('deactivated: not offered, refused for a new record; the old record and the entry stay', async () => {
@@ -101,7 +111,7 @@ describe('services: history stays as recorded', () => {
     const rec = await dev.rpc('record_service', { p_command_id: crypto.randomUUID(), p_person_id: PRO, p_service_id: SVC, p_value_minor: 650000,
       p_payments: [{ method_id: CASH, amount_minor: 650000 }] })
     expect(rec.error?.message).toBe('SERVICE_INACTIVE')
-    expect((await dev.from('service_records').select('value_minor').eq('id', RECORD).single()).data!.value_minor).toBe(450000)
+    expect(await historical()).toMatchObject({ amount_minor: 450000, title: 'Serviço G Histórico' })
     expect(await service(SVC)).toEqual({ name: 'Serviço G Histórico', default_price_minor: 650000, active: false })
     await setService(SVC, 'Serviço G Histórico', 650000, true)                 // reactivation brings it back
     expect((await dev.from('services').select('id').eq('active', true)).data!.map((s) => s.id)).toContain(SVC)

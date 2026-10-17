@@ -41,9 +41,16 @@ const purchase = (c: SupabaseClient, cmd: string, g: string | null, over: Row = 
   p_command_id: cmd, p_grant_id: g, p_lines: [{ product_id: O.product, quantity: 1, line_cost_minor: K(400) }],
   p_salon_amount_minor: K(400), p_contributions: [], p_origin_id: O.origin, ...over,
 })
-const rowsOf = async (c: SupabaseClient, cmd: string) =>
-  (await c.from('service_records').select('id, occurred_at, recorded_at').eq('command_id', cmd)).data as Row[]
 const summary = async (c: SupabaseClient, kind: string, rid: string) => (await c.rpc('record_summary', { p_kind: kind, p_record_id: rid })).data as Row
+// The service history is not readable directly (S3b); records are observed through what the server exposes:
+//   · devO2 never opens a private context, so it reads a summary of its own record only while that record's recorded_at
+//     is within the last 30 minutes (record_summary, S3a): a server-side bound on recorded_at;
+//   · a period's production (Fecho, devO's manager context) counts every active record of the period exactly once.
+async function windowSummary(rid: string): Promise<Row> {
+  const r = await devO2.rpc('record_summary', { p_kind: 'service', p_record_id: rid })
+  expect(r.error, r.error?.message).toBeNull()
+  return r.data
+}
 
 async function enterPrivate(c: SupabaseClient, person: string, pin: string) {
   expect((await c.rpc('verify_person', { p_person_id: person, p_secret: pin, p_scope: 'private_session' })).data?.ok).toBe(true)
@@ -74,43 +81,45 @@ beforeAll(async () => {
 describe('capture time · record_service', () => {
   it('an omitted capture time behaves as before: occurred_at = recorded_at = server time', async () => {
     const cmd = randomUUID(), before = Date.now()
-    const r = await service(devO, cmd)
+    const r = await service(devO2, cmd)
     expect(r.error).toBeNull()
-    const [row] = await rowsOf(devO, cmd)
-    expect(ms(row.occurred_at)).toBe(ms(row.recorded_at))
-    expect(ms(r.data.occurred_at)).toBe(ms(row.occurred_at))
-    expect(Math.abs(ms(row.recorded_at) - before)).toBeLessThan(2 * MIN)                  // the server clock, not the device's
+    expect(Math.abs(ms(r.data.occurred_at) - before)).toBeLessThan(2 * MIN)               // the server clock, not the device's
+    expect(ms((await windowSummary(r.data.record_id)).occurred_at)).toBe(ms(r.data.occurred_at))   // recorded_at: now, too
   })
   it('a delayed capture keeps the captured occurred_at; recorded_at is the later server write time', async () => {
     const cmd = randomUUID(), captured = at(-3 * H)
-    const r = await service(devO, cmd, { p_occurred_at: captured })
+    const r = await service(devO2, cmd, { p_occurred_at: captured })
     expect(r.error).toBeNull()
     expect(ms(r.data.occurred_at)).toBe(ms(captured))
-    const [row] = await rowsOf(devO, cmd)
-    expect(ms(row.occurred_at)).toBe(ms(captured))
-    expect(ms(row.recorded_at) - ms(row.occurred_at)).toBeGreaterThan(2.9 * H)
+    // stored with the captured occurred_at, yet still in the recording device's 30-minute window: recorded_at is the
+    // server write time, at least 2.5 hours after occurred_at
+    expect(ms((await windowSummary(r.data.record_id)).occurred_at)).toBe(ms(captured))
   })
   it('48 hours is the oldest accepted capture (inclusive); older is rejected without a record', async () => {
     expect((await service(devO, randomUUID(), { p_occurred_at: at(-48 * H + 2 * MIN) })).error).toBeNull()
-    const cmd = randomUUID()
-    expect((await service(devO, cmd, { p_occurred_at: at(-48 * H - 2 * MIN) })).error?.message).toBe('CAPTURE_TIME_TOO_OLD')
+    const cmd = randomUUID(), tooOld = at(-48 * H - 2 * MIN)
+    const period = (await periodOf(devO, tooOld)).id, p0 = await production(devO, period)
+    expect((await service(devO, cmd, { p_occurred_at: tooOld })).error?.message).toBe('CAPTURE_TIME_TOO_OLD')
     expect((await service(devO, randomUUID(), { p_occurred_at: at(-30 * 24 * H) })).error?.message).toBe('CAPTURE_TIME_TOO_OLD')
-    expect(await rowsOf(devO, cmd)).toEqual([])
+    expect(await production(devO, period)).toBe(p0)                                       // nothing recorded
   })
   it('5 minutes ahead is the latest accepted capture (inclusive); later is rejected without a record', async () => {
     expect((await service(devO, randomUUID(), { p_occurred_at: at(4 * MIN) })).error).toBeNull()
-    const cmd = randomUUID()
-    expect((await service(devO, cmd, { p_occurred_at: at(6 * MIN) })).error?.message).toBe('CAPTURE_TIME_IN_FUTURE')
+    const cmd = randomUUID(), tooLate = at(6 * MIN)
+    const period = (await periodOf(devO, tooLate)).id, p0 = await production(devO, period)
+    expect((await service(devO, cmd, { p_occurred_at: tooLate })).error?.message).toBe('CAPTURE_TIME_IN_FUTURE')
     expect((await service(devO, randomUUID(), { p_occurred_at: at(24 * H) })).error?.message).toBe('CAPTURE_TIME_IN_FUTURE')
-    expect(await rowsOf(devO, cmd)).toEqual([])
+    expect(await production(devO, period)).toBe(p0)                                       // nothing recorded
   })
   it('a rejected capture leaves no journal entry: the same command id with a valid time is a new record', async () => {
-    const cmd = randomUUID()
+    const cmd = randomUUID(), when = at(-H)
+    const period = (await periodOf(devO, when)).id
     expect((await service(devO, cmd, { p_occurred_at: at(-49 * H) })).error?.message).toBe('CAPTURE_TIME_TOO_OLD')
-    const r = await service(devO, cmd, { p_occurred_at: at(-H) })
+    const p0 = await production(devO, period)
+    const r = await service(devO, cmd, { p_occurred_at: when })
     expect(r.error).toBeNull()
     expect(r.data.replayed).toBeUndefined()
-    expect(await rowsOf(devO, cmd)).toHaveLength(1)
+    expect(await production(devO, period)).toBe(p0 + K(1000))                             // exactly one record
   })
   it('the period is derived from occurred_at, not from the write time', async () => {
     const captured = at(-26 * H)                                           // always an earlier day than today
@@ -126,13 +135,14 @@ describe('capture time · record_service', () => {
 describe('capture time · idempotency', () => {
   it('same command, payload and capture time replays (one record); the same instant written differently also replays', async () => {
     const cmd = randomUUID(), captured = new Date(Date.now() - 2 * H)
+    const period = (await periodOf(devO, captured.toISOString())).id, p0 = await production(devO, period)
     const first = await service(devO, cmd, { p_occurred_at: captured.toISOString() })
     expect(first.error).toBeNull()
     const again = await service(devO, cmd, { p_occurred_at: captured.toISOString() })
     expect([again.data.replayed, again.data.record_id]).toEqual([true, first.data.record_id])
     const offset = new Date(captured.getTime() + H).toISOString().replace('Z', '+01:00')   // same instant, +01:00
     expect((await service(devO, cmd, { p_occurred_at: offset })).data?.record_id).toBe(first.data.record_id)
-    expect(await rowsOf(devO, cmd)).toHaveLength(1)
+    expect(await production(devO, period)).toBe(p0 + K(1000))                             // exactly one record
   })
   it('a different capture time, or none, under the same command id is a conflict', async () => {
     const cmd = randomUUID(), captured = at(-2 * H)
@@ -202,9 +212,10 @@ describe('inactive references', () => {
     expect((await service(devO, randomUUID(), { p_payments: [{ method_id: O.methodOff, amount_minor: K(1000) }] })).error?.message).toBe('PAYMENT_METHOD_INACTIVE')
     expect((await service(devO, randomUUID(), { p_payments: [{ method_id: O.method, amount_minor: K(500) }, { method_id: O.methodOff, amount_minor: K(500) }] })).error?.message)
       .toBe('PAYMENT_METHOD_INACTIVE')
-    const cmd = randomUUID()
-    expect((await service(devO, cmd, { p_service_id: O.serviceOff, p_occurred_at: at(-H) })).error?.message).toBe('SERVICE_INACTIVE')
-    expect(await rowsOf(devO, cmd)).toEqual([])
+    const cmd = randomUUID(), when = at(-H)
+    const period = (await periodOf(devO, when)).id, p0 = await production(devO, period)
+    expect((await service(devO, cmd, { p_service_id: O.serviceOff, p_occurred_at: when })).error?.message).toBe('SERVICE_INACTIVE')
+    expect(await production(devO, period)).toBe(p0)                                       // nothing recorded
   })
   it('movements: inactive person, payment method, category, origin, product or contributor — before the grant is consumed', async () => {
     const g = await grant(devO)
@@ -266,13 +277,14 @@ describe('approved and closed periods (never moved to another period)', () => {
     it(`a capture whose occurred_at falls in a ${label} period is rejected (${code}), for services and movements`, async () => {
       const captured = at(-30 * H)
       const dev = c()
-      await prepare(dev, X.manager, pin, captured, close)
+      const period = await prepare(dev, X.manager, pin, captured, close)
       const today = await periodOf(dev, at(0))
       const t0 = await production(dev, today.id)
       const cmd = randomUUID()
       expect((await dev.rpc('record_service', { p_command_id: cmd, p_person_id: X.person, p_service_id: X.service, p_value_minor: K(10),
         p_payments: [{ method_id: X.method, amount_minor: K(10) }], p_occurred_at: captured })).error?.message).toBe(code)
-      expect((await dev.from('service_records').select('id').eq('command_id', cmd)).data).toEqual([])
+      // nothing written in the captured period (P and Q only ever see rejections: their periods hold no service)
+      expect(((await dev.rpc('team_history', { p_person_id: X.person, p_period_id: period.id, p_kind: 'service' })).data as Row).total_count).toBe(0)
       expect(await production(dev, today.id)).toBe(t0)                                                  // not moved to today
       const g = await grant(dev, X.manager, pin)
       expect((await dev.rpc('record_advance', { p_command_id: randomUUID(), p_grant_id: g, p_person_id: X.person, p_amount_minor: K(10),
