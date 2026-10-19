@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Android S1: no backup or device transfer of local state (device session, offline outbox and drafts).
+         allowBackup=false (Android 11 and lower, cloud backup on 12+); dataExtractionRules also covers device-to-device
+         transfer on 12+; fullBackupContent keeps every domain excluded if backup were re-enabled. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
