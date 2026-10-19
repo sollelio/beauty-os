@@ -37,6 +37,7 @@ These labels are assigned editorially by the product team from the discovery not
 - `Confirmed` `beauty-os` is the working repository name, **not** necessarily the commercial name.
 - `Confirmed` Phase: product / solution discovery. No implementation, technology or architecture decisions have been made.
 - `Decided` The product is **one responsive web application**, mobile-first, usable on smartphone, tablet and desktop/laptop — not a native iOS/Android app. Detail: [05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor).
+- `Decided` (Sollelio, 2026-10-19) The **Android app is a Capacitor package of this same application** (same code, UI and Supabase backend), not a separate native app; the web/PWA continues on Netlify. A Google Play release is not approved. Detail: [ADR-0011](architecture/adr/0011-android-package-with-capacitor.md).
 
 ### Brand architecture — `Decided` (supplied by Sollelio)
 

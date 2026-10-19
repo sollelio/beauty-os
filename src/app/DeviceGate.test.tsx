@@ -1,7 +1,7 @@
 // Offline 4 · opening the app without a connection: the last-known binding opens public capture only; without one,
 // the device says it needs a connection. Online answers keep the binding current or remove it.
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -77,6 +77,72 @@ describe('offline start', () => {
     vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
     mount('/privado/entrar')
     expect(await screen.findByTestId('needs-connection')).toBeTruthy()
+  })
+  // Android A2 · 155 device_context requests in two minutes: navigator.onLine said online, the server was not reachable
+  it('server unreachable with the browser online: asked once, not again and again (no «A carregar…» loop)', async () => {
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount()
+    // the device context's own retry (one, while the browser says online) comes first
+    expect((await screen.findByTestId('home', {}, { timeout: 3000 })).textContent).toBe('Teste Offline O · cache · true')
+    const asked = vi.mocked(getDeviceContext).mock.calls.length
+    await new Promise((r) => setTimeout(r, 300))
+    expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked)
+    expect(screen.getByTestId('home')).toBeTruthy()
+  })
+  it('the connection returning (offline → online) asks the server again, once, and leaves the cached binding', async () => {
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+    online = false
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount()
+    expect((await screen.findByTestId('home')).textContent).toBe('Teste Offline O · cache · true')
+    const asked = vi.mocked(getDeviceContext).mock.calls.length
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org })
+    act(() => { online = true; window.dispatchEvent(new Event('online')) })
+    await waitFor(() => expect(screen.getByTestId('home').textContent).toBe('Teste Offline O · server · true'))
+    expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked + 1)
+  })
+  describe('back in the foreground on the cached binding (the server may be back with no connectivity change)', () => {
+    const foreground = () => act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    const unreachableThenHome = async () => {
+      await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+      vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+      mount()
+      expect((await screen.findByTestId('home', {}, { timeout: 3000 })).textContent).toBe('Teste Offline O · cache · true')
+      return vi.mocked(getDeviceContext).mock.calls.length
+    }
+    it('the server answering: asked once in the background, the server binding replaces the cached one', async () => {
+      const asked = await unreachableThenHome()
+      vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org })
+      foreground()
+      await waitFor(() => expect(screen.getByTestId('home').textContent).toBe('Teste Offline O · server · true'))
+      expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked + 1)
+    })
+    it('still unreachable: one request at a time, the cached binding stays on screen (no «A carregar…»), nothing after the failure', async () => {
+      const asked = await unreachableThenHome()
+      let fail!: (e: unknown) => void
+      vi.mocked(getDeviceContext).mockReturnValue(new Promise((_, reject) => { fail = reject }))
+      foreground()
+      foreground()                                               // a second resume while the first request is out
+      expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked + 1)
+      expect(screen.getByTestId('home').textContent).toBe('Teste Offline O · cache · true')
+      expect(screen.queryByText('A carregar…')).toBeNull()
+      await act(async () => { fail(new AppError('network', 'Failed to fetch')) })
+      await new Promise((r) => setTimeout(r, 300))
+      expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked + 1)    // a failure never asks again by itself
+      expect(screen.getByTestId('home').textContent).toBe('Teste Offline O · cache · true')
+    })
+    it('offline: not asked (the connection returning does that)', async () => {
+      await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
+      online = false
+      vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+      mount()
+      expect((await screen.findByTestId('home')).textContent).toBe('Teste Offline O · cache · true')
+      const asked = vi.mocked(getDeviceContext).mock.calls.length
+      foreground()
+      await new Promise((r) => setTimeout(r, 100))
+      expect(vi.mocked(getDeviceContext).mock.calls.length).toBe(asked)
+    })
   })
   it('without a cached binding (or for another principal) it needs a connection', async () => {
     await saveBinding(await openSharedOfflineDb(), { deviceUserId: crypto.randomUUID(), organization: org, verifiedAt: new Date().toISOString() })

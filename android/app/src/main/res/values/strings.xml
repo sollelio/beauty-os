@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Beauty OS Spike</string>
+    <string name="title_activity_main">Beauty OS Spike</string>
+    <string name="package_name">com.sollelio.beautyos.spike</string>
+    <string name="custom_url_scheme">com.sollelio.beautyos.spike</string>
+</resources>

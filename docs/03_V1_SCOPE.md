@@ -81,7 +81,7 @@ A V1 rule is a percentage of the person's own production in the period, either *
 | Suppliers | Supplier marketplace; supplier portal; delivery network; real-time supplier inventory |
 | Finance & people | Full accounting; tax; formal payroll; full HR; attendance; shift scheduling |
 | Stock | Advanced inventory forecasting; automatic purchasing; barcode scanning; exact per-service millilitre consumption; warehouse management; advanced expiry/batch workflows |
-| Other | POS hardware; AI recommendations; full white-label / tenant theming beyond name + logo ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)); native iOS/Android apps ([05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor)); tutorial videos — replaced by in-app microanimations ([learning experience](design/learning-experience.md)) |
+| Other | POS hardware; AI recommendations; full white-label / tenant theming beyond name + logo ([05 §6](05_PRODUCT_EXPERIENCE_MODEL.md#6-product-identity-vs-tenant-identity--decided)); native iOS/Android apps ([05 §2](05_PRODUCT_EXPERIENCE_MODEL.md#2-device-constraints-and-form-factor); the Capacitor Android package of the same web app is not a native app — [ADR-0011](architecture/adr/0011-android-package-with-capacitor.md), Google Play release not approved); tutorial videos — replaced by in-app microanimations ([learning experience](design/learning-experience.md)) |
 
 ## 5. Open scope questions
 

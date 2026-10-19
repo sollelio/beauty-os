@@ -1,6 +1,6 @@
 # ADR-0008 — Frontend stack and repository organization
 
-**Status:** Accepted (Architecture Definition checkpoint, 2026-10-06)
+**Status:** Accepted (Architecture Definition checkpoint, 2026-10-06) · amended in part by [ADR-0011](0011-android-package-with-capacitor.md) (the same app also packaged for Android with Capacitor; web/PWA on Netlify unchanged)
 **Related:** [Architecture Definition §15, §19](../architecture-definition.md#15-frontend-architecture)
 
 ## Context

@@ -16,3 +16,4 @@ Status values: **Proposed** (not binding) · **Accepted** (binding) · **Superse
 | [0008](0008-frontend-stack-and-repository-organization.md) | Frontend stack and repository organization | Accepted |
 | [0009](0009-shared-device-principal-and-verification.md) | Shared-device principal and verified actor | Accepted (iOS Safari physical validation deferred; pre-pilot gate) |
 | [0010](0010-offline-capture-and-sync.md) | Offline capture and foreground synchronization (Offline V1) | Accepted (supersedes 07 D5 in part) |
+| [0011](0011-android-package-with-capacitor.md) | Android package of the web app with Capacitor | Accepted (Android direction; amends 0008 in part; Google Play release not approved) |

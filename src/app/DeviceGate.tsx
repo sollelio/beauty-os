@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet } from 'react-router'
 import { getDeviceContext, orgKeys, readStoredPrincipal, reportDeviceSync, watchDevicePrincipal } from '../modules/org/api'
@@ -35,10 +35,33 @@ export function DeviceGate() {
   const cached = useCachedBinding(principal, noServer)
   // Opened without a connection, the query library still believes it is online, so the browser's "online" event does
   // not refetch: ask the server again ourselves when the connection returns (until then the runtime stays on the cached
-  // binding — no snapshot refresh, no sync report).
+  // binding — no snapshot refresh, no sync report). Only on the return itself (offline → online): "online" with the
+  // server unreachable must not ask again after every failure (a «A carregar…» loop).
   const connectivity = useConnectivity()
+  const lastConnectivity = useRef(connectivity)
+  const probing = useRef(false)
   const { refetch } = ctx
-  useEffect(() => { if (noServer && connectivity === 'online') void refetch() }, [noServer, connectivity, refetch])
+  useEffect(() => {
+    const returned = lastConnectivity.current === 'offline' && connectivity === 'online'
+    lastConnectivity.current = connectivity
+    if (returned && noServer && !probing.current) void refetch()
+  }, [noServer, connectivity, refetch])
+  // The server can come back with no connectivity change (it was down, a captive portal, DNS): when the app returns to
+  // the foreground on the cached binding, ask once in the background. The cached binding stays on screen meanwhile (a
+  // refetch would replace the app with «A carregar…»); a failure changes nothing, an answer replaces it. One at a time.
+  useEffect(() => {
+    if (!noServer) return
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || getConnectivity() !== 'online' || probing.current
+          || queryClient.isFetching({ queryKey: orgKeys.deviceContext }) > 0) return
+      probing.current = true
+      getDeviceContext()
+        .then((answer) => { queryClient.setQueryData(orgKeys.deviceContext, answer) }, () => { /* still unreachable: stay on the cached binding */ })
+        .finally(() => { probing.current = false })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [noServer, queryClient])
   const onDrained = useCallback((outcome: SyncOutcome) => {
     if (outcome.kind !== 'drained') return
     if (outcome.result.synced > 0) void queryClient.invalidateQueries({ queryKey: servicesKeys.all })

@@ -18,6 +18,18 @@ describe('registerServiceWorker', () => {
     registerServiceWorker(n)
     expect(n.serviceWorker.register).toHaveBeenCalledWith('/sw.js', { scope: '/', updateViaCache: 'none' })
   })
+  it('in production on the web (not the Capacitor shell): registered', () => {
+    vi.stubEnv('PROD', true)
+    const n = nav()
+    registerServiceWorker(n, false)
+    expect(n.serviceWorker.register).toHaveBeenCalledWith('/sw.js', { scope: '/', updateViaCache: 'none' })
+  })
+  it('not in the Capacitor Android shell (Android A1), even in production', () => {
+    vi.stubEnv('PROD', true)
+    const n = nav()
+    registerServiceWorker(n, true)
+    expect(n.serviceWorker.register).not.toHaveBeenCalled()
+  })
   it('a browser without service workers keeps working as before', () => {
     vi.stubEnv('PROD', true)
     expect(() => registerServiceWorker({} as Navigator)).not.toThrow()
