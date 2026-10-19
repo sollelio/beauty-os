@@ -1,4 +1,4 @@
-package com.sollelio.beautyos.spike;
+package com.sollelio.beautyos;
 
 import com.getcapacitor.BridgeActivity;
 

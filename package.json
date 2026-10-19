@@ -12,8 +12,9 @@
     "check:supabase": "node scripts/check-supabase.mjs",
     "test": "vitest run",
     "test:db": "vitest run --config vitest.db.config.ts",
-    "android:sync": "npm run build && cap sync android",
-    "android:check": "node scripts/check-android-bundle.mjs"
+    "android:check": "node scripts/check-android-bundle.mjs",
+    "android:sync:dev": "tsc -b && vite build --mode android-dev && cap sync android && node scripts/check-android-bundle.mjs dev",
+    "android:sync:prod": "tsc -b && vite build --mode android-prod && cap sync android && node scripts/check-android-bundle.mjs prod"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",

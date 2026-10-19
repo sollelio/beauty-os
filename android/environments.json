@@ -1,0 +1,16 @@
+{
+  "dev": {
+    "applicationId": "com.sollelio.beautyos.dev",
+    "appName": "Beauty OS Dev",
+    "supabaseProjectRef": "plukxnjnmowlnplpgsnm",
+    "captcha": "optional",
+    "webViewHostname": "localhost"
+  },
+  "prod": {
+    "applicationId": "com.sollelio.beautyos",
+    "appName": "Beauty OS",
+    "supabaseProjectRef": "kzirzmtarnskwirufyjw",
+    "captcha": "required",
+    "webViewHostname": null
+  }
+}

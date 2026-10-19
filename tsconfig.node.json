@@ -23,6 +23,7 @@
     "vite.config.ts",
     "capacitor.config.ts",
     "pwa/**/*.ts",
+    "scripts/**/*.ts",
     "vitest.db.config.ts",
     "tests/**/*.ts"
   ]

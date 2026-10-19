@@ -1,10 +1,15 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
+// Android R2 (ADR-0011): one flavor per environment, identities from android/environments.json (shared with the web
+// build's guard). dev → Supabase Dev, prod → Supabase Prod; each flavor packages only a web bundle built for it.
+def beautyOsEnvironments = new JsonSlurper().parse(rootProject.file('environments.json'))
+
 android {
-    namespace = "com.sollelio.beautyos.spike"
+    namespace = "com.sollelio.beautyos"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.sollelio.beautyos.spike"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -15,6 +20,20 @@ android {
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+    }
+    flavorDimensions = ["environment"]
+    productFlavors {
+        dev { dimension "environment" }
+        prod { dimension "environment" }
+    }
+    productFlavors.configureEach { flavor ->
+        def env = beautyOsEnvironments[flavor.name]
+        if (env == null) throw new GradleException("No environment '${flavor.name}' in android/environments.json")
+        flavor.applicationId = env.applicationId
+        flavor.resValue "string", "app_name", env.appName
+        flavor.resValue "string", "title_activity_main", env.appName
+        flavor.resValue "string", "package_name", env.applicationId
+        flavor.resValue "string", "custom_url_scheme", env.applicationId
     }
     buildTypes {
         release {
@@ -43,6 +62,56 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// Fail closed: a flavor packages only a web bundle built for its environment (marker written by
+// `vite build --mode android-<flavor>`) with its approved WebView hostname — a Dev bundle never ships as prod, nor the
+// reverse, and an environment without an approved hostname (webViewHostname null) is refused. Wired through the public
+// variant API as a generated asset source, so AGP itself runs it before merging any variant's assets (no task names).
+abstract class VerifyAndroidWebBundle extends DefaultTask {
+    @Input abstract Property<String> getFlavor()
+    @Input abstract Property<String> getSupabaseProjectRef()
+    @Input @Optional abstract Property<String> getWebViewHostname()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getSyncedFiles()
+    @Internal abstract RegularFileProperty getMarker()
+    @Internal abstract RegularFileProperty getCapacitorConfig()
+    @OutputDirectory abstract DirectoryProperty getOutputDir()
+
+    @TaskAction
+    void verify() {
+        def env = flavor.get(), sync = "run `npm run android:sync:${env}`"
+        def markerFile = marker.get().asFile
+        if (!markerFile.exists()) throw new GradleException("No Android web bundle marker: ${sync} before building the ${env} flavor.")
+        def built = new JsonSlurper().parse(markerFile)
+        if (built.environment != env || built.supabaseProjectRef != supabaseProjectRef.get()) {
+            throw new GradleException("The synced web bundle was built for '${built.environment}', not '${env}': ${sync}.")
+        }
+        if (!webViewHostname.present) {
+            throw new GradleException("${env} Android builds are refused until the WebView hostname is approved and configured (ADR-0011; webViewHostname in android/environments.json).")
+        }
+        def configFile = capacitorConfig.get().asFile
+        def hostname = configFile.exists() ? (new JsonSlurper().parse(configFile).server?.hostname ?: 'localhost') : null
+        if (hostname != webViewHostname.get()) {
+            throw new GradleException("The synced Capacitor config uses WebView hostname '${hostname}', not '${webViewHostname.get()}' (${env}): ${sync}.")
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def env = beautyOsEnvironments[variant.flavorName]
+        if (env == null) throw new GradleException("No environment '${variant.flavorName}' in android/environments.json")
+        def verify = tasks.register("verify${variant.name.capitalize()}WebBundle", VerifyAndroidWebBundle) { task ->
+            task.flavor.set(variant.flavorName)
+            task.supabaseProjectRef.set(env.supabaseProjectRef as String)
+            task.webViewHostname.set(env.webViewHostname as String)          // null: not approved → refused
+            task.marker.set(file('src/main/assets/public/beauty-os-android-env.json'))
+            task.capacitorConfig.set(file('src/main/assets/capacitor.config.json'))
+            task.syncedFiles.from(task.marker, task.capacitorConfig)
+            task.outputDir.set(layout.buildDirectory.dir("intermediates/beautyOsWebBundleCheck/${variant.name}"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(verify, { it.outputDir })
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

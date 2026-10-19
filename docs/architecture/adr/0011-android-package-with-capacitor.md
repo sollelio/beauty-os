@@ -14,8 +14,18 @@ Beauty OS is one responsive, mobile-first web application (05 §2, `Decided`), h
 - **The web/PWA on Netlify continues unchanged**, including its static-shell service worker (ADR-0010 §7).
 - **Bundled assets only:** the Android shell serves the built `dist/` from the device (`https://localhost`); never a remote `server.url`, never the Netlify site. The static-shell service worker is **not registered** in the Android shell (`registerServiceWorker`, runtime check), since the bundled assets already open without a connection.
 - **Native surface kept minimal:** Capacitor core only, no extra plugins; permissions `INTERNET` and `ACCESS_NETWORK_STATE`. The latter is required: without it Android WebView never reports offline (`navigator.onLine` stays `true`), which breaks ADR-0010's connectivity signal.
-- **Build:** Capacitor 8 (`@capacitor/core`, `@capacitor/android`, `@capacitor/cli`, pinned), `android/` project in the repository, JDK 21 and the Android SDK; `npm run android:sync` (web build + sync) and `npm run android:check` (bundled assets, no `server.url`, Supabase **Dev** only, no secret key in the bundle).
-- **Until a release decision:** application id `com.sollelio.beautyos.spike` (non-production), debug builds only, Supabase **Dev** only.
+- **Build:** Capacitor 8 (`@capacitor/core`, `@capacitor/android`, `@capacitor/cli`, pinned), `android/` project in the repository, JDK 21 and the Android SDK.
+- **Identities and environments (Android R2, Sollelio 2026-10-19):** one Gradle flavor per environment, defined once in `android/environments.json`:
+
+  | Flavor | Application id | Launcher name | Supabase | CAPTCHA |
+  |---|---|---|---|---|
+  | `dev` | `com.sollelio.beautyos.dev` | Beauty OS Dev | Dev (`plukxnjnmowlnplpgsnm`), exclusively | optional |
+  | `prod` | `com.sollelio.beautyos` | Beauty OS | Prod (`kzirzmtarnskwirufyjw`), including closed testing | required |
+
+  Play listing title: *Sollelio Beauty OS*. The feasibility package `com.sollelio.beautyos.spike` stays an independent experimental installation (no migration).
+- **Fail-closed environment separation:** `npm run android:sync:dev|prod` builds with `vite --mode android-dev|android-prod`, which reads env files only from `android/env/` (git-ignored `.env.android-<env>.local`, never the root `.env.local`) and is **refused** unless they point at that environment's Supabase project (and, for prod, carry the CAPTCHA site key); the bundle gets an environment marker; `cap sync`; `scripts/check-android-bundle.mjs <env>` re-checks the synced bundle (marker, only its project, no `server.url`, no secret key). Gradle refuses to package a flavor whose synced marker is not that flavor, or whose Capacitor config does not use the flavor's approved WebView hostname (a verification task wired through AGP's public variant API, so it runs before every variant's asset merge whatever its task names), so a Dev bundle never ships as prod, nor the reverse. The web/PWA build is unchanged (no marker, root env files).
+- **Prod refused until its origin is approved:** `webViewHostname` in `android/environments.json` is `localhost` for dev and `null` for prod; while it is `null`, every prod Android build is refused (web build, bundle check and Gradle), so no usable prod artifact can carry the temporary `https://localhost` origin. The hostname fixes where the app's local data lives and must not change once a prod build is installed.
+- **Not yet decided / configured:** signing and keystores, versioning, release brand assets, the WebView origin hostname, and any production-connected build (none has been made).
 - **iOS:** not in scope of this decision.
 
 ## Evidence (2026-10-19)
