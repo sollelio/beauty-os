@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch splash icon (Android 12+ system splash; Android 7–11 via core-splashscreen): the official symbol
+     (sollelio-beauty-os-symbol.svg), paths verbatim, same placement as the launcher; 288 dp, inside the 192 dp icon circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.4921875"
+        android:scaleY="0.4921875"
+        android:translateX="29.390625"
+        android:translateY="29.390625">
+        <path android:fillColor="#3030A8" android:pathData="M8 8h34c4 0 6 2 6 6v17c0 6-3 10-8 13L8 58V8Z" />
+        <path android:fillColor="#7657D6" android:pathData="M58 8h26c5 0 8 3 8 8v20L60 50c-5 2-8-1-8-6V18c0-7 2-10 6-10Z" />
+        <path android:fillColor="#3030A8" android:pathData="M8 66l32-14c5-2 8 1 8 6v24c0 7-3 10-10 10H16c-5 0-8-3-8-8V66Z" />
+        <path android:fillColor="#3030A8" android:pathData="M60 56l32-14v42c0 5-3 8-8 8H58c-4 0-6-2-6-6V69c0-6 3-10 8-13Z" />
+    </group>
+</vector>

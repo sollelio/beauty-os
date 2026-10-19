@@ -16,7 +16,11 @@
     </style>
 
 
+    <!-- Launch (Android R3): Warm Off-white with the official symbol, drawn by the system splash on Android 12+ and as the
+         window background by core-splashscreen on Android 7–11; the in-app Brand Splash (L1) continues on the same colour. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
