@@ -72,9 +72,14 @@ describe('device registration and report', () => {
     expect(await status(p.id)).toEqual(before)
     expect((await mgr.rpc('fecho_sync_status', { p_period_id: '00000000-0000-4000-8000-0000000cb801' })).error?.message).toBe('CROSS_TENANT_REFERENCE')
   })
-  it('the status is counts only, and needs a team-finance private context', async () => {
+  it('the status: the counts and the devices behind them (label, state, counts — never an id); needs a team-finance private context', async () => {
     const p = freshPeriod()
-    expect(Object.keys(await status(p.id)).sort()).toEqual(['pending', 'ready', 'safe', 'silent'])
+    const s = await status(p.id)
+    expect(Object.keys(s).sort()).toEqual(['devices', 'pending', 'period_ended', 'ready', 'safe', 'silent'])
+    for (const d of s.devices as Row[]) {
+      expect(Object.keys(d).sort()).toEqual(['conflicts', 'drafts', 'enrolled_at', 'label', 'reported_at', 'services', 'state', 'this_device'])
+    }
+    expect(JSON.stringify(s)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/)
     const plain = await newDevice()
     await ok(plain, zero)
     expect((await plain.rpc('fecho_sync_status', { p_period_id: p.id })).error?.message).toBe('VERIFICATION_REQUIRED')
@@ -86,7 +91,8 @@ describe('period sync safety', () => {
     const c = await device('TEST-ORG-C-2026')
     expect((await c.rpc('verify_person', { p_person_id: '00000000-0000-4000-8000-00000000c202', p_secret: '343434', p_scope: 'private_session' })).data?.ok).toBe(true)
     const any = ((await c.rpc('fecho_periods')).data as Row[])[0]!
-    expect((await c.rpc('fecho_sync_status', { p_period_id: any.id })).data).toEqual({ ready: 0, pending: 0, silent: 0, safe: true })
+    expect((await c.rpc('fecho_sync_status', { p_period_id: any.id })).data)
+      .toEqual({ ready: 0, pending: 0, silent: 0, safe: true, period_ended: expect.any(Boolean), devices: [] })
   })
   it('every offline-capable device ready after the period ended: approve and close proceed', async () => {
     const p = freshPeriod()
@@ -128,6 +134,29 @@ describe('period sync safety', () => {
     expect(await status(p.id)).toMatchObject({ pending: 1, safe: false })
     await ok(b, zero)
     expect(await status(p.id)).toMatchObject({ pending: 0, silent: 0, safe: true })
+  })
+  it('per device: the states agree with the counts; the blocking phone carries its counts for this period only', async () => {
+    const p = freshPeriod(), other = freshPeriod()
+    const d = await newDevice()
+    await ok(d, { days: [{ day: p.day, services: 2, conflicts: 1 }, { day: other.day, services: 7 }], undated: { drafts: 1 } })
+    const s = await status(p.id)
+    const devices = s.devices as Row[]
+    for (const k of ['ready', 'pending', 'silent']) expect(devices.filter((x) => x.state === k).length, k).toBe(s[k])
+    expect(devices.filter((x) => x.this_device)).toHaveLength(1)                              // the manager's own device
+    expect(devices.filter((x) => x.state === 'pending')).toEqual([expect.objectContaining({ services: 2, conflicts: 1, drafts: 1, this_device: false })])
+    expect(s.period_ended).toBe(true)
+    expect((await approve(p.id)).error?.message).toBe('PERIOD_OFFLINE_SYNC_PENDING')             // the block is unchanged
+    await ok(d, zero)
+    const after = await status(p.id)
+    expect(after).toMatchObject({ pending: 0, safe: true })
+    expect((after.devices as Row[]).every((x) => x.state === 'ready')).toBe(true)
+  })
+  it('a period that has not ended: every device is silent and the status says the period has not ended', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Luanda', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    const p = ((await mgr.rpc('fecho_periods')).data as Row[]).find((x) => x.starts_on === today)!
+    const s = await status(p.id)
+    expect(s).toMatchObject({ safe: false, period_ended: false })
+    expect((s.devices as Row[]).every((x) => x.state === 'silent')).toBe(true)
   })
   it('a refused approval or close consumes nothing: the same grant then succeeds; the period is untouched', async () => {
     const p = freshPeriod()

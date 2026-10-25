@@ -64,7 +64,7 @@ export function ClosePage() {
         {!pos.owners_decision && <div className="notice notice-neutral">Ainda sem decisão dos sócios: fica registado «sem decisão» ao fechar.</div>}
         {sync.blocked && sync.q.data && <SyncNotice status={sync.q.data} verb="fechar" onOpen={() => setSyncOpen(true)} />}
       </>}
-      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
+      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} verb="fechar" endsOn={f.period.ends_on} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
       permission="period.close" run={closePeriod} input={{ periodId: f.period.id, revision: f.review_revision }} blocked={blocked || sync.blocked}
       intro="Depois de fechado, o período fica só de leitura. Alterações só por reabertura autorizada, com motivo e registo de quem."
       lockNote="Fica no histórico com quem fechou e quando." label="Fechar período" onSuccess={back} onBack={back}

@@ -49,7 +49,7 @@ export function ApprovePage() {
         <button className="btn btn-primary btn-tall" disabled>{`Aprovar ${m(pos.payable_minor)}`}</button>
         <button className="btn btn-secondary" onClick={() => setSyncOpen(true)}>Ver estado da sincronização</button>
       </>}
-      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
+      after={syncOpen && sync.q.data && <SyncStatusSheet status={sync.q.data} verb="aprovar" endsOn={f.period.ends_on} onDismiss={() => setSyncOpen(false)} onRefresh={() => void sync.q.refetch()} refreshing={sync.q.isFetching} />}
       lockNote="Fica no histórico com quem aprovou e quando. O período passa a «Pronto para pagamento»; depois, os valores só mudam com registo de quem e porquê.">
       <ListGroup data-testid="approval-lines">
         {pos.people.map((x) => (

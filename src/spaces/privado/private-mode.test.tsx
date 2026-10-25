@@ -331,6 +331,24 @@ describe('Fecho offline sync gate (Offline 7)', () => {
     expect((screen.getByRole('button', { name: 'Fechar período' }) as HTMLButtonElement).disabled).toBe(false)
     expect(closePeriod).not.toHaveBeenCalled()
   })
+  it('the status sheet names the blocking phone, and Atualizar shows it ready with the new count', async () => {
+    const phone = (label: string, state: 'ready' | 'pending', services = 0) =>
+      ({ label, state, enrolled_at: '2026-10-14T08:00:00Z', reported_at: '2026-10-19T13:05:00Z', this_device: false, services, drafts: 0, conflicts: 0 })
+    vi.mocked(getFecho).mockResolvedValue(fecho('aberto'))
+    vi.mocked(getSyncStatus).mockResolvedValue({ ready: 1, pending: 1, silent: 0, safe: false, period_ended: true,
+      devices: [phone('Telemóvel do salão', 'ready'), phone('Telemóvel da Merce', 'pending', 2)] })
+    renderApp(['/privado/fecho', '/privado/fecho/aprovar'])
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Ver estado da sincronização' }))[0]!)
+    expect((await screen.findByTestId('sync-gate-summary')).textContent).toMatch(/^1 telemóvel precisa de atenção/)
+    expect(screen.getByRole('region', { name: 'Telemóvel da Merce' }).textContent).toMatch(/Registos por enviar.*ainda tem 2 registos por enviar/)
+    vi.mocked(getSyncStatus).mockResolvedValue({ ready: 2, pending: 0, silent: 0, safe: true, period_ended: true,
+      devices: [phone('Telemóvel do salão', 'ready'), phone('Telemóvel da Merce', 'ready')] })
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }))
+    await waitFor(() => expect(screen.getByTestId('sync-gate-summary').textContent).toMatch(/^Todos os telemóveis estão sincronizados/))
+    expect(screen.getByRole('region', { name: 'Telemóvel da Merce' }).textContent).toMatch(/Sincronizado.*pronto para o fecho/)
+    expect(screen.queryByTestId('sync-notice')).toBeNull()
+    expect(approvePeriod).not.toHaveBeenCalled()
+  })
   it('approval is gated the same way', async () => {
     vi.mocked(getFecho).mockResolvedValue(fecho('aberto'))
     vi.mocked(getSyncStatus).mockResolvedValue(unsafe)
