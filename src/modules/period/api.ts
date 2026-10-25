@@ -132,7 +132,13 @@ export const confirmPayment = (c: string, g: string, i: PaymentInput) =>
     { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_person_id: i.personId, p_amount_minor: i.amountMinor, p_payment_method_id: i.methodId })
 
 /** Offline 7 (ADR-0010 §5): the period's device sync state, live — how many offline-capable devices are ready, still
- *  hold work for it, or have not checked in since it ended. Counts only; never cached for offline use. */
-export type SyncStatus = { ready: number; pending: number; silent: number; safe: boolean }
+ *  hold work for it, or have not checked in since it ended, and which devices those are (label, never an id). Never
+ *  cached for offline use. `period_ended` / `devices` are absent from a database without 20261025000100. */
+export type SyncDeviceState = 'ready' | 'pending' | 'silent'
+export type SyncDevice = {
+  label: string | null; enrolled_at: string; reported_at: string | null; this_device: boolean; state: SyncDeviceState
+  services: number; drafts: number; conflicts: number       // this period's days plus undated work, as last reported
+}
+export type SyncStatus = { ready: number; pending: number; silent: number; safe: boolean; period_ended?: boolean; devices?: SyncDevice[] }
 export const getSyncStatus = (periodId: string) => rpc<SyncStatus>('fecho_sync_status', { p_period_id: periodId })
 

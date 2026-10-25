@@ -293,6 +293,7 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .sheet { z-index: 100; }
 .sheet-body { max-height: min(92dvh, calc(100% - 1rem)); overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 .sheet-body:focus { outline: none; }
+.sheet-body > .sync-devices { flex-shrink: 0; }   /* a long list scrolls the sheet; a row-group (overflow hidden) would shrink and clip */
 .sheet-title { font-size: 1.25rem; overflow-wrap: anywhere; }
 
 /* PinConfirm + destructive actions (UX slice 2). Person choice as a grid of 52px options; a six-cell PIN that shows
