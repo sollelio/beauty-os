@@ -18,7 +18,10 @@ export function SyncNotice({ status, verb, onOpen }: { status: SyncStatus; verb:
   const waiting = status.pending + status.silent
   return (
     <div className="notice notice-warning stack stack-tight" role="status" data-testid="sync-notice">
-      {status.period_ended === false ? <>
+      {status.period_ended === false ? status.week_end?.available ? <>
+        <strong>A semana ainda não foi terminada.</strong>
+        <span>Termine a semana no Fecho; depois cada telemóvel confirma o seu estado e pode {verb}.</span>
+      </> : <>
         <strong>Este período ainda não terminou.</strong>
         <span>Só pode {verb} depois do fim do período, quando cada telemóvel confirmar o seu estado.</span>
       </> : <>
@@ -32,10 +35,17 @@ export function SyncNotice({ status, verb, onOpen }: { status: SyncStatus; verb:
 
 type View = { tone: 'success' | 'warning' | 'danger' | 'neutral'; badge: string; reasons: string[]; actions: string[]; lastSeen?: boolean; lost?: boolean }
 
+/** week: the organization ends its weeks by declaration (Slice 2); declared: this one was, so "the end" is that moment. */
+type Week = { available: boolean; declared: boolean }
+
 /** What a phone's state means for the people at the salon: why it blocks and what to do on it. */
-function deviceView(d: SyncDevice, periodEnded: boolean, endsOn: string, timeZone: string): View {
+function deviceView(d: SyncDevice, periodEnded: boolean, endsOn: string, timeZone: string, week: Week): View {
   if (d.state === 'ready') return { tone: 'success', badge: 'Sincronizado', reasons: ['Este telemóvel já está pronto para o fecho.'], actions: [] }
   if (d.state === 'silent') {
+    if (!periodEnded && week.available) {
+      return { tone: 'neutral', badge: 'Aguarda o fim da semana', reasons: ['A semana ainda não foi terminada.'],
+        actions: ['Depois de terminar a semana, abra o Beauty OS neste telemóvel com Internet.'] }
+    }
     if (!periodEnded) {
       return { tone: 'neutral', badge: 'Aguarda o fim do período', reasons: [`O período termina no fim de ${formatDayShort(endsOn, timeZone)}.`],
         actions: [`A partir de ${formatDayShort(nextDay(endsOn), timeZone)}, abra o Beauty OS neste telemóvel com Internet.`] }
@@ -44,7 +54,8 @@ function deviceView(d: SyncDevice, periodEnded: boolean, endsOn: string, timeZon
       return { tone: 'warning', badge: 'Precisa de ligação', reasons: ['Este telemóvel ainda não conseguiu confirmar o seu estado.'],
         actions: ['Ligue-o à Internet e toque em «Atualizar».'] }
     }
-    return { tone: 'warning', badge: 'Sem estado recente', reasons: ['Este telemóvel ainda não confirmou o seu estado depois do fim do período.'],
+    return { tone: 'warning', badge: 'Sem estado recente',
+      reasons: [week.declared ? 'Este telemóvel ainda não confirmou o seu estado depois de a semana ter sido terminada.' : 'Este telemóvel ainda não confirmou o seu estado depois do fim do período.'],
       actions: ['Abra o Beauty OS neste telemóvel com Internet para confirmar o estado.'], lastSeen: true, lost: true }
   }
   const reasons: string[] = [], actions: string[] = []
@@ -68,9 +79,9 @@ function deviceView(d: SyncDevice, periodEnded: boolean, endsOn: string, timeZon
   return { tone: d.conflicts > 0 ? 'danger' : 'warning', badge, reasons, actions }
 }
 
-function DeviceRow({ d, periodEnded, endsOn }: { d: SyncDevice; periodEnded: boolean; endsOn: string }) {
+function DeviceRow({ d, periodEnded, endsOn, week }: { d: SyncDevice; periodEnded: boolean; endsOn: string; week: Week }) {
   const { timezone } = useOrganization()
-  const v = deviceView(d, periodEnded, endsOn, timezone)
+  const v = deviceView(d, periodEnded, endsOn, timezone, week)
   const name = d.label?.trim() || 'Telemóvel sem nome'
   return (
     <section className="row-block" aria-label={name} data-state={d.state}>
@@ -100,6 +111,7 @@ export function SyncStatusSheet({ status, verb, endsOn, onDismiss, onRefresh, re
   const waiting = status.pending + status.silent
   const devices = status.devices && [...status.devices].sort((a, b) => ORDER[a.state] - ORDER[b.state])
   const periodEnded = status.period_ended !== false
+  const week: Week = { available: !!status.week_end?.available, declared: !!status.week_end?.declared_at }
   return (
     <BottomSheet labelledBy="sync-gate-title" onDismiss={onDismiss}>
       <h2 id="sync-gate-title" className="sheet-title">Estado da sincronização</h2>
@@ -107,6 +119,9 @@ export function SyncStatusSheet({ status, verb, endsOn, onDismiss, onRefresh, re
         {status.safe ? <>
           <strong>Todos os telemóveis estão sincronizados</strong>
           <span className="support">Já pode voltar ao fecho.</span>
+        </> : !periodEnded && week.available ? <>
+          <strong>A semana ainda não foi terminada</strong>
+          <span className="support">Termine a semana no Fecho. Depois, cada telemóvel abre o Beauty OS com Internet para confirmar o seu estado.</span>
         </> : !periodEnded ? <>
           <strong>Este período ainda não terminou</strong>
           <span className="support">Cada telemóvel só pode confirmar o seu estado depois do fim do período. Volte a {verb} a partir de {formatDayShort(nextDay(endsOn), timezone)}.</span>
@@ -118,7 +133,7 @@ export function SyncStatusSheet({ status, verb, endsOn, onDismiss, onRefresh, re
       {devices ? (
         devices.length > 0 && (
           <ListGroup className="sync-devices" data-testid="sync-devices">
-            {devices.map((d, i) => <DeviceRow key={`${d.enrolled_at}-${i}`} d={d} periodEnded={periodEnded} endsOn={endsOn} />)}
+            {devices.map((d, i) => <DeviceRow key={`${d.enrolled_at}-${i}`} d={d} periodEnded={periodEnded} endsOn={endsOn} week={week} />)}
           </ListGroup>
         )
       ) : (

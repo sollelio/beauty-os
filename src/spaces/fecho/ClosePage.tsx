@@ -107,6 +107,8 @@ export function HistoryPage() {
         return [`Registo anulado · ${KIND_LABEL[e.record_kind as RecordKind]}`, `${r.title}${r.person ? ` · ${r.person}` : ''} · ${m(r.amount_minor)} · motivo: ${e.reason} · anulado por ${e.by}`]
       }
       case 'payment': return [`Pagamento · ${e.person}`, `${m(e.amount_minor)} · ${String(e.method).toLocaleLowerCase('pt-PT')} · confirmado por ${e.by}`]
+      case 'week_end': return ['Semana terminada', `${e.early ? 'antes da hora habitual · ' : ''}por ${e.by}`]
+      case 'week_end_withdrawn': return ['Semana continuada', `por ${e.by}`]
       case 'close': return ['Período fechado', `${e.payments_count} pagamentos · ${m(e.paid_minor)}${e.distribution_minor !== null && e.distribution_minor !== undefined ? ` · distribuição ${m(e.distribution_minor)}` : ''} · fechado por ${e.by}`]
       default: return [e.kind, `por ${e.by}`]
     }

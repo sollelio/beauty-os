@@ -45,6 +45,7 @@ const SERVICE_REVIEW: Record<string, string> = {
   PAYMENT_METHOD_INACTIVE: 'A forma de pagamento já não está ativa.',
   PERIOD_APPROVED: 'O período deste serviço já tem os valores aprovados e não aceita novos registos.',
   PERIOD_CLOSED: 'O período deste serviço já está fechado e não aceita novos registos.',
+  PERIOD_WEEK_ENDED: 'A semana deste serviço já tinha sido terminada no Fecho: só entra se a gestão continuar a semana.',
   CAPTURE_TIME_TOO_OLD: 'Foi guardado há mais de 48 horas: já não pode ser registado com a hora original.',
   CAPTURE_TIME_IN_FUTURE: 'A hora guardada está no futuro (o relógio do telemóvel pode estar errado).',
   IDEMPOTENCY_CONFLICT: 'Não foi possível confirmar se este registo já foi recebido.',

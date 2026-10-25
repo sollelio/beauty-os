@@ -18,6 +18,7 @@ import { ErrorState, Skeleton } from '../../shared/ui/states'
 import { PrivateBar } from '../privado/PrivateBar'
 import { rangeLabel, useFecho, when } from './fecho'
 import { ExceptionRow, KV, Loading, SheetBoundary, StateStrip, SummaryRow } from './ui'
+import { DeclareWeekEndSheet, WeekEndNotice, WithdrawWeekEndSheet } from './WeekEnd'
 
 const STATE_TONE: Record<PeriodState, 'warning' | 'accent' | 'neutral' | 'success'> = {
   aberto: 'neutral', pronto_para_pagamento: 'accent', em_pagamento: 'accent', fechado: 'success',
@@ -28,7 +29,7 @@ export function FechoHome() {
   const navigate = useNavigate()
   const back = useAppBack('/privado')
   const { q, to } = useFecho()
-  const sheets = useSheet<'period' | 'annul'>()
+  const sheets = useSheet<'period' | 'annul' | 'week-end' | 'week-continue'>()
   if (!q.data) return <Loading q={q} />
   const f = q.data
   const m = (n: number) => formatMoney(n, org)
@@ -40,6 +41,9 @@ export function FechoHome() {
   const paidCount = lines.filter((l) => l.status === 'pago').length
   const outstanding = lines.filter((l) => l.outstanding_minor > 0)
   const cases = f.exceptions.filter((e) => e.kind === 'above_earned').length
+  // the operational week (Slice 2): only with the organization's schedule; otherwise everything is as before
+  const we = st === 'aberto' && f.week_end?.available ? f.week_end : null
+  const weekOpen = !!we && !we.ended
 
   const exceptionRow = (e: FechoException, i: number) => {
     switch (e.kind) {
@@ -72,6 +76,7 @@ export function FechoHome() {
       return <div className="notice notice-warning" role="status"><strong style={{ display: 'block' }}>Ainda não pode aprovar</strong>
         {pending.length} {pending.length === 1 ? 'regra' : 'regras'} por definir. Depois pode aprovar e passar a pagamento.</div>
     }
+    if (weekOpen) return null                                                  // the week notice says what comes first
     if (st === 'aberto') {
       const undecided = pos.owners_decision === null
       return <div className="notice notice-success" role="status"><strong style={{ display: 'block' }}>Pronto para aprovar</strong>
@@ -100,9 +105,15 @@ export function FechoHome() {
     if (st === 'fechado') return null
     if (st === 'aberto') {
       const first = f.exceptions.find((e) => e.kind === 'rule_pending')
-      return first && first.kind === 'rule_pending'
-        ? <button className="btn btn-primary btn-tall" onClick={() => navigate(to(`/privado/fecho/regra/${first.person.person_id}`))}>Decidir regra · {first.person.display_name}</button>
-        : <button className="btn btn-primary btn-tall" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
+      if (first && first.kind === 'rule_pending') {
+        return <button className="btn btn-primary btn-tall" onClick={() => navigate(to(`/privado/fecho/regra/${first.person.person_id}`))}>Decidir regra · {first.person.display_name}</button>
+      }
+      return we?.can_declare ? (
+        <>
+          <button className="btn btn-primary btn-tall" onClick={() => sheets.open('week-end')}>Terminar a semana</button>
+          <button className="btn btn-secondary" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
+        </>
+      ) : <button className="btn btn-primary btn-tall" onClick={() => navigate(to('/privado/fecho/aprovar'))}>Aprovar valores a pagar</button>
     }
     return (
       <>
@@ -137,6 +148,7 @@ export function FechoHome() {
         <StateStrip state={st} />
       </section>
 
+      {we && <WeekEndNotice we={we} timeZone={org.timezone} />}
       {readiness}
 
       {f.exceptions.length > 0 && (
@@ -185,6 +197,13 @@ export function FechoHome() {
         </section>
       )}
 
+      {we?.can_withdraw && (
+        <section className="exceptional">
+          <button className="btn btn-secondary" onClick={() => sheets.open('week-continue')}>Continuar a semana</button>
+          <span className="support">Se ainda houver atividade nesta semana. Fica no histórico.</span>
+        </section>
+      )}
+
       {f.readiness.can_annul && (
         <section className="exceptional">
           <button className="btn btn-destructive" onClick={() => sheets.open('annul')}>Voltar a rever (anula a aprovação)</button>
@@ -193,6 +212,24 @@ export function FechoHome() {
       )}
 
       {sheets.current === 'period' && <PeriodSheet current={f} onPick={(id) => sheets.leaveTo(`/privado/fecho?p=${encodeURIComponent(id)}`)} onClose={sheets.close} />}
+      {sheets.current === 'week-end' && (
+        <BottomSheet labelledBy="week-end-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <span id="week-end-title" className="label">Terminar a semana · {f.period.label}</span>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
+          </div>
+          <DeclareWeekEndSheet f={f} timeZone={org.timezone} onDone={sheets.close} onClose={sheets.close} />
+        </BottomSheet>
+      )}
+      {sheets.current === 'week-continue' && (
+        <BottomSheet labelledBy="week-continue-title" onDismiss={sheets.close}>
+          <div className="row-between">
+            <span id="week-continue-title" className="label">Continuar a semana · {f.period.label}</span>
+            <button className="icon-btn" aria-label="Fechar" onClick={sheets.close}><Icon name="close" /></button>
+          </div>
+          <WithdrawWeekEndSheet f={f} onDone={sheets.close} onClose={sheets.close} />
+        </BottomSheet>
+      )}
       {sheets.current === 'annul' && (
         <BottomSheet labelledBy="annul-title" onDismiss={sheets.close}>
           <div className="row-between">
