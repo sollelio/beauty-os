@@ -87,4 +87,21 @@ describe('Fecho sync status per phone', () => {
     render(<SyncNotice status={status([dev('Telemóvel do salão', 'silent')], false)} verb="fechar" onOpen={() => {}} />)
     expect(screen.getByTestId('sync-notice').textContent).toMatch(/^Este período ainda não terminou\.Só pode fechar depois do fim do período/)
   })
+  it('a week not yet ended (with a schedule): it says to end the week first, and every phone waits for that', () => {
+    sheet({ ...status([dev('Telemóvel do salão', 'silent', { this_device: true }), dev('Telemóvel da Merce', 'silent')], false), week_end: { available: true, declared_at: null } })
+    expect(screen.getByTestId('sync-gate-summary').textContent).toMatch(/^A semana ainda não foi terminadaTermine a semana no Fecho\./)
+    expect(text('Telemóvel da Merce')).toMatch(/Aguarda o fim da semana.*A semana ainda não foi terminada\..*Depois de terminar a semana, abra o Beauty OS neste telemóvel com Internet\./)
+    expect(document.body.textContent).not.toMatch(/Aguarda o fim do período|Volte a aprovar a partir/)
+  })
+  it('right after the week is ended: phones that reported before it are measured against that moment', () => {
+    sheet({ ...status([dev('Telemóvel do salão', 'ready', { this_device: true }), dev('Telemóvel do Laurindo', 'silent')], true),
+      week_end: { available: true, declared_at: '2026-10-24T17:30:00Z' } })
+    expect(screen.getByTestId('sync-gate-summary').textContent).toMatch(/^1 telemóvel precisa de atenção/)
+    expect(text('Telemóvel do Laurindo')).toMatch(/Sem estado recente.*ainda não confirmou o seu estado depois de a semana ter sido terminada\./)
+    expect(text('Telemóvel do salão')).toMatch(/Sincronizado/)
+  })
+  it('the Fecho notice before the week is ended (with a schedule)', () => {
+    render(<SyncNotice status={{ ...status([dev('Telemóvel do salão', 'silent')], false), week_end: { available: true, declared_at: null } }} verb="aprovar" onOpen={() => {}} />)
+    expect(screen.getByTestId('sync-notice').textContent).toMatch(/^A semana ainda não foi terminada\.Termine a semana no Fecho; depois cada telemóvel confirma o seu estado e pode aprovar\./)
+  })
 })

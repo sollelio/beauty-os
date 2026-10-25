@@ -19,6 +19,12 @@ export function formatDayShort(isoOrDate: string, timeZone: string): string {
   return `${Number(d)} ${MONTHS[Number(m) - 1]}`
 }
 
+/** The weekday, "sábado": of a plain "YYYY-MM-DD" date, or of an instant in the organization's timezone. */
+export function formatWeekday(isoOrDate: string, timeZone: string): string {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(isoOrDate)
+  return new Intl.DateTimeFormat('pt-PT', { weekday: 'long', timeZone: date ? 'UTC' : timeZone }).format(new Date(date ? `${isoOrDate}T12:00:00Z` : isoOrDate))
+}
+
 /** "hoje às 09:30", or "14 out às 18:05" for another day (a draft confirmed later keeps its capture time). */
 export function formatWhen(iso: string, timeZone: string, now: Date = new Date()): string {
   const day = dayKey(iso, timeZone) === dayKey(now.toISOString(), timeZone) ? 'hoje' : formatDayShort(iso, timeZone)

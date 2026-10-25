@@ -75,7 +75,7 @@ describe('device registration and report', () => {
   it('the status: the counts and the devices behind them (label, state, counts — never an id); needs a team-finance private context', async () => {
     const p = freshPeriod()
     const s = await status(p.id)
-    expect(Object.keys(s).sort()).toEqual(['devices', 'pending', 'period_ended', 'ready', 'safe', 'silent'])
+    expect(Object.keys(s).sort()).toEqual(['devices', 'pending', 'period_ended', 'ready', 'safe', 'silent', 'week_end'])
     for (const d of s.devices as Row[]) {
       expect(Object.keys(d).sort()).toEqual(['conflicts', 'drafts', 'enrolled_at', 'label', 'reported_at', 'services', 'state', 'this_device'])
     }
@@ -92,7 +92,7 @@ describe('period sync safety', () => {
     expect((await c.rpc('verify_person', { p_person_id: '00000000-0000-4000-8000-00000000c202', p_secret: '343434', p_scope: 'private_session' })).data?.ok).toBe(true)
     const any = ((await c.rpc('fecho_periods')).data as Row[])[0]!
     expect((await c.rpc('fecho_sync_status', { p_period_id: any.id })).data)
-      .toEqual({ ready: 0, pending: 0, silent: 0, safe: true, period_ended: expect.any(Boolean), devices: [] })
+      .toEqual({ ready: 0, pending: 0, silent: 0, safe: true, period_ended: expect.any(Boolean), devices: [], week_end: { available: false, declared_at: null } })
   })
   it('every offline-capable device ready after the period ended: approve and close proceed', async () => {
     const p = freshPeriod()

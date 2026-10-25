@@ -20,6 +20,10 @@ export const FECHO_MESSAGES: Record<string, string> = {
   RESERVE_INSUFFICIENT: 'A reserva não tem saldo suficiente para este valor.',
   RESERVE_EXCEEDS_RECORD: 'O valor passa o que falta pagar deste registo.',
   VALIDATION_FAILED: 'Verifique os valores introduzidos.',
+  WEEK_END_TOO_EARLY: 'A semana só pode ser terminada no último dia de funcionamento.',
+  WEEK_END_NOT_AVAILABLE: 'Este período não tem um último dia de funcionamento definido.',
+  PERIOD_WEEK_ENDED: 'A semana já está terminada.',
+  WEEK_NOT_ENDED: 'A semana já não está terminada.',
 }
 
 /** The Fecho review of the period in ?p= (or the current one). Drops all private data if the context ended. */

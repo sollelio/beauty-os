@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -18,8 +18,9 @@ vi.mock('../../modules/services/api', async (orig) => ({
 vi.mock('../../modules/period/api', async (orig) => ({
   ...(await orig<typeof import('../../modules/period/api')>()),
   getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]), reopenPeriod: vi.fn(), getRulePreview: vi.fn(),
+  declareWeekEnd: vi.fn(), withdrawWeekEnd: vi.fn(),
 }))
-import { approvePeriod, closePeriod, confirmPayment, getFecho, getFechoHistory, getRulePreview, reopenPeriod } from '../../modules/period/api'
+import { approvePeriod, closePeriod, confirmPayment, declareWeekEnd, getFecho, getFechoHistory, getRulePreview, reopenPeriod, withdrawWeekEnd, type WeekEnd } from '../../modules/period/api'
 import { RuleFlow } from './RuleFlow'
 import { ReopenPage } from './ReopenPage'
 import { FechoHome } from './FechoHome'
@@ -301,5 +302,109 @@ describe('RuleFlow states: typing never replaces the screen', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
     expect(await within(screen.getByTestId('rule-effect')).findByText(/32\.000 Kz = 40% × 64\.000/)).toBeTruthy()
     expect(continuar().disabled).toBe(false)
+  })
+})
+
+// Slice 2 · Terminar a semana (ADR-0010 §5 amendment). Salão Agradável-like schedule: Saturday, usual closing 20:00
+// Africa/Luanda (19:00 UTC). Only the clock is faked, so the query library's timers run as usual.
+describe('Terminar a semana', () => {
+  const week = (over: Partial<WeekEnd> = {}): WeekEnd => ({
+    available: true, last_operating_day: '2026-10-24', usual_closing_at: '2026-10-24T19:00:00Z', calendar_end: '2026-10-25T23:00:00Z',
+    declared: null, ended: false, ended_by: null, too_early: false, can_declare: true, can_withdraw: false, ...over,
+  })
+  const weekFecho = (we: WeekEnd) => {
+    const base = fecho({}, [nadia, laurindo])
+    return { ...base, period: { ...base.period, label: 'Semana 19/10–25/10', starts_on: '2026-10-19', ends_on: '2026-10-25' }, week_end: we }
+  }
+  const sheet = () => screen.getByRole('dialog')
+  beforeEach(() => { vi.mocked(declareWeekEnd).mockReset(); vi.mocked(withdrawWeekEnd).mockReset() })
+  afterEach(() => vi.useRealTimers())
+
+  it('Saturday before the usual closing time: the week is open, ending it asks first; "Continuar aberto" changes nothing', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-24T17:30:00Z'))      // 18:30 in Luanda
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week()))
+    vi.mocked(declareWeekEnd).mockResolvedValue({ review_revision: 8, declared_at: '2026-10-24T17:31:00Z', early: true })
+    renderAt('/privado/fecho')
+    const notice = await screen.findByTestId('week-end-notice')
+    expect(notice.textContent).toMatch(/^A semana ainda não foi terminada/)
+    expect(within(notice).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Terminar a semana', 'Cada telemóvel envia o que tem guardado', 'Aprovar os valores'])
+    expect(screen.queryByText('Pronto para aprovar')).toBeNull()                                   // the week comes first
+    fireEvent.click(screen.getByRole('button', { name: 'Terminar a semana' }))
+    const warning = within(sheet()).getByTestId('early-warning')
+    expect(warning.textContent).toMatch(/O salão normalmente funciona até às 20:00\.Tem a certeza de que o expediente desta semana terminou\?/)
+    expect(within(sheet()).queryByLabelText('PIN')).toBeNull()
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Continuar aberto' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(declareWeekEnd).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Terminar a semana' }))
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Terminar a semana' }))            // yes, the week is over
+    await confirmAs()
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Terminar a semana' }))
+    await waitFor(() => expect(declareWeekEnd).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(declareWeekEnd).mock.calls[0]![2]).toEqual({ periodId: 'p10' })
+  })
+  it('Saturday after the usual closing time: straight to the confirmation, no question', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-24T19:30:00Z'))      // 20:30 in Luanda
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week()))
+    vi.mocked(declareWeekEnd).mockResolvedValue({ review_revision: 8, declared_at: '2026-10-24T19:30:00Z', early: false })
+    renderAt('/privado/fecho')
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminar a semana' }))
+    expect(within(sheet()).queryByTestId('early-warning')).toBeNull()
+    await confirmAs()
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Terminar a semana' }))
+    await waitFor(() => expect(declareWeekEnd).toHaveBeenCalledTimes(1))
+  })
+  it('before the last operating day: says when the week can be ended, and offers no way to end it', async () => {
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week({ too_early: true, can_declare: false })))
+    renderAt('/privado/fecho')
+    expect((await screen.findByTestId('week-end-notice')).textContent).toMatch(/^A semana ainda está a decorrerPode terminar a semana a partir de sábado, 24 out/)
+    expect(screen.queryByRole('button', { name: 'Terminar a semana' })).toBeNull()
+  })
+  it('after the declaration: when, by whom, early; approval is next; "Continuar a semana" withdraws it', async () => {
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week({ declared: { at: '2026-10-24T17:30:00Z', early: true, by: 'Fernando' }, ended: true,
+      ended_by: 'declaration', can_declare: false, can_withdraw: true })))
+    vi.mocked(withdrawWeekEnd).mockResolvedValue({ review_revision: 9 })
+    renderAt('/privado/fecho')
+    const notice = await screen.findByTestId('week-end-notice')
+    expect(notice.textContent).toMatch(/^Semana terminada · sábado, 24 out às 18:30Por Fernando, antes da hora habitual\./)
+    expect(screen.getByText('Pronto para aprovar')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Terminar a semana' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Aprovar valores a pagar' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar a semana' }))
+    expect(within(sheet()).getByText(/O período volta a aceitar registos/)).toBeTruthy()
+    await confirmAs()
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Continuar a semana' }))
+    await waitFor(() => expect(withdrawWeekEnd).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(withdrawWeekEnd).mock.calls[0]![2]).toEqual({ periodId: 'p10' })
+  })
+  it('a server refusal is said plainly', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-24T19:30:00Z'))
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week()))
+    vi.mocked(declareWeekEnd).mockRejectedValue(new AppError('domain', 'WEEK_END_TOO_EARLY', 'WEEK_END_TOO_EARLY'))
+    renderAt('/privado/fecho')
+    fireEvent.click(await screen.findByRole('button', { name: 'Terminar a semana' }))
+    await confirmAs()
+    fireEvent.click(within(sheet()).getByRole('button', { name: 'Terminar a semana' }))
+    expect(await within(sheet()).findByText('A semana só pode ser terminada no último dia de funcionamento.')).toBeTruthy()
+  })
+  it('without a schedule nothing changes: no week notice, approval as before', async () => {
+    vi.mocked(getFecho).mockResolvedValue(fecho({ week_end: { ...week(), available: false, can_declare: false } }, [nadia, laurindo]))
+    renderAt('/privado/fecho')
+    expect(await screen.findByText('Pronto para aprovar')).toBeTruthy()
+    expect(screen.queryByTestId('week-end-notice')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Terminar a semana' })).toBeNull()
+  })
+  it('the history names the week end and its withdrawal', async () => {
+    vi.mocked(getFecho).mockResolvedValue(weekFecho(week()))
+    vi.mocked(getFechoHistory).mockResolvedValue([
+      { kind: 'week_end', at: '2026-10-24T19:05:00Z', early: false, by: 'Merce' },
+      { kind: 'week_end_withdrawn', at: '2026-10-24T18:40:00Z', by: 'Fernando' },
+      { kind: 'week_end', at: '2026-10-24T17:30:00Z', early: true, by: 'Fernando' },
+    ])
+    renderAt('/privado/fecho/historico')
+    expect(await screen.findAllByText('Semana terminada')).toHaveLength(2)
+    expect(screen.getByText('Semana continuada')).toBeTruthy()
+    expect(screen.getByText('antes da hora habitual · por Fernando')).toBeTruthy()
+    expect(screen.getByText('por Merce')).toBeTruthy()
   })
 })

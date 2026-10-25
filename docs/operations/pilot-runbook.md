@@ -31,6 +31,14 @@ Then, per person: **rule** (`select private.admin_set_rule(:person, 'standing' |
 **PIN** (exactly 6 digits) for anyone who confirms or enters the private area (`select private.admin_set_person_secret(:person, '<6 digits>')`); PINs are chosen at production setup and never stored in the repository,
 and **permissions** (§4).
 
+**Operating schedule (optional; Fecho «Terminar a semana», ADR-0010 §5 amendment):** the last operating weekday (ISO:
+1 = Monday … 6 = Saturday, 7 = Sunday) and the usual closing time, in the organization's timezone. Audited
+(`week_schedule_set`). Without it nothing changes: a week ends at its calendar end.
+```sql
+select private.admin_set_week_schedule(:org, 6::smallint, time '20:00');   -- Saturday, usually closes at 20:00
+select private.admin_set_week_schedule(:org, null, null);                  -- remove it
+```
+
 ## 2. Periods
 
 Periods are explicit and never derived from the calendar (07 §10.3). Create each one before it starts; records whose
@@ -39,6 +47,15 @@ date falls outside every period are kept but appear in no Fecho until a period c
 ```sql
 select private.admin_create_period(:org, '<label>', '<first day>', '<last day>');   -- rejects overlaps
 ```
+
+**Ending the week (Fecho «Terminar a semana»; organizations with a schedule):** on the period's last operating day, after
+the last client, a `period.decide` holder ends the week in Fecho with their PIN (before the usual closing time the app asks
+first). From then on, activity that happened after that moment is refused in that period (`PERIOD_WEEK_ENDED`); what counts is
+when it happened, not when a phone sends it, so work a phone saved offline before the end still syncs. Each operational phone
+opens Beauty OS with a connection to confirm it holds nothing more; then the period can be approved. If there is still
+activity, «Continuar a semana» (same permission) reopens the week while the period is not approved; after approval, annul
+the approval first (only before any payment). Every declaration and withdrawal stays in the period's history. To see them:
+`select kind, at, early, person_id from public.period_week_end_events where period_id = :period order by seq;`
 
 ## 3. Devices
 

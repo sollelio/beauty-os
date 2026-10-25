@@ -58,6 +58,23 @@ export type Fecho = {
   closed: { closed_at: string; closed_by: string; calculation_version: string; review_revision: number } | null
   reopened: { at: string; by: string; reason: string; to_state: PeriodState } | null
   close_statements_count: number
+  /** absent from a database without 20261027000100 */
+  week_end?: WeekEnd
+}
+/** The operational end of the week (ADR-0010 §5 amendment, Slice 2): the organization's schedule gives the period's last
+ *  operating day and usual closing time; a period.decide holder declares the week ended on that day. All times are
+ *  instants computed by the server in the organization's timezone. */
+export type WeekEnd = {
+  available: boolean                                   // the organization has a schedule and the period has its last operating day
+  last_operating_day: string | null                    // "YYYY-MM-DD"
+  usual_closing_at: string | null                      // the usual closing time on that day
+  calendar_end: string
+  declared: { at: string; early: boolean; by: string } | null
+  ended: boolean
+  ended_by: 'declaration' | 'calendar' | null
+  too_early: boolean
+  can_declare: boolean
+  can_withdraw: boolean
 }
 export type FechoPeriod = { id: string; label: string; state: PeriodState; starts_on: string; ends_on: string }
 export type MoneyReview = {
@@ -117,6 +134,11 @@ export type UseReserveInput = { expenseId: string | null; purchaseId: string | n
 export const spendReserve = (c: string, g: string, i: UseReserveInput) =>
   rpc<R>('use_reserve', { p_command_id: c, p_grant_id: g, p_expense_id: i.expenseId, p_purchase_id: i.purchaseId, p_amount_minor: i.amountMinor })
 export type ReviewedInput = { periodId: string; revision: number }
+export type WeekEndInput = { periodId: string }
+export const declareWeekEnd = (c: string, g: string, i: WeekEndInput) =>
+  rpc<R & { declared_at: string; early: boolean }>('declare_week_end', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId })
+export const withdrawWeekEnd = (c: string, g: string, i: WeekEndInput) =>
+  rpc<R>('withdraw_week_end', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId })
 export const approvePeriod = (c: string, g: string, i: ReviewedInput) =>
   rpc<R & { total_minor: number }>('approve_period', { p_command_id: c, p_grant_id: g, p_period_id: i.periodId, p_review_revision: i.revision })
 export const annulApproval = (c: string, g: string, i: ReviewedInput) =>
@@ -139,6 +161,10 @@ export type SyncDevice = {
   label: string | null; enrolled_at: string; reported_at: string | null; this_device: boolean; state: SyncDeviceState
   services: number; drafts: number; conflicts: number       // this period's days plus undated work, as last reported
 }
-export type SyncStatus = { ready: number; pending: number; silent: number; safe: boolean; period_ended?: boolean; devices?: SyncDevice[] }
+export type SyncStatus = {
+  ready: number; pending: number; silent: number; safe: boolean; period_ended?: boolean; devices?: SyncDevice[]
+  /** whether the week can be declared ended, and when it was (Slice 2) */
+  week_end?: { available: boolean; declared_at: string | null }
+}
 export const getSyncStatus = (periodId: string) => rpc<SyncStatus>('fecho_sync_status', { p_period_id: periodId })
 
