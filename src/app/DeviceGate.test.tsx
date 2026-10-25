@@ -36,7 +36,7 @@ let user: string
 function Home() {
   const o = useOrganization()
   const r = useOfflineRuntime()
-  return <p data-testid="home">{o.name} · {r.bindingSource} · {String(r.partitionActive)}</p>
+  return <p data-testid="home" data-offline-capture={String(r.offlineCapture)}>{o.name} · {r.bindingSource} · {String(r.partitionActive)}</p>
 }
 function mount(path = '/') {
   const router = createMemoryRouter([{ path: '/', element: <DeviceGate />, children: [
@@ -57,6 +57,15 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks())
 
 describe('offline start', () => {
+  it('a support device starting offline from its cached binding still keeps no offline work', async () => {
+    await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString(), devicePurpose: 'support' })
+    online = false
+    vi.mocked(getDeviceContext).mockRejectedValue(new AppError('network', 'Failed to fetch'))
+    mount()
+    const home = await screen.findByTestId('home')
+    expect(home.textContent).toBe('Teste Offline O · cache · true')
+    expect(home.dataset.offlineCapture).toBe('false')
+  })
   it('opens public capture on the cached binding — and not the private area', async () => {
     await saveBinding(await openSharedOfflineDb(), { deviceUserId: user, organization: org, verifiedAt: new Date().toISOString() })
     online = false
@@ -160,6 +169,18 @@ describe('online answers', () => {
     mount()
     expect((await screen.findByTestId('home')).textContent).toBe('Teste Offline O · server · true')
     await waitFor(async () => expect((await readBinding(await openSharedOfflineDb(), user))?.organization).toEqual(org))
+    expect(screen.getByTestId('home').dataset.offlineCapture).toBe('true')        // no device purpose in the answer: operational
+  })
+  it('a support device (ADR-0010 §5 amendment): no offline capture, and the purpose is cached for an offline start', async () => {
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org, device: { purpose: 'support' } })
+    mount()
+    expect((await screen.findByTestId('home')).dataset.offlineCapture).toBe('false')
+    await waitFor(async () => expect((await readBinding(await openSharedOfflineDb(), user))?.devicePurpose).toBe('support'))
+  })
+  it('an operational device answered as such keeps offline capture', async () => {
+    vi.mocked(getDeviceContext).mockResolvedValue({ bound: true, organization: org, device: { purpose: 'operational' } })
+    mount()
+    expect((await screen.findByTestId('home')).dataset.offlineCapture).toBe('true')
   })
   it('not bound (revoked): enrollment, the binding removed, queued work kept and counted', async () => {
     const db = await openSharedOfflineDb()

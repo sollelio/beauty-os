@@ -28,6 +28,9 @@ export type OfflineRuntime = {
   persistence: PersistStatus | null
   sync: SyncSnapshot
   storeAccess: OfflineStoreAccess | null
+  /** Whether this device may keep new work offline (ADR-0010 §5 amendment): false on a support device, which captures
+   *  online only. Existing local work is still shown, sent and reviewed. */
+  offlineCapture: boolean
   refresh: () => Promise<void>
   /** Asks the browser to keep this device's storage (ADR-0010 §8); only when a person's action calls it. */
   requestPersistence: () => Promise<PersistResult | null>
@@ -44,7 +47,7 @@ export type OfflineRuntime = {
 export const IDLE_SYNC: SyncSnapshot = { status: 'idle', lastTrigger: null, lastOutcome: null }
 export const INACTIVE_RUNTIME: Omit<OfflineRuntime, 'connectivity'> = {
   partitionActive: false, bindingSource: null, storage: 'none', local: null, heldElsewhere: 0, persistence: null, sync: IDLE_SYNC,
-  storeAccess: null, refresh: async () => {}, requestPersistence: async () => null, syncNow: async () => null,
+  storeAccess: null, offlineCapture: true, refresh: async () => {}, requestPersistence: async () => null, syncNow: async () => null,
   syncReport: { at: null, failed: false }, reportSyncNow: async () => false, discardForeign: async () => {},
 }
 

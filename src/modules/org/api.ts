@@ -16,7 +16,11 @@ export type Organization = {
   /** null or absent: no logo — the name only */
   logo?: TenantLogo | null
 }
-export type DeviceContext = { bound: false } | { bound: true; organization: Organization }
+/** operational: a salon capture device (the default) · support: Sollelio support inside the organization, online only
+ *  (ADR-0010 §5 amendment) — never offline-capable, outside the period-sync guard. */
+export type DevicePurpose = 'operational' | 'support'
+/** `device` is absent from a database without 20261026000100: the device is operational. */
+export type DeviceContext = { bound: false } | { bound: true; organization: Organization; device?: { purpose: DevicePurpose } }
 
 export const orgKeys = { deviceContext: ['org', 'device-context'] as const }
 

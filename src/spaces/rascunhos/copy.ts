@@ -12,6 +12,7 @@ export const MOVEMENT_BLOCKED: Record<MovementBlock, string> = {
   missing: 'Sem ligação. Para guardar movimentos sem ligação, este telemóvel precisa de ter aberto o Beauty OS com ligação nas últimas 48 horas.',
   stale: 'Sem ligação. Os dados do salão neste telemóvel têm mais de 48 horas: é preciso ligação para os atualizar antes de guardar.',
   unavailable: 'Sem ligação. Este telemóvel não consegue guardar movimentos sem ligação.',
+  online_only: 'Sem ligação. Este telemóvel é de apoio e só guarda movimentos com ligação.',
 }
 
 const REVIEW: Record<string, string> = {
@@ -23,6 +24,7 @@ const REVIEW: Record<string, string> = {
   CAPTURE_TIME_IN_FUTURE: 'A hora guardada está no futuro (o relógio do telemóvel pode estar errado).',
   NOT_AUTHORIZED: 'Este telemóvel não pôde registar este movimento.',
   IDEMPOTENCY_CONFLICT: 'Este rascunho já foi enviado com outro conteúdo.',
+  DEVICE_ONLINE_ONLY: 'Este telemóvel passou a ser de apoio e já não envia o que foi guardado sem ligação. Registe o movimento de novo, com ligação.',
 }
 /** Why a draft needs review (a server rejection kept on the draft); nothing is changed automatically. */
 export const reviewText = (code: string) => REVIEW[code] ?? captureFailure({ code } as AppError, 'O servidor não aceitou este movimento.')
@@ -47,6 +49,7 @@ const SERVICE_REVIEW: Record<string, string> = {
   CAPTURE_TIME_IN_FUTURE: 'A hora guardada está no futuro (o relógio do telemóvel pode estar errado).',
   IDEMPOTENCY_CONFLICT: 'Não foi possível confirmar se este registo já foi recebido.',
   NOT_AUTHORIZED: 'Este telemóvel deixou de estar autorizado a enviar registos.',
+  DEVICE_ONLINE_ONLY: 'Este telemóvel passou a ser de apoio e já não envia o que foi guardado sem ligação. Registe o serviço de novo, com ligação.',
 }
 export const serviceReviewText = (code: string) => SERVICE_REVIEW[code] ?? 'O servidor não aceitou este registo.'
 export const DISCARD_LOCAL = 'Só é apagado deste telemóvel. Nada foi registado no servidor.'

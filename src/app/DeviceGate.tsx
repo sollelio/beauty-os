@@ -89,9 +89,10 @@ export function DeviceGate() {
   }
 
   const organization = ctx.data ? (ctx.data.bound ? ctx.data.organization : null) : cached.data!.organization
+  const devicePurpose = ctx.data ? (ctx.data.bound ? ctx.data.device?.purpose ?? 'operational' : 'operational') : cached.data!.devicePurpose ?? 'operational'
   return (
     <OfflineRuntimeProvider organization={organization} principal={principal} bindingSource={ctx.data ? 'server' : 'cache'}
-      serverBinding={ctx.data ? (ctx.data.bound ? 'bound' : 'unbound') : 'unknown'}
+      serverBinding={ctx.data ? (ctx.data.bound ? 'bound' : 'unbound') : 'unknown'} devicePurpose={devicePurpose}
       drain={serviceDrainer} refreshSnapshot={refreshSnapshots} onDrained={onDrained} reportSync={reportDeviceSync}>
       {/* the organization's logo (T2): kept for this binding only; an unbound device keeps none */}
       <TenantLogoProvider principal={principal} organization={organization}>

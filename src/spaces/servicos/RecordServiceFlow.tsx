@@ -90,7 +90,7 @@ export function RecordServiceFlow() {
   }
 
   // a failure that can be retried here; a missing or stale offline snapshot cannot (its notice says why)
-  const retry = record.status === 'error' && !(record.queueFailure === 'missing' || record.queueFailure === 'stale')
+  const retry = record.status === 'error' && !(record.queueFailure === 'missing' || record.queueFailure === 'stale' || record.queueFailure === 'online_only')
   const footer = step === 3 && person && service && (
     <ServiceConfirmBar serviceName={service.name} personName={person.display_name} valueMinor={valueMinor} format={org}
       state={retry ? 'retry' : record.status === 'pending' ? 'pending' : 'ready'} canConfirm={!!input} onConfirm={confirm} onExit={flow.exit} />
@@ -143,11 +143,13 @@ const BLOCKED: Record<CaptureBlock, string> = {
   missing: 'Sem ligação. Para registar serviços sem ligação, este telemóvel precisa de ter aberto o Beauty OS com ligação nas últimas 48 horas.',
   stale: 'Sem ligação. Os dados do salão neste telemóvel têm mais de 48 horas: é preciso ligação para os atualizar antes de registar.',
   unavailable: 'Sem ligação. Este telemóvel não consegue guardar registos sem ligação.',
+  online_only: 'Sem ligação. Este telemóvel é de apoio e só regista com ligação.',
 }
 const QUEUE_FAILURE: Record<QueueFailure, string> = {
   storage: 'Não foi possível guardar neste telemóvel. Os dados continuam aqui.',
   missing: BLOCKED.missing,
   stale: BLOCKED.stale,
+  online_only: BLOCKED.online_only,
 }
 
 // The person's frequent services (online only) around the ServicePicker. Offline there is no "frequentes" list: the full

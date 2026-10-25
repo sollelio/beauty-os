@@ -11,8 +11,9 @@ import { recordService, servicesKeys, type RecordServiceInput } from './api'
 import { captureSnapshotState, queueService, readCaptureSnapshot } from './offline'
 
 export type QueuedService = { commandId: string; occurredAt: string }
-/** Why an offline service was not stored: device storage failed, or the salon data on this device is not usable. */
-export type QueueFailure = 'storage' | 'missing' | 'stale'
+/** Why an offline service was not stored: device storage failed, the salon data on this device is not usable, or this
+ *  is a support device, which captures online only. */
+export type QueueFailure = 'storage' | 'missing' | 'stale' | 'online_only'
 
 class QueueError extends Error {
   constructor(readonly reason: QueueFailure) { super(reason) }
@@ -36,10 +37,11 @@ export function useRecordService() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: servicesKeys.all }),
   })
 
-  const { storeAccess, refresh, requestPersistence } = runtime
+  const { storeAccess, offlineCapture, refresh, requestPersistence } = runtime
   const queue = useMutation({
     networkMode: 'always',                                  // local work: never paused for lack of a connection
     mutationFn: async (input: RecordServiceInput): Promise<QueuedService> => {
+      if (!offlineCapture) throw new QueueError('online_only')
       if (!storeAccess) throw new QueueError('storage')
       const it = intentFor(input)
       it.occurredAt ??= new Date().toISOString()             // captured once, at the first confirmation

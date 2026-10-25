@@ -118,8 +118,27 @@ describe('cached binding', () => {
     mount({})
     await waitFor(async () => expect(await binding(USER_1)).toMatchObject({ deviceUserId: USER_1, organization: org(ORG_A) }))
     const b = (await binding(USER_1))!
-    expect(Object.keys(b).sort()).toEqual(['deviceUserId', 'organization', 'verifiedAt'])
+    expect(Object.keys(b).sort()).toEqual(['devicePurpose', 'deviceUserId', 'organization', 'verifiedAt'])
+    expect(b.devicePurpose).toBe('operational')
     expect(Object.keys(b.organization).sort()).toEqual(['currency_code', 'currency_exponent', 'currency_symbol', 'id', 'name', 'timezone'])
+    expect(latest.offlineCapture).toBe(true)
+  })
+  it('a binding cached before the device purpose existed reads as operational', async () => {
+    const db = await openDb()
+    await new Promise((res, rej) => { const r = db.transaction('binding', 'readwrite').objectStore('binding').put({ deviceUserId: USER_1, organization: org(ORG_A), verifiedAt: T }); r.onsuccess = res; r.onerror = rej })
+    db.close()
+    expect((await binding(USER_1))?.devicePurpose).toBe('operational')
+  })
+  it('a support device: its purpose is cached, it keeps no new offline work and sends no sync report', async () => {
+    const reportSync = vi.fn(async () => ({}))
+    mount({ reportSync, devicePurpose: 'support' })
+    await ready()
+    await waitFor(async () => expect((await binding(USER_1))?.devicePurpose).toBe('support'))
+    expect(latest.offlineCapture).toBe(false)
+    expect(await act(() => latest.reportSyncNow())).toBe(false)
+    await act(() => new Promise((r) => setTimeout(r, 1000)))
+    expect(reportSync).not.toHaveBeenCalled()
+    expect(latest.syncReport).toEqual({ at: null, failed: false })
   })
   it('running on the cached binding (server not reached) does not rewrite it; the partition is the cached one', async () => {
     const db = await openDb()

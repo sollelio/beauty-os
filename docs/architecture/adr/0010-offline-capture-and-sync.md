@@ -1,6 +1,6 @@
 # ADR-0010 — Offline capture and foreground synchronization (Offline V1)
 
-**Status:** Accepted (Sollelio, 2026-10-15 — Offline 0)
+**Status:** Accepted (Sollelio, 2026-10-15 — Offline 0) · **Amended** §5 (Sollelio, 2026-10-25: device purpose — implemented; operational week end — approved, not yet implemented)
 **Supersedes:** [07 §2 D5](../../07_PRE_IMPLEMENTATION_GAP_CLOSURE.md#d5--connectivity-a1-saving-requires-a-network-connection) (connectivity: online-required, no offline engine) — **in part**: online-required saving still applies to everything outside the offline scope below.
 **Related:** [Architecture Definition §12, §13, §15](../architecture-definition.md) · [ADR-0003](0003-trusted-database-commands.md) · [ADR-0005](0005-period-lifecycle-and-review-revision.md) · [ADR-0006](0006-command-idempotency.md) · [ADR-0007](0007-historical-financial-stability.md) · [ADR-0009](0009-shared-device-principal-and-verification.md) · 05 §2
 
@@ -66,6 +66,12 @@ Contract (the implementation is designed in Offline 7):
 - A **formally revoked / unbound** device leaves the required set. A device whose storage was lost (re-enrolled under a new binding) blocks until its old binding is formally revoked.
 - **No manager override** in Offline V1.
 - Late arrivals stay protected independently: the server already rejects records into approved or closed periods.
+
+**Amendment (Sollelio, 2026-10-25).** Approved together; implemented in slices.
+
+- **Device purpose — implemented (Slice 1).** A bound device is **operational** (the default: every existing device and every enrollment) or **support** (Sollelio support, diagnosis and administration inside one organization). The required set is every active, offline-capable **operational** device. A support device stays bound and keeps its online capabilities (it is not revoked), and it **cannot hold offline work**, enforced by the server: its captures always take the server's time — any capture carrying a device-captured time (a queued offline service, a movement draft confirmed later) is refused (`DEVICE_ONLINE_ONLY`) after the journal replay (ADR-0006 unchanged) and before any grant is consumed; its check-ins are answered and ignored, so it never becomes offline-capable. The client keeps no new offline work on it (the purpose comes with the device context and is kept in the cached binding for an offline start), and sends no check-in. The purpose changes only through an audited operator procedure; a device becomes support only when its last check-in held no work, and becomes operational again through its next check-in (the normal, audited registration). **Invariant:** *no device outside the required set can hold offline work.*
+- **Operational week end — approved, not yet implemented (Slice 2).** A period becomes period-sync-eligible at its **operational end**: the end of the week declared explicitly by an authorized person (`period.decide`) on the period's last operating day in the organization's timezone, or its calendar end when no declaration exists. The organization's operating schedule (operating days, usual closing time) is organization data. Before the usual closing time the declaration needs an explicit confirmation; nothing ever closes by clock time. After the declaration, new records dated in the period are rejected; before approval an authorized person can withdraw it. The check-in rule above then reads "received after the period's operational end". Until Slice 2 is implemented, the calendar end applies as before.
+- Unchanged: exactly-once (ADR-0006), foreground-only sync, RLS and grants, `PERIOD_OFFLINE_SYNC_PENDING`, and **no override**.
 
 ### 6. Local storage model
 

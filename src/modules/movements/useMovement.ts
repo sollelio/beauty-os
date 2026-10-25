@@ -25,7 +25,8 @@ export const movementKeys = {
 }
 const LOCAL = { networkMode: 'always', retry: false } as const
 
-export type MovementBlock = 'missing' | 'stale' | 'unavailable'
+/** online_only: a support device, which keeps no drafts (ADR-0010 §5 amendment) */
+export type MovementBlock = 'missing' | 'stale' | 'unavailable' | 'online_only'
 export type MovementView = { offline: boolean; loading: boolean; blocked: MovementBlock | null; data: Partial<MovementData> }
 
 /** The lists one movement needs: online as before (and kept for offline use), offline from the device only. */
@@ -44,7 +45,7 @@ export function useMovementData(kind: MovementKind): MovementView {
   const snapshot = useQuery({
     queryKey: [...(access ? offlineKeys.snapshot(access.partition) : [...offlineKeys.all, 'snapshot', 'none']), kind],
     queryFn: async () => readMovementSnapshot(await access!.getStore(), kind),
-    enabled: offline && !!access, ...LOCAL, staleTime: 0,
+    enabled: offline && !!access && runtime.offlineCapture, ...LOCAL, staleTime: 0,
   })
 
   // after a successful online load, keep this movement's own lists for offline drafts
@@ -66,6 +67,7 @@ export function useMovementData(kind: MovementKind): MovementView {
         unitWords: units.data, purchasePeople: contributors.data, purchaseOrigins: origins.data },
     }
   }
+  if (!runtime.offlineCapture) return { offline, loading: false, blocked: 'online_only', data: {} }
   if (!access || runtime.storage === 'unavailable' || snapshot.isError) return { offline, loading: false, blocked: 'unavailable', data: {} }
   if (snapshot.isPending) return { offline, loading: true, blocked: null, data: {} }
   if (snapshot.data.state !== 'ok') return { offline, loading: false, blocked: snapshot.data.state, data: {} }
@@ -100,7 +102,7 @@ export function usePendingDrafts() {
 /** Saving, discarding and confirming one movement's draft. */
 export function useDraftActions<K extends MovementKind>(kind: K, draft: MovementDraft<K> | null) {
   const queryClient = useQueryClient()
-  const { storeAccess, refresh, requestPersistence } = useOfflineRuntime()
+  const { storeAccess, offlineCapture, refresh, requestPersistence } = useOfflineRuntime()
   const store = useCallback(async () => {
     if (!storeAccess) throw new Error('STORAGE_UNAVAILABLE')
     return storeAccess.getStore()
@@ -113,6 +115,7 @@ export function useDraftActions<K extends MovementKind>(kind: K, draft: Movement
   const save = useMutation({
     networkMode: 'always',                                         // local work: never paused for lack of a connection
     mutationFn: async ({ form, display }: { form: FormOf<K>; display: DraftPayload['display'] }) => {
+      if (!offlineCapture) throw new Error('ONLINE_ONLY')                // a support device keeps no drafts
       const s = await store()
       const saved = await saveDraft(s, kind, form, display, draft?.draftId ?? null)
       if ((await s.meta.get('storagePersistGranted')) === null) void requestPersistence()   // once per device partition

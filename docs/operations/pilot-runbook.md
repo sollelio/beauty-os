@@ -65,6 +65,18 @@ select private.admin_create_period(:org, '<label>', '<first day>', '<last day>')
   binding of a re-enrolled browser) is revoked with `private.admin_revoke_device(:device_id, '<reason>')` — it then
   stops counting, and if it ever comes back online it cannot send anything (its local work stays on it, never moved).
   There is no override of the block.
+- **Support device (ADR-0010 §5 amendment):** a device used only for Sollelio support, diagnosis or administration
+  stays bound but is taken out of the Fecho sync block by making it a support device — not by revoking it:
+  ```sql
+  select private.admin_set_device_purpose(:device_id, 'support', '<reason>');
+  ```
+  It is refused (`DEVICE_HAS_OFFLINE_WORK`) while the device's last report holds work: open Beauty OS on it with a
+  connection first, send what it holds, confirm or discard drafts and review what is "Para rever". A support device
+  then works online only — it keeps nothing offline and is never offline-capable; anything it had kept offline from
+  before is refused by the server and stays "Para rever" on it. Every change is audited (`device_purpose_set`). To
+  make it a capture device again: `select private.admin_set_device_purpose(:device_id, 'operational', '<reason>');` —
+  it rejoins the block with its next report. The purpose of the bound devices:
+  `select id, label, purpose, offline_capable_at from private.devices where organization_id = :org and revoked_at is null;`
 
 ## 4. Permissions (07 §8)
 

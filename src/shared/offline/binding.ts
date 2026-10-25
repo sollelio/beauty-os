@@ -13,7 +13,10 @@ export type PublicOrganization = {
   /** the logo reference (version and presentation geometry), so an offline start finds the cached logo */
   logo?: { version: number; ring?: { color: string; radius: number; width: number }; iris?: number } | null
 }
-export type CachedBinding = { deviceUserId: string; organization: PublicOrganization; verifiedAt: string }
+/** devicePurpose: as the server last said; absent (cached before it existed) reads as operational. A support device
+ *  stays online-only even when it starts from this cache. */
+export type CachedBinding = { deviceUserId: string; organization: PublicOrganization; verifiedAt: string; devicePurpose?: 'operational' | 'support' }
+const purposeOf = (v: unknown): 'operational' | 'support' => (v === 'support' ? 'support' : 'operational')
 
 const malformed = (m: string) => new OfflineStorageError('MALFORMED_RECORD', m)
 const text = (v: unknown, max: number) => typeof v === 'string' && v.trim().length > 0 && v.length <= max
@@ -45,6 +48,7 @@ export async function saveBinding(db: IDBDatabase, binding: CachedBinding): Prom
     deviceUserId: assertUuid('deviceUserId', binding.deviceUserId),
     organization: checkOrganization(binding.organization),
     verifiedAt: assertIso('verifiedAt', binding.verifiedAt),
+    devicePurpose: purposeOf(binding.devicePurpose),
   }
   assertSafeObject(record, 'binding')
   return transact(db, [BINDING_STORE], 'readwrite', async (tx) => { await promised(tx.objectStore(BINDING_STORE).put(record)); return record })
@@ -55,7 +59,7 @@ export async function readBinding(db: IDBDatabase, deviceUserId: string): Promis
   if (!isUuid(deviceUserId)) return null
   const r = (await transact(db, [BINDING_STORE], 'readonly', (tx) => promised(tx.objectStore(BINDING_STORE).get(deviceUserId)))) as CachedBinding | undefined
   if (!r || r.deviceUserId !== deviceUserId || !isIsoInstant(r.verifiedAt)) return null
-  try { return { deviceUserId, organization: checkOrganization(r.organization), verifiedAt: r.verifiedAt } } catch { return null }
+  try { return { deviceUserId, organization: checkOrganization(r.organization), verifiedAt: r.verifiedAt, devicePurpose: purposeOf(r.devicePurpose) } } catch { return null }
 }
 
 export async function deleteBinding(db: IDBDatabase, deviceUserId: string): Promise<void> {

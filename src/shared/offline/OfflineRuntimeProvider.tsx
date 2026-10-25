@@ -40,10 +40,13 @@ const idleSnapshot = () => IDLE_SYNC
 const LOCAL = { networkMode: 'always', retry: false, staleTime: Infinity } as const
 
 export function OfflineRuntimeProvider({
-  organization, principal, bindingSource, serverBinding = 'unknown', drain, refreshSnapshot, onDrained, reportSync,
+  organization, principal, bindingSource, serverBinding = 'unknown', devicePurpose = 'operational', drain, refreshSnapshot, onDrained, reportSync,
   openDb = openSharedOfflineDb, storageApi, children,
 }: {
   organization: PublicOrganization | null
+  /** From the device context, or offline from the cached binding (ADR-0010 §5 amendment): a support device keeps no
+   *  new offline work and sends no sync report. */
+  devicePurpose?: 'operational' | 'support'
   principal: string | null
   bindingSource: BindingSource | null
   serverBinding?: ServerBinding
@@ -74,11 +77,11 @@ export function OfflineRuntimeProvider({
   useEffect(() => {
     if (!principal || !isUuid(principal) || serverBinding === 'unknown') return
     const write: ((d: IDBDatabase) => Promise<unknown>) | null = serverBinding === 'bound' && orgJson
-      ? (d: IDBDatabase) => saveBinding(d, { deviceUserId: principal, organization: JSON.parse(orgJson) as PublicOrganization, verifiedAt: new Date().toISOString() })
+      ? (d: IDBDatabase) => saveBinding(d, { deviceUserId: principal, organization: JSON.parse(orgJson) as PublicOrganization, verifiedAt: new Date().toISOString(), devicePurpose })
       : serverBinding === 'unbound' ? (d: IDBDatabase) => deleteBinding(d, principal) : null
     if (!write) return
     void getDb().then(write).then(() => queryClient.invalidateQueries({ queryKey: offlineKeys.binding(principal) }), () => { /* storage unavailable */ })
-  }, [principal, serverBinding, orgJson, getDb, queryClient])
+  }, [principal, serverBinding, orgJson, devicePurpose, getDb, queryClient])
 
   // ---------- local status ----------
   const local = useQuery({
@@ -141,9 +144,10 @@ export function OfflineRuntimeProvider({
   // ---------- the device sync report (Offline 7): foreground only, never faked ----------
   const timeZone = organization?.timezone ?? null
   const [syncReport, setSyncReport] = useState<{ at: string | null; failed: boolean }>({ at: null, failed: false })
-  const canReport = !!partition && !!reportSync && !!timeZone && serverBinding === 'bound' && connectivity === 'online' && local.isSuccess
+  const offlineCapture = devicePurpose !== 'support'
+  const canReport = offlineCapture && !!partition && !!reportSync && !!timeZone && serverBinding === 'bound' && connectivity === 'online' && local.isSuccess
   const reportSyncNow = useCallback(async () => {
-    if (!partition || !reportSync || !timeZone || serverBinding !== 'bound' || getConnectivity() !== 'online') return false
+    if (!offlineCapture || !partition || !reportSync || !timeZone || serverBinding !== 'bound' || getConnectivity() !== 'online') return false
     try {
       const store = createOfflineStore(await getDb(), partition)
       const sent = Date.now()
@@ -157,7 +161,7 @@ export function OfflineRuntimeProvider({
       setSyncReport((r) => ({ ...r, failed: true }))
       return false
     }
-  }, [partition, reportSync, timeZone, serverBinding, getDb])
+  }, [offlineCapture, partition, reportSync, timeZone, serverBinding, getDb])
   // after every change of local state (capture, sync, draft confirmed or discarded, review), on start and reconnect
   // (canReport turns true), and when the app comes back to the foreground — a phone left open past a period's end
   useEffect(() => {
@@ -181,6 +185,7 @@ export function OfflineRuntimeProvider({
     persistence: partition ? persisted.data ?? null : null,
     sync: coordinator ? sync : IDLE_SYNC,
     storeAccess,
+    offlineCapture,
     refresh: async () => {
       if (!partition) return
       await Promise.all([refreshLocal(), queryClient.invalidateQueries({ queryKey: offlineKeys.persisted })])
@@ -202,7 +207,7 @@ export function OfflineRuntimeProvider({
       for (const p of await findForeignPartitions(d, partition)) await purgePartition(d, p, { discardUnsyncedWork: true })
       await queryClient.invalidateQueries({ queryKey: offlineKeys.all })
     },
-  }), [partition, bindingSource, storage, local.data, held.data, persisted.data, coordinator, sync, storeAccess, refreshLocal, queryClient, storageApi, getDb, after,
+  }), [partition, bindingSource, storage, local.data, held.data, persisted.data, coordinator, sync, storeAccess, offlineCapture, refreshLocal, queryClient, storageApi, getDb, after,
     syncReport, reportSyncNow])
 
   return <OfflineRuntimeContext.Provider value={value}>{children}</OfflineRuntimeContext.Provider>
