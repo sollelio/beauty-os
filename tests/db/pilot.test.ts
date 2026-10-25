@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { client, device } from './env'
 
 const PROCS = ['admin_issue_enrollment_code', 'admin_revoke_device', 'admin_set_person_secret', 'admin_set_permission',
-  'admin_create_period', 'admin_set_rule', 'admin_list_devices', 'cleanup_unbound_anonymous_users']
+  'admin_create_period', 'admin_set_rule', 'admin_list_devices', 'cleanup_unbound_anonymous_users', 'admin_set_device_purpose']
 
 describe('operator procedures', () => {
   it('are not callable by an enrolled device, an unbound anonymous user or the anon key', async () => {

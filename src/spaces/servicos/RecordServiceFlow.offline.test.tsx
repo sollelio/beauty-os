@@ -49,8 +49,8 @@ async function outbox() {
   db.close()
   return items
 }
-const renderFlow = () => renderScreen(PATH, (
-  <OfflineRuntimeProvider organization={org} principal={USER} bindingSource="server" serverBinding="bound" openDb={openDb}
+const renderFlow = (devicePurpose: 'operational' | 'support' = 'operational') => renderScreen(PATH, (
+  <OfflineRuntimeProvider organization={org} principal={USER} bindingSource="server" serverBinding="bound" devicePurpose={devicePurpose} openDb={openDb}
     storageApi={{ storage: { persisted: async () => false, persist: persist as unknown as () => Promise<boolean> } }}>
     <RecordServiceFlow />
   </OfflineRuntimeProvider>
@@ -137,6 +137,15 @@ describe('Registar serviço offline', () => {
     expect(persist).toHaveBeenCalledTimes(1)
     expect(await outbox()).toHaveLength(2)
   })
+  it('a support device keeps nothing offline, even with fresh salon data: it says it registers online only', async () => {
+    await snapshot()
+    renderFlow('support')
+    expect((await screen.findByTestId('offline-blocked')).textContent).toBe('Sem ligação. Este telemóvel é de apoio e só regista com ligação.')
+    expect(screen.queryByText('Ana')).toBeNull()
+    await act(() => new Promise((r) => setTimeout(r, 20)))
+    expect(await outbox()).toEqual([])
+    expect(persist).not.toHaveBeenCalled()
+  })
 })
 
 describe('Registar serviço online (unchanged)', () => {
@@ -158,6 +167,27 @@ describe('Registar serviço online (unchanged)', () => {
     const db = await openDb()
     await waitFor(async () => expect((await createOfflineStore(db, partition).snapshot.listMeta()).map((m) => m.group)).toEqual(['paymentMethods', 'people', 'services']))
     db.close()
+    vi.mocked(servicesApi.listCapturePeople).mockClear(); vi.mocked(servicesApi.listPaymentMethods).mockClear()
+    vi.mocked(servicesApi.listFrequentServices).mockClear(); vi.mocked(catalogueApi.listServices).mockClear(); vi.mocked(servicesApi.recordService).mockClear()
+  })
+})
+
+describe('Registar serviço on a support device, online', () => {
+  it('submits directly with the server\'s time (no capture time sent) and queues nothing', async () => {
+    online = true
+    vi.mocked(servicesApi.listCapturePeople).mockResolvedValue([{ id: P1, display_name: 'Ana', capabilities: ['Cabelo'] }])
+    vi.mocked(servicesApi.listPaymentMethods).mockResolvedValue([{ id: M1, code: 'numerario', label: 'Numerário' }])
+    vi.mocked(servicesApi.listFrequentServices).mockResolvedValue([])
+    vi.mocked(catalogueApi.listServices).mockResolvedValue([{ id: S1, name: 'Coloração', default_price_minor: 1200000 }])
+    vi.mocked(servicesApi.recordService).mockResolvedValue({ record_id: '00000000-0000-4000-8000-0000000099ef', occurred_at: new Date().toISOString() })
+    renderFlow('support')
+    fireEvent.click(await screen.findByText('Ana'))
+    fireEvent.click(await screen.findByText('Coloração'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar serviço' }))
+    expect(await screen.findByText('Serviço registado com sucesso.')).toBeTruthy()
+    expect(servicesApi.recordService).toHaveBeenCalledTimes(1)
+    expect(servicesApi.submitQueuedService).not.toHaveBeenCalled()
+    expect(await outbox()).toEqual([])
     vi.mocked(servicesApi.listCapturePeople).mockClear(); vi.mocked(servicesApi.listPaymentMethods).mockClear()
     vi.mocked(servicesApi.listFrequentServices).mockClear(); vi.mocked(catalogueApi.listServices).mockClear(); vi.mocked(servicesApi.recordService).mockClear()
   })

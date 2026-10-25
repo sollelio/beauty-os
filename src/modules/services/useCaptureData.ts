@@ -8,7 +8,8 @@ import { isOfflineMode, offlineKeys, useOfflineRuntime } from '../../shared/offl
 import { listCapturePeople, listPaymentMethods, servicesKeys } from './api'
 import { captureSnapshotState, readCaptureSnapshot, writeCaptureSnapshot, type CaptureData } from './offline'
 
-export type CaptureBlock = 'missing' | 'stale' | 'unavailable'
+/** online_only: a support device, which keeps no work offline (ADR-0010 §5 amendment) */
+export type CaptureBlock = 'missing' | 'stale' | 'unavailable' | 'online_only'
 export type CaptureDataView = CaptureData & {
   offline: boolean
   loading: boolean
@@ -27,7 +28,7 @@ export function useCaptureData(): CaptureDataView {
   const snapshot = useQuery({
     queryKey: access ? offlineKeys.snapshot(access.partition) : [...offlineKeys.all, 'snapshot', 'none'],
     queryFn: async () => readCaptureSnapshot(await access!.getStore()),
-    enabled: offline && !!access, networkMode: 'always', retry: false, staleTime: 0,
+    enabled: offline && !!access && runtime.offlineCapture, networkMode: 'always', retry: false, staleTime: 0,
   })
 
   // after a successful online load, keep exactly these lists for offline capture
@@ -45,6 +46,7 @@ export function useCaptureData(): CaptureDataView {
     }
   }
   const none = { people: [], services: [], paymentMethods: [], errors: { people: false, services: false, paymentMethods: false } }
+  if (!runtime.offlineCapture) return { ...none, offline, loading: false, blocked: 'online_only' }
   if (!access || runtime.storage === 'unavailable' || snapshot.isError) return { ...none, offline, loading: false, blocked: 'unavailable' }
   if (snapshot.isPending) return { ...none, offline, loading: true, blocked: null }
   const state = captureSnapshotState(snapshot.data)

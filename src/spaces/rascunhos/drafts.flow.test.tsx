@@ -50,8 +50,8 @@ Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () 
 let factory: IDBFactory
 const openDb = () => openOfflineDb({ factory })
 const store = async () => createOfflineStore(await openDb(), partition)
-const wrap = (el: ReactNode, drain?: Parameters<typeof OfflineRuntimeProvider>[0]['drain']) => (
-  <OfflineRuntimeProvider organization={orgRow} principal={USER} bindingSource="server" serverBinding="bound" openDb={openDb} storageApi={{}} drain={drain}>{el}</OfflineRuntimeProvider>
+const wrap = (el: ReactNode, drain?: Parameters<typeof OfflineRuntimeProvider>[0]['drain'], devicePurpose: 'operational' | 'support' = 'operational') => (
+  <OfflineRuntimeProvider organization={orgRow} principal={USER} bindingSource="server" serverBinding="bound" devicePurpose={devicePurpose} openDb={openDb} storageApi={{}} drain={drain}>{el}</OfflineRuntimeProvider>
 )
 async function seedSnapshot(at = new Date().toISOString()) {
   const s = await store()
@@ -147,6 +147,13 @@ describe('offline: a draft on this phone, no PIN, nothing sent', () => {
   it('stale or missing salon data blocks a new draft', async () => {
     renderScreen('/dinheiro/despesa', wrap(<ExpenseFlow />), { org: orgRow })
     expect((await screen.findByTestId('offline-blocked')).textContent).toMatch(/últimas 48 horas/)
+  })
+  it('a support device keeps no draft, even with fresh salon data: it says it saves movements online only', async () => {
+    await seedSnapshot()
+    renderScreen('/dinheiro/despesa', wrap(<ExpenseFlow />, undefined, 'support'), { org: orgRow })
+    expect((await screen.findByTestId('offline-blocked')).textContent).toBe('Sem ligação. Este telemóvel é de apoio e só guarda movimentos com ligação.')
+    expect(screen.queryByText('Água')).toBeNull()
+    expect(await drafts()).toEqual([])
   })
   it('a draft stays after a restart, once; editing it keeps its capture time', async () => {
     await seedSnapshot()
@@ -262,6 +269,15 @@ describe('online: confirming a draft', () => {
     await waitFor(async () => expect((await readDraft(await store(), draft.draftId))?.payload.review?.code).toBe('CAPTURE_TIME_TOO_OLD'))
     expect((await readDraft(await store(), draft.draftId))?.state).toBe('draft')
     expect((await screen.findAllByText(/há mais de 48 horas/)).length).toBeGreaterThan(0)
+  })
+  it('a draft kept from before the device became support: the server refuses it (DEVICE_ONLINE_ONLY), kept for review', async () => {
+    const { draft, view } = await openDraftOnline()
+    vi.mocked(team.recordAdvance).mockRejectedValueOnce(toAppError({ message: 'DEVICE_ONLINE_ONLY' }))
+    view()
+    await confirmWithPin()
+    await waitFor(async () => expect((await readDraft(await store(), draft.draftId))?.payload.review?.code).toBe('DEVICE_ONLINE_ONLY'))
+    expect((await readDraft(await store(), draft.draftId))?.state).toBe('draft')
+    expect((await screen.findAllByText(/passou a ser de apoio/)).length).toBeGreaterThan(0)
   })
   it('a server CAPTURE_TIME_IN_FUTURE is kept for review too', async () => {
     const { draft, view } = await openDraftOnline()
