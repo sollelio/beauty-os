@@ -66,6 +66,16 @@ describe('service conflicts', () => {
     expect(document.body.textContent).not.toMatch(/[A-Z]{4,}_[A-Z_]+/)
     expect(within(card).queryByRole('button', { name: 'Tentar novamente' })).toBeNull()       // retrying cannot fix it
   })
+  it('a day without a period (a closed Sunday): a calm reason, its original time kept, never moved to another day', async () => {
+    const item = await conflict('NO_PERIOD_FOR_DATE')
+    renderReview()
+    const card = await screen.findByTestId('service-conflict')
+    expect(card.textContent).toMatch(/Não existe um período aberto para a data deste serviço\. Confirme a data ou fale com quem gere o salão\./)
+    expect(card.textContent).toMatch(/guardado 14 out às 10:30/)
+    expect(document.body.textContent).not.toMatch(/[A-Z]{4,}_[A-Z_]+/)
+    expect(within(card).getAllByRole('button').map((b) => b.textContent)).toEqual(['Registar novamente', 'Descartar'])
+    expect(await (await store()).outbox.get(item.commandId)).toMatchObject({ state: 'conflict', occurredAt: '2026-10-14T09:30:00.000Z' })
+  })
   it('discard asks first; an uncertain one gets the stronger warning; it removes only the local item', async () => {
     const keep = await conflict('PERIOD_CLOSED')
     const gone = await conflict('IDEMPOTENCY_CONFLICT', 100000)
@@ -132,6 +142,12 @@ async function openDraft(code: string) {
 }
 
 describe('drafts to review', () => {
+  it('a day without a period: the reason in salon words; the draft stays (a period may still be created for that day)', async () => {
+    await openDraft('NO_PERIOD_FOR_DATE')
+    const review = await screen.findByTestId('draft-review')
+    expect(review.textContent).toMatch(/Não existe um período aberto para esta data\. Confirme a data ou fale com quem gere o salão\./)
+    expect(screen.queryByTestId('draft-blocked')).toBeNull()
+  })
   it('an inactive reference stays editable and confirmable with a fresh PIN', async () => {
     await openDraft('PERSON_INACTIVE')
     expect(await screen.findByTestId('draft-review')).toBeTruthy()

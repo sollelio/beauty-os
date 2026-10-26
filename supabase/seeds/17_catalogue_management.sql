@@ -35,6 +35,9 @@ select '00000000-0000-4000-8000-0000000000f5'::uuid, p::uuid, perm
                ('00000000-0000-4000-8000-0000000088a2', 'payment.confirm')) x(p, perm)
 on conflict do nothing;
 
+-- a period covering the records below (operational records need a covering period, Slice 4; also in seed 23)
+insert into public.periods (id, organization_id, label, starts_on, ends_on) values
+  ('00000000-0000-4000-8000-00000000c0f5', '00000000-0000-4000-8000-0000000000f5', 'Cobertura Teste G', '2026-01-05', '2027-12-31') on conflict (id) do nothing;
 insert into public.service_records (id, organization_id, person_id, service_id, value_minor, payment_kind, occurred_at, recorded_at, device_id, command_id) values
   ('00000000-0000-4000-8000-0000000088c1', '00000000-0000-4000-8000-0000000000f5', '00000000-0000-4000-8000-0000000088a3',
    '00000000-0000-4000-8000-0000000088b1', 450000, 'single', '2026-01-05 10:00+01', '2026-01-05 10:00+01', '00000000-0000-4000-8000-00000008aede',

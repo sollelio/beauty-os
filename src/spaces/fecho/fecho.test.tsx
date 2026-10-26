@@ -102,6 +102,11 @@ async function confirmAs() {
 beforeEach(() => { vi.mocked(getFecho).mockReset(); vi.mocked(approvePeriod).mockReset(); vi.mocked(closePeriod).mockReset(); vi.mocked(confirmPayment).mockReset() })
 
 describe('Fecho home', () => {
+  it('no period has started yet (only future periods, Slice 4): says so instead of showing a future week', async () => {
+    vi.mocked(getFecho).mockRejectedValue(new AppError('domain', 'PERIOD_NOT_FOUND', 'PERIOD_NOT_FOUND'))
+    renderAt('/privado/fecho')
+    expect(await screen.findByText('Ainda não começou nenhum período.')).toBeTruthy()
+  })
   it('readiness and exceptions: blocked while a rule is pending; the first blocking item is the next action', async () => {
     vi.mocked(getFecho).mockResolvedValue(fecho())
     renderAt('/privado/fecho')

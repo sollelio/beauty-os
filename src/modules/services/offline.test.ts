@@ -159,12 +159,13 @@ describe('drain', () => {
     expect(server.submit).not.toHaveBeenCalled()
   })
   it('each distinct Offline 1 rejection is kept as a conflict with its code', async () => {
-    for (const code of ['PERSON_INACTIVE', 'SERVICE_INACTIVE', 'PAYMENT_METHOD_INACTIVE', 'PERIOD_CLOSED', 'CAPTURE_TIME_TOO_OLD', 'CAPTURE_TIME_IN_FUTURE', 'IDEMPOTENCY_CONFLICT']) {
+    for (const code of ['PERSON_INACTIVE', 'SERVICE_INACTIVE', 'PAYMENT_METHOD_INACTIVE', 'PERIOD_CLOSED', 'CAPTURE_TIME_TOO_OLD', 'CAPTURE_TIME_IN_FUTURE', 'IDEMPOTENCY_CONFLICT',
+                        'NO_PERIOD_FOR_DATE']) {
       const server = fakeServer()
       const [a] = await queue(1)
       server.fail(toAppError({ message: code }))
       await createServiceDrainer(deps(server))(store, signal())
-      expect(await store.outbox.get(a!.commandId), code).toMatchObject({ state: 'conflict', lastError: code })
+      expect(await store.outbox.get(a!.commandId), code).toMatchObject({ state: 'conflict', lastError: code, occurredAt: a!.occurredAt })   // never re-dated
     }
   })
   it('an uncertain answer (committed, then the connection dropped) is replayed with the same id: one record', async () => {

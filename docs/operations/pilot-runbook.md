@@ -49,11 +49,24 @@ select private.admin_set_week_schedule(:org, null, null);                  -- re
 
 ## 2. Periods
 
-Periods are explicit and never derived from the calendar (07 §10.3). Create each one before it starts; records whose
-date falls outside every period are kept but appear in no Fecho until a period covering them exists.
+Periods are explicit and never derived from the calendar (07 §10.3). They may leave out days the salon does not operate
+(e.g. Monday–Saturday weeks, Sunday closed). **Create each one well before it starts:** a service, advance, expense or
+purchase whose date falls in no period is refused (`NO_PERIOD_FOR_DATE`, "Não existe um período aberto para esta data") —
+online, and at sync for work saved offline, which then stays for review on the phone. It is never moved to another period.
 
 ```sql
 select private.admin_create_period(:org, '<label>', '<first day>', '<last day>');   -- rejects overlaps
+```
+
+**Future periods to the operating schedule** (organizations with a schedule, §1): ends each future period that is still
+empty and untouched (Aberto, not started, no record, no week-end event, approval, payment, decision, reserve or other
+history) on the schedule's last operating day, keeping its start; a label ending with the old end date gets the new one.
+Every other period is listed with the reason it is kept. A period's bounds never change once it means anything
+financially. Run it first without applying (it changes nothing and can run in a read-only transaction), review, then
+apply; each changed period is audited (`period_shortened`).
+```sql
+select private.admin_shorten_future_periods_to_schedule(:org, '<reason>');          -- review: eligible and skipped
+select private.admin_shorten_future_periods_to_schedule(:org, '<reason>', true);    -- apply
 ```
 
 **Ending the week (Fecho «Terminar a semana»; organizations with a schedule):** on the period's last operating day, after

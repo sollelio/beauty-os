@@ -62,7 +62,7 @@ export function SituationPage() {
   if (situation.isError) {
     return (
       <AppScreen bar={bar}>
-        <ErrorState onRetry={() => situation.refetch()} action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>Não foi possível mostrar esta situação.</ErrorState>
+        <ErrorState onRetry={() => situation.refetch()} action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>{toAppError(situation.error).code === 'PERIOD_NOT_FOUND' ? 'Ainda não começou nenhum período.' : 'Não foi possível mostrar esta situação.'}</ErrorState>
       </AppScreen>
     )
   }
