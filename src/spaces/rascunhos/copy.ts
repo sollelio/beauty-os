@@ -48,6 +48,7 @@ const SERVICE_REVIEW: Record<string, string> = {
   PERIOD_APPROVED: 'O período deste serviço já tem os valores aprovados e não aceita novos registos.',
   PERIOD_CLOSED: 'O período deste serviço já está fechado e não aceita novos registos.',
   PERIOD_WEEK_ENDED: 'A semana deste serviço já tinha sido terminada no Fecho: só entra se a gestão continuar a semana.',
+  NO_PERIOD_FOR_DATE: 'Não existe um período aberto para a data deste serviço. Confirme a data ou fale com quem gere o salão.',
   CAPTURE_TIME_TOO_OLD: 'Foi guardado há mais de 48 horas: já não pode ser registado com a hora original.',
   CAPTURE_TIME_IN_FUTURE: 'A hora guardada está no futuro (o relógio do telemóvel pode estar errado).',
   IDEMPOTENCY_CONFLICT: 'Não foi possível confirmar se este registo já foi recebido.',

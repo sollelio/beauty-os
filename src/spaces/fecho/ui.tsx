@@ -81,7 +81,8 @@ export function Loading({ q, title = 'Fecho' }: { q: { isError: boolean; error: 
     <AppScreen bar={<PrivateBar title={title} onBack={back} />}>
       {q.isError ? (
         <ErrorState action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>
-          {code === 'NOT_AUTHORIZED' ? 'O Fecho só está disponível para quem gere as finanças da equipa.' : 'Não foi possível carregar o Fecho.'}
+          {code === 'NOT_AUTHORIZED' ? 'O Fecho só está disponível para quem gere as finanças da equipa.'
+            : code === 'PERIOD_NOT_FOUND' ? 'Ainda não começou nenhum período.' : 'Não foi possível carregar o Fecho.'}
         </ErrorState>
       ) : <Skeleton rows={4} headline />}
     </AppScreen>

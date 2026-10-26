@@ -6,6 +6,7 @@ const PERIOD_LOCK: Partial<Record<string, string>> = {
   PERIOD_APPROVED: 'Este período já tem os valores aprovados: não entram novos registos. Para mudar, a gestão tem de anular a aprovação no Fecho (só é possível antes de haver pagamentos).',
   PERIOD_CLOSED: 'Este período está fechado: não entram novos registos.',
   PERIOD_WEEK_ENDED: 'A semana deste período já foi terminada no Fecho: não entram registos com hora posterior ao fim da semana. Se ainda houve atividade, a gestão pode continuar a semana no Fecho.',
+  NO_PERIOD_FOR_DATE: 'Não existe um período aberto para esta data. Confirme a data ou fale com quem gere o salão.',
   CATALOGUE_INACTIVE: 'Um dos produtos está desativado em Gestão: retire-o desta compra ou peça a quem gere o catálogo para o reativar.',
 }
 
