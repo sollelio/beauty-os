@@ -17,6 +17,7 @@ export const MOVEMENT_BLOCKED: Record<MovementBlock, string> = {
 
 const REVIEW: Record<string, string> = {
   PERSON_INACTIVE: 'A pessoa deste movimento já não está ativa.',
+  PERSON_NOT_PERSONNEL: 'A pessoa escolhida neste movimento não faz parte da equipa do salão.',
   PAYMENT_METHOD_INACTIVE: 'A forma de pagamento deste movimento já não está ativa.',
   CATEGORY_INACTIVE: 'A categoria desta despesa já não está ativa.',
   ORIGIN_INACTIVE: 'O local de compra já não está ativo.',
@@ -41,6 +42,7 @@ export function draftFailure(err: AppError | null, fallback: string): string {
 // ---------- review (Offline 7): calm reasons for queued services; never a backend code ----------
 const SERVICE_REVIEW: Record<string, string> = {
   PERSON_INACTIVE: 'A pessoa deste serviço já não está ativa.',
+  PERSON_NOT_PERSONNEL: 'A pessoa deste serviço não faz parte da equipa do salão.',
   SERVICE_INACTIVE: 'Este serviço já não está disponível no catálogo.',
   PAYMENT_METHOD_INACTIVE: 'A forma de pagamento já não está ativa.',
   PERIOD_APPROVED: 'O período deste serviço já tem os valores aprovados e não aceita novos registos.',

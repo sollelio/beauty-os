@@ -184,6 +184,33 @@ describe('private session', () => {
     expect(router.state.location.pathname + router.state.location.search).toBe('/privado/fecho?p=p10')
     expect(rpc).toHaveBeenCalledWith('verify_person', { p_person_id: 'm1', p_secret: '135790', p_scope: 'private_session' })
   })
+  it('the people offered depend on where the entry leads: the server lists them for Fecho, Negócio or the private area', async () => {
+    const listed = () => rpc.mock.calls.filter(([fn]) => fn === 'list_private_people').map(([, args]) => args)
+    status = { active: false }
+    for (const [entry, purpose] of [
+      [{ pathname: '/privado/entrar', state: { next: '/privado/fecho/aprovar' } }, 'fecho'],
+      [{ pathname: '/privado/entrar', state: { next: '/privado/negocio/equipa' } }, 'negocio'],
+      ['/privado/entrar', 'private'],                                                  // from Hoje: no destination
+      [{ pathname: '/privado/entrar', state: { next: '/privado/situacao/n' } }, 'private'],
+    ] as const) {
+      rpc.mockClear()
+      const { router } = renderApp([entry as InitialEntry])
+      expect(await screen.findByRole('button', { name: 'Mercy' })).toBeTruthy()
+      expect(listed()).toEqual([{ p_purpose: purpose }])
+      router.dispose(); document.body.innerHTML = ''
+    }
+    rpc.mockClear()
+    renderApp(['/', '/privado/fecho'])                                                 // an ended context inside Fecho
+    expect(await screen.findByRole('button', { name: 'Mercy' })).toBeTruthy()
+    expect(listed()).toEqual([{ p_purpose: 'fecho' }])
+  })
+  it('nobody listed for Fecho on this device: says so for Fecho', async () => {
+    status = { active: false }
+    const base = rpc.getMockImplementation()!
+    rpc.mockImplementation(async (fn: string, args: unknown) => (fn === 'list_private_people' ? { data: [], error: null } : base(fn, args)))
+    renderApp([{ pathname: '/privado/entrar', state: { next: '/privado/fecho' } }])
+    expect(await screen.findByText('Ninguém com acesso ao Fecho neste dispositivo.')).toBeTruthy()
+  })
 })
 
 describe('Fecho review and decisions', () => {

@@ -10,7 +10,13 @@ import { toAppError } from '../../shared/errors'
 
 export const PRIVATE_ROOT = ['private'] as const
 export const privateKeys = { status: ['org', 'private-status'] as const,   // outside PRIVATE_ROOT: it holds no figures and must survive removal
-  people: ['org', 'private-people'] as const }
+  people: (purpose: PrivatePurpose) => ['org', 'private-people', purpose] as const }
+
+/** What the private entry leads to: the server lists the people who can use it (holders of that area's permission;
+ *  everyone with a PIN for the private area itself). Never a sensitive decision — every read is checked again. */
+export type PrivatePurpose = 'private' | 'fecho' | 'negocio'
+export const privatePurpose = (next: string | undefined): PrivatePurpose =>
+  next?.startsWith('/privado/fecho') ? 'fecho' : next?.startsWith('/privado/negocio') ? 'negocio' : 'private'
 
 export type PrivateStatus =
   | { active: false }
@@ -22,9 +28,9 @@ export async function getPrivateStatus(): Promise<PrivateStatus> {
   return data as PrivateStatus
 }
 
-/** People who can open a private context on this device (names only). */
-export async function listPrivatePeople(): Promise<{ id: string; display_name: string }[]> {
-  const { data, error } = await getSupabase().rpc('list_private_people')
+/** People who can open a private context on this device for this purpose (names only). */
+export async function listPrivatePeople(purpose: PrivatePurpose = 'private'): Promise<{ id: string; display_name: string }[]> {
+  const { data, error } = await getSupabase().rpc('list_private_people', { p_purpose: purpose })
   if (error) throw toAppError(error)
   return data
 }

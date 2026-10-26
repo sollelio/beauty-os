@@ -31,6 +31,14 @@ Then, per person: **rule** (`select private.admin_set_rule(:person, 'standing' |
 **PIN** (exactly 6 digits) for anyone who confirms or enters the private area (`select private.admin_set_person_secret(:person, '<6 digits>')`); PINs are chosen at production setup and never stored in the repository,
 and **permissions** (§4).
 
+**Sollelio support identity (interim; architecture §7):** a person who is Sollelio's support identity, not salon personnel,
+gets the kind `support` (every person is `personnel` by default). It then appears in no person list on the salon's devices,
+only on a support-purpose device (§3), and keeps its permissions and PIN. Refused for anyone with a service capability or a
+rule (`PERSON_IS_PERSONNEL`). Audited (`person_kind_set`).
+```sql
+select private.admin_set_person_kind(:person, 'support', '<reason>');     -- back: 'personnel'
+```
+
 **Operating schedule (optional; Fecho «Terminar a semana», ADR-0010 §5 amendment):** the last operating weekday (ISO:
 1 = Monday … 6 = Saturday, 7 = Sunday) and the usual closing time, in the organization's timezone. Audited
 (`week_schedule_set`). Without it nothing changes: a week ends at its calendar end.
