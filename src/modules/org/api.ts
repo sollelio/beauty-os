@@ -123,9 +123,10 @@ export async function verifyPerson(personId: string, secret: string): Promise<st
 export type PersonRow = { id: string; display_name: string }
 export const peopleKeys = { all: ['org', 'people'] as const }
 
-/** Active people of this organization (operational names only). */
+/** Active salon personnel of this organization (operational names only): purchase contributors. A support identity
+ *  (people.kind 'support', Slice 3) is never a contributor. */
 export async function listPeople(): Promise<PersonRow[]> {
-  const { data, error } = await getSupabase().from('people').select('id, display_name').eq('active', true).order('display_name')
+  const { data, error } = await getSupabase().from('people').select('id, display_name').eq('active', true).eq('kind', 'personnel').order('display_name')
   if (error) throw toAppError(error)
   return data
 }

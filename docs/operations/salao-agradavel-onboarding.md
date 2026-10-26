@@ -35,9 +35,10 @@ Agradável to give support without using Fernando's (or anyone's) PIN and withou
 is an ordinary person of this organization with its own PIN (chosen and held by Sollelio, never in the repository), under
 the same person/PIN verification as everyone else: organization-scoped, no service role, no RLS bypass, no platform-level
 access. Everything it confirms is attributed to "Sollelio Support". It has no capability and no rule, so it is not offered
-in service capture, advances or the team list and is not counted in Fecho (the script refuses to commit otherwise). It
-does appear wherever every active person or a permission holder is listed: the Área privada person list, the
-*Confirmação necessária* picker of each permission, and the contributor list of a purchase. **It is to be replaced by the
+in service capture, advances or the team list and is not counted in Fecho (the script refuses to commit otherwise). Once
+its person kind is `support` (Slice 3; `private.admin_set_person_kind`, [runbook §1](pilot-runbook.md)) it is not listed
+anywhere on the salon's devices — Área privada, Fecho and Negócio entry, the *Confirmação necessária* pickers, purchase
+contributors — only on Sollelio's support-purpose device, to enter or confirm; its permissions and PIN are unchanged. **It is to be replaced by the
 future Sollelio Console / platform-support model**; it is not part of the salon's permission matrix (07 D8).
 
 Rules: `admin_set_rule(person, 'standing', %, '2026-10-12', Fernando)`. Capabilities are labels shown in capture and
