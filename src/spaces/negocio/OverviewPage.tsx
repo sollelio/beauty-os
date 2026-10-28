@@ -127,7 +127,7 @@ function Changes({ h, m }: { h: BusinessHealth; m: (n: number) => string }) {
         <p className="note num" style={{ color: 'var(--ink)' }}>Face a {prev.period?.label}: {changeLine('produção', h.changes.previous.production_minor, m)} · {changeLine('resultado', h.changes.previous.operating_result_minor, m, resPrev)}.</p>
       ) : <p className="note">{COMPARISON_UNAVAILABLE[prev.reason ?? 'no_previous_period']}</p>}
       {h.changes.average_3 ? (
-        <p className="note num" style={{ color: 'var(--ink)' }}>Face à média dos últimos {avg.window} períodos fechados: {changeLine('produção', h.changes.average_3.production_minor, m)} · {changeLine('resultado', h.changes.average_3.operating_result_minor, m, resAvg)}.</p>
+        <p className="note num" style={{ color: 'var(--ink)' }}>Face à média dos últimos {avg.window} períodos aprovados: {changeLine('produção', h.changes.average_3.production_minor, m)} · {changeLine('resultado', h.changes.average_3.operating_result_minor, m, resAvg)}.</p>
       ) : avg.reason !== prev.reason && <p className="note">{COMPARISON_UNAVAILABLE[avg.reason ?? 'insufficient_history']}</p>}
       {drivers.length > 0 && (
         <>

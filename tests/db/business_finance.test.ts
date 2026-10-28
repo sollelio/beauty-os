@@ -30,6 +30,10 @@ async function finance(label: string): Promise<BusinessFinance> {
 const metric = (f: BusinessFinance, key: FinanceMetric['key']) => f.metrics.find((m) => m.key === key)!
 const err = async (fn: string, args: Row = {}) => (await dev.rpc(fn, args)).error?.message
 const numbers = (v: unknown): number[] => typeof v === 'number' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(numbers) : []
+/** The selected period's own figures: everything except the comparison values, which are other periods' figures (checked
+ *  against those periods as the same viewer sees them, since approved periods are compared — 2026-10-28). */
+const ownNumbers = (f: BusinessFinance) =>
+  numbers({ ...f, metrics: f.metrics.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'previous' && k !== 'average_3'))) })
 
 beforeAll(async () => {
   dev = await device('TEST-ORG-F-2026')
@@ -102,10 +106,18 @@ describe('figures (team.finance.read viewer: the complete aggregate context)', (
     expect(metric(f, 'operating_result_minor').change_previous).toEqual({ delta_minor: -K(8000), percent: -11.6 })
     expect(f.result_change).toEqual({ delta_minor: -K(8000), percent: -11.6 })
     expect(metric((await finance('Semana F5')), 'purchases_salon_minor').change_previous).toEqual({ delta_minor: -K(23000), percent: -100 })
-    const f6 = await finance('Semana F6')
-    expect(f6.comparison.previous).toMatchObject({ available: false, reason: 'previous_not_closed' })
-    expect(f6.metrics.every((m) => m.change_previous === null && m.previous === null)).toBe(true)
-    expect(f6.drivers).toEqual([])
+    // F5 is approved (Em pagamento, not closed): its figures are fixed, so F6 compares with it (weekly accrual, later payment)
+    const f6 = await finance('Semana F6'), f5 = await finance('Semana F5')
+    expect(f6.comparison.previous).toMatchObject({ available: true, reason: null, period: { label: 'Semana F5' } })
+    // … every fixed figure; Livre is final only at close (the reserve can still change), so not against an unclosed week
+    for (const x of f6.metrics) expect(x.previous, x.key).toBe(x.key === 'free_minor' ? null : metric(f5, x.key).current)
+    expect(metric(f6, 'free_minor')).toMatchObject({ previous: null, change_previous: null })
+    expect(metric(f6, 'production_minor').change_previous).not.toBeNull()
+    expect(f6.reserve).toMatchObject({ previous_allocated_minor: null, previous_used_minor: null })
+    // F4's previous, F3, is closed: Livre compares, with its close-statement value
+    expect(metric(f, 'free_minor').previous).toBe(metric(await finance('Semana F3'), 'free_minor').current)
+    // F9's previous, F8, is Aberto: never a reference
+    expect((await finance('Semana F9')).comparison.previous).toMatchObject({ available: false, reason: 'previous_not_approved' })
   })
 
   it('insufficient history: no previous for F1, no average before three closed periods', async () => {
@@ -188,7 +200,11 @@ describe('business-only viewer: hidden where a figure resolves to one other pers
     const t = (await finance('Semana F8')).trend.find((x) => x.label === 'Semana F6')!
     expect(t).toMatchObject({ operating_result_minor: null, retention_pct: null, private_fields: ['operating_result_minor', 'retention_pct'] })
     const team = metric(m.F6, 'team_earnings_minor').current!
-    const seen = numbers(f)
+    const seen = ownNumbers(f)
+    // the comparison values are F5's own figures exactly as this viewer sees F5 — nothing about F6 (F5's expenses, 40.000,
+    // happen to equal F6's hidden earnings: a coincidence of the fixture, not a derivation)
+    const f5 = await finance('Semana F5')
+    for (const x of f.metrics) expect(x.previous, x.key).toBe(x.key === 'free_minor' ? null : metric(f5, x.key).current)   // Livre: F5 is not closed
     // (F6's result, 30.000, equals its Renda expense — a visible figure in its own right — so it is not checked by value)
     for (const v of [team, metric(m.F6, 'operating_costs_minor').current]) expect(seen, String(v)).not.toContain(v)
     for (const v of seen.filter((x) => x !== K(30000))) expect(K(100000) - K(30000) - v, String(v)).not.toBe(team)   // minus the expense itself
@@ -227,7 +243,11 @@ describe('unpaid total: team earnings − unpaid = advances + paid must not reso
     expect(f.private_fields).toEqual(['unpaid_team_minor', 'paid_team_minor'])
     expect(f.obligations).toMatchObject({ unpaid_team_minor: null, paid_team_minor: null })
     expect(metric(f, 'team_earnings_minor').current).toBe(K(80000))           // the aggregate earnings stay
-    const seen = numbers(f)
+    const seen = ownNumbers(f)
+    // the average is of the approved weeks before F9 as this viewer sees them (F5, F4, F3); its result, 70.000, equals F9's
+    // hidden unpaid total only by coincidence of the fixture
+    const window = await Promise.all(['Semana F5', 'Semana F4', 'Semana F3'].map((l) => finance(l)))
+    expect(metric(f, 'operating_result_minor').average_3).toBe(Math.round(window.reduce((s, w) => s + metric(w, 'operating_result_minor').current!, 0) / 3))
     expect(seen).not.toContain(K(70000))
     for (const v of seen) expect(K(80000) - v, String(v)).not.toBe(K(10000))  // no figure gives A's advance
     expect((await health('Semana F9')).current.unpaid_team_minor).toBeNull()  // the overview follows the same rule
@@ -261,10 +281,15 @@ describe('unpaid total: team earnings − unpaid = advances + paid must not reso
       for (const v of Object.values(hid)) expect(txt).not.toContain(money(v))
       const f = await finance('Semana F10')
       expect(f.trend.every((t) => !('unpaid_team_minor' in t))).toBe(true)
-      expect(f.comparison.previous.available).toBe(false)                     // F9 is not closed: nothing to compare
+      // F9 is approved: F10 compares with it — figures only, never an unpaid or paid amount
+      expect(f.comparison.previous).toMatchObject({ available: true, period: { label: 'Semana F9' } })
+      expect(f.metrics.map((x) => x.key)).not.toContain('unpaid_team_minor')
+      const f9 = await finance('Semana F9')                                   // the comparison values are F9's own figures as this viewer sees them
+      for (const x of f.metrics) expect(x.previous, `${who} ${x.key}`).toBe(x.key === 'free_minor' ? null : metric(f9, x.key).current)   // Livre: F9 is not closed
     }
     await as(BUSINESS_ONLY)                                                   // the visible F10 total is the only one counted
     const pending = buildInsights(await health('Semana F10'), money).insights.find((i) => i.kind === 'payments_pending')!
-    expect(pending.title).toBe(`Ainda faltam ${money(K(69000))} por pagar à equipa.`)
+    expect(pending.title).toBe(`A pagar à equipa (acumulado): ${money(K(69000))}.`)
+    expect(pending.severity).toBe('INFORMATION')
   })
 })

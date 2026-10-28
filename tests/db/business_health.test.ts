@@ -151,14 +151,15 @@ describe('comparison', () => {
     expect(h2.changes.previous!.production_minor).toEqual({ delta_minor: K(100000), percent: null })
   })
 
-  it('insufficient history, previous not closed, current incomplete', async () => {
+  it('insufficient history, an approved previous period compared, current incomplete', async () => {
     const h3 = await health(P['Semana E3']!)
     expect(h3.meta).toMatchObject({ history_count: 2, baseline: 'previous' })
     expect(h3.meta.comparison.average_3).toMatchObject({ available: false, reason: 'insufficient_history' })
     expect(h3.average_3).toBeNull()
     const h7 = await health(P['Semana E7']!)
-    expect(h7.meta.comparison.previous).toMatchObject({ available: false, reason: 'previous_not_closed' })
-    expect(h7.changes.previous).toBeNull()
+    // E6 is approved with 30.000 still unpaid: its figures are fixed, so E7 compares with it (weekly accrual, later payment)
+    expect(h7.meta.comparison.previous).toMatchObject({ available: true, reason: null, period: { label: 'Semana E6' } })
+    expect(h7.changes.previous).not.toBeNull()
     expect(h7.meta.comparison.average_3.available).toBe(true)
     const h8 = await health(null)
     expect(h8.meta).toMatchObject({ is_complete: false, baseline: 'none' })
@@ -181,9 +182,9 @@ describe('insights from the read model', () => {
 
   it('E6: payments pending and production decline; E7: blocked period first-class, payments of E6 still listed', async () => {
     const r6 = buildInsights(await health(P['Semana E6']!), money)
-    expect(r6.insights.map((i) => i.kind)).toEqual(['payments_pending', 'production_decline'])
-    expect(r6.insights[0]!.title).toBe('Ainda faltam 30000 Kz por pagar à equipa.')
-    expect(await kinds('Semana E7')).toEqual(['payments_pending', 'period_blocked'])
+    expect(r6.insights.map((i) => i.kind)).toEqual(['production_decline', 'payments_pending'])   // the unpaid balance is information
+    expect(r6.insights[1]).toMatchObject({ title: 'A pagar à equipa (acumulado): 30000 Kz.', severity: 'INFORMATION', impact_minor: K(30000) })
+    expect((await kinds('Semana E7')).filter((k) => k === 'period_blocked' || k === 'payments_pending')).toEqual(['period_blocked', 'payments_pending'])
   })
 
   it('no insight below the thresholds or without the data', async () => {
@@ -191,8 +192,8 @@ describe('insights from the read model', () => {
     expect(buildInsights(await health(P['Semana E3']!), money).skipped).toContainEqual({ kind: 'production_decline', reason: 'not_enough_services' })
     expect(await kinds('Semana E4')).toEqual([])                    // result up; X +64% but its excess < 3% of production
     expect(await kinds('Semana E1')).toEqual([])
-    const r8 = buildInsights(await health(null), money)            // current period: only the open action of E6 and E7
-    expect(r8.insights.map((i) => i.kind)).toEqual(['payments_pending', 'period_blocked'])
+    const r8 = buildInsights(await health(null), money)            // current period: only the open situations of E6 and E7
+    expect(r8.insights.map((i) => i.kind)).toEqual(['period_blocked', 'payments_pending'])
     expect(r8.skipped.map((s) => s.reason)).toEqual(['current_incomplete', 'current_incomplete', 'current_incomplete'])
   })
 })

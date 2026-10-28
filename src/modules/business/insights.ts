@@ -73,20 +73,21 @@ export function generateInsights(h: BusinessHealth, money: (minor: number) => st
   const prevMeta = h.meta.comparison.previous
   const prevLabel = prevMeta.period?.label ?? 'o período anterior'
 
-  // 1 · Approved amounts still unpaid (this and earlier open periods), one grouped insight
+  // 1 · Approved amounts still unpaid (this and earlier open periods), one grouped insight. Weekly accrual + flexible later
+  //     payment (Sollelio, 2026-10-28): a normal outstanding balance, shown as information — not a problem to act on now.
   const unpaid = h.open_periods.filter((p) => (p.unpaid_team_minor ?? 0) > 0)
   if (unpaid.length > 0) {
     const total = unpaid.reduce((s, p) => s + (p.unpaid_team_minor ?? 0), 0)
     out.push(make({
-      id: `payments_pending:${unpaid.map((p) => p.id).join(',')}`, kind: 'payments_pending', severity: 'ACTION_REQUIRED', impact_minor: total,
+      id: `payments_pending:${unpaid.map((p) => p.id).join(',')}`, kind: 'payments_pending', severity: 'INFORMATION', impact_minor: total,
       periods: unpaid.map((p) => ({ id: p.id, label: p.label })),
-      title: `Ainda faltam ${money(total)} por pagar à equipa.`,
+      title: `A pagar à equipa (acumulado): ${money(total)}.`,
       detail: {
         current: money(total),
-        basis: `Valores aprovados e ainda não pagos: ${unpaid.map((p) => `${p.label} ${money(p.unpaid_team_minor ?? 0)}`).join(' · ')}.`,
+        basis: `Aprovado e ainda por pagar, por período: ${unpaid.map((p) => `${p.label} ${money(p.unpaid_team_minor ?? 0)}`).join(' · ')}.`,
         drivers: [],
         action: { label: 'Ver pagamentos', to: `/privado/fecho/pagamentos?p=${unpaid[0]!.id}`, finance: true },
-        confidence: 'Valor do fecho aprovado; desaparece quando os pagamentos forem confirmados.',
+        confidence: 'Valores fixados nos fechos aprovados. Podem ser pagos mais tarde; o total baixa à medida que os pagamentos são confirmados.',
       },
     }, cur.period.id))
   }
@@ -130,7 +131,7 @@ export function generateInsights(h: BusinessHealth, money: (minor: number) => st
           current: `Produção ${money(cur.production_minor)} · resultado ${money(cur.operating_result_minor ?? 0)}`,
           reference: `Produção ${money(h.previous.production_minor)} · resultado ${money(h.previous.operating_result_minor ?? 0)}`,
           change: `Produção +${pct(prod.percent)} · resultado −${pct(res.percent)}`,
-          basis: `${cur.period.label} comparado com ${prevLabel} (fechado).`,
+          basis: `${cur.period.label} comparado com ${prevLabel} (aprovado).`,
           drivers,
           confidence: drivers.length ? 'Custos que mais subiram no mesmo período; não indica que tenham sido a causa.' : 'Sem um custo que se destaque.',
         },
@@ -146,7 +147,7 @@ export function generateInsights(h: BusinessHealth, money: (minor: number) => st
           current: `${money(cur.production_minor)} · ${plural(cur.services_count, 'serviço', 'serviços')}`,
           reference: `${money(h.previous.production_minor)} · ${plural(h.previous.services_count, 'serviço', 'serviços')}`,
           change: `${money(prod.delta_minor ?? 0)} (−${pct(prod.percent)})`,
-          basis: `${cur.period.label} comparado com ${prevLabel} (fechado).`,
+          basis: `${cur.period.label} comparado com ${prevLabel} (aprovado).`,
           drivers: [],
           confidence: `Com ${plural(cur.services_count, 'serviço registado', 'serviços registados')} (mínimo ${t.minServices}).`,
         },
@@ -178,7 +179,7 @@ export function generateInsights(h: BusinessHealth, money: (minor: number) => st
           current: high.map((c) => `${c.label} ${money(c.current_minor)}${cur.production_minor > 0 ? ` (${Math.round((c.current_minor * 1000) / cur.production_minor) / 10}% da produção)` : ''}`).join(' · '),
           reference: high.map((c) => `${c.label} média ${money(c.average_3_minor!)}`).join(' · '),
           change: high.map((c) => `${c.label} +${money(c.current_minor - c.average_3_minor!)} (+${pct(above(c))})`).join(' · '),
-          basis: `Média de ${used} (fechados).`,
+          basis: `Média de ${used} (aprovados).`,
           drivers: high.map((c) => ({ label: c.label, delta_minor: c.current_minor - c.average_3_minor!, text: `+${money(c.current_minor - c.average_3_minor!)} acima da média` })),
           confidence: `Categoria presente em pelo menos ${t.categoryMinPresence} dos ${t.averageWindow} períodos; o excesso passa ${t.categoryMinImpactPctOfProduction}% da produção.`,
         },
@@ -253,9 +254,10 @@ export function costDrivers(h: BusinessHealth, money: (minor: number) => string)
 export const COMPARISON_UNAVAILABLE: Record<ComparisonReason, string> = {
   current_incomplete: 'O período ainda está a decorrer: a comparação fica disponível quando terminar.',
   no_previous_period: 'Ainda não há um período anterior para comparar.',
-  previous_not_closed: 'O período anterior ainda não está fechado: os valores dele podem mudar.',
+  previous_not_approved: 'O período anterior ainda não foi aprovado: os valores dele podem mudar.',
+  previous_not_closed: 'O período anterior ainda não está fechado: os valores dele podem mudar.',   // a database before 20261030000100
   previous_not_comparable: 'O período anterior tem uma duração diferente e não é comparável.',
-  insufficient_history: 'Ainda não há períodos fechados suficientes para uma média.',
+  insufficient_history: 'Ainda não há períodos aprovados suficientes para uma média.',
 }
 
 /** Shares of the period's production taken by the largest and the two largest contributions, in whole percent, as the
@@ -370,7 +372,7 @@ export function costInsights(c: BusinessCosts, money: (minor: number) => string,
         current: `${money(c.purchases.salon_minor!)} (${String(c.summary.purchases_pct_of_production).replace('.', ',')}% da produção)`,
         reference: `${money(c.purchases.previous_salon_minor ?? 0)} em ${prevLabel}`,
         change: `+${money(ch.delta_minor ?? 0)} (+${pct(ch.percent)})`,
-        basis: `${p.label} comparado com ${prevLabel} (fechado). Só a parte paga pelo salão.`,
+        basis: `${p.label} comparado com ${prevLabel} (aprovado). Só a parte paga pelo salão.`,
         drivers: top.map((x) => ({ label: x.name, delta_minor: x.salon_minor ?? 0, text: `${money(x.salon_minor ?? 0)} · ${plural(x.purchases_count, 'compra', 'compras')}` })),
         confidence: 'Produtos com mais valor comprado neste período; não indica que tenham sido a causa.',
       } }, p.id))

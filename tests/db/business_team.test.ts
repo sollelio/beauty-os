@@ -78,7 +78,7 @@ describe('business-only viewer: the team as a whole, nothing named (07 D9 · B11
         expect(raw.match(/.{30}(Profissional D|dd2[1-4]|person_id|display_name|"share_pct"|previous_production|earned|advance|remaining|excess|outstanding).{10}/)?.[0], label).toBeUndefined()
     }
     expect((await team('Semana D1')).comparison).toMatchObject({ available: false, reason: 'no_previous_period' })
-    expect((await team('Semana D5')).comparison).toMatchObject({ available: false, reason: 'previous_not_closed' })
+    expect((await team('Semana D5')).comparison).toMatchObject({ available: false, reason: 'previous_not_approved' })   // D4 is Aberto
     expect(await err('team_situation', { p_person_id: D1 })).toBe('NOT_AUTHORIZED')      // no finance drill-down
   })
 

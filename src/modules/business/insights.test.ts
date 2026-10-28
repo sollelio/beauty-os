@@ -66,23 +66,31 @@ describe('buildInsights thresholds', () => {
     expect(two.insights[0]!.title).toBe('2 categorias de despesa acima da média dos últimos 3 períodos.')
   })
 
-  it('payments pending and blocked periods: grouped, and gone once resolved', () => {
+  it('approved-but-unpaid amounts: one accumulated balance across open periods, as information (weekly accrual, later payment); blocked periods still need action', () => {
     const open = [{ id: 'a', label: 'A', state: 'em_pagamento' as const, is_complete: true, unpaid_team_minor: 120_000_00, unpaid_private: false, pending_rules_count: 0 },
                   { id: 'b', label: 'B', state: 'pronto_para_pagamento' as const, is_complete: true, unpaid_team_minor: 5_000_00, unpaid_private: false, pending_rules_count: 0 },
                   { id: 'c', label: 'C', state: 'aberto' as const, is_complete: true, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 2 },
                   { id: 'd', label: 'D', state: 'aberto' as const, is_complete: false, unpaid_team_minor: null, unpaid_private: false, pending_rules_count: 1 }]
     const r = buildInsights(health({ open }), money).insights
-    expect(r.map((i) => i.kind)).toEqual(['payments_pending', 'period_blocked'])
-    expect(r[0]!.title).toBe('Ainda faltam 125000 Kz por pagar à equipa.')
-    expect(r[1]!.title).toBe('C terminou e não pode ser aprovado: 2 regras de remuneração por definir.')   // D is still running
+    expect(r.map((i) => i.kind)).toEqual(['period_blocked', 'payments_pending'])
+    const pay = r[1]!
+    expect(pay.severity).toBe('INFORMATION')                                                  // a normal liability, not an urgent problem
+    expect(pay.title).toBe('A pagar à equipa (acumulado): 125000 Kz.')                         // A 120.000 + B 5.000, two weeks
+    expect(pay.impact_minor).toBe(125_000_00)
+    expect(pay.periods.map((p) => p.id)).toEqual(['a', 'b'])
+    expect(pay.detail.basis).toBe('Aprovado e ainda por pagar, por período: A 120000 Kz · B 5000 Kz.')
+    expect(pay.detail.action).toMatchObject({ label: 'Ver pagamentos', to: '/privado/fecho/pagamentos?p=a', finance: true })
+    expect(pay.detail.confidence).toMatch(/Podem ser pagos mais tarde/)
+    expect(r[0]!.severity).toBe('ACTION_REQUIRED')
+    expect(r[0]!.title).toBe('C terminou e não pode ser aprovado: 2 regras de remuneração por definir.')   // D is still running
     expect(kinds(health({ open: open.map((p) => ({ ...p, unpaid_team_minor: p.unpaid_team_minor ? 0 : null, pending_rules_count: 0 })) }))).toEqual([])
   })
 
-  it('priority: action first, then attention; never more than 5', () => {
+  it('priority: action first, then attention, then information (the unpaid balance); never more than 5', () => {
     const h = health({ prod: 20, result: -10, avg: true, cats: [cat(10_000_00, 5_000_00, 3)],
       open: [{ id: 'a', label: 'A', state: 'aberto', is_complete: true, unpaid_team_minor: 1, unpaid_private: false, pending_rules_count: 1 }] })
     // within attention, the larger money at stake first: the category's 5.000 excess before the result's tiny drop
-    expect(kinds(h)).toEqual(['payments_pending', 'period_blocked', 'expense_category_high', 'production_up_result_down'])
+    expect(kinds(h)).toEqual(['period_blocked', 'expense_category_high', 'production_up_result_down', 'payments_pending'])
     expect(buildInsights(h, money, { ...INSIGHT_THRESHOLDS, maxShown: 2 }).insights).toHaveLength(2)
     expect(INSIGHT_THRESHOLDS.maxShown).toBe(5)
   })
@@ -235,8 +243,8 @@ describe('shared insight model (Slice 06): one engine for the overview, the deta
 
   it('priority: action, then attention (open situations first, then money at stake), then information', () => {
     const r = gen(full()).insights.map((i) => i.kind)
-    expect(r).toEqual(['payments_pending', 'period_blocked', 'product_attention', 'purchases_up', 'expense_category_high', 'production_up_result_down',
-                       'service_decline', 'team_concentration', 'service_concentration', 'service_growth'].filter((k) => r.includes(k as InsightKind)))
+    expect(r).toEqual(['period_blocked', 'product_attention', 'purchases_up', 'expense_category_high', 'production_up_result_down',
+                       'service_decline', 'team_concentration', 'payments_pending', 'service_concentration', 'service_growth'].filter((k) => r.includes(k as InsightKind)))
     expect(r.indexOf('product_attention')).toBeLessThan(r.indexOf('purchases_up'))         // state before period within attention
   })
 
@@ -257,13 +265,13 @@ describe('shared insight model (Slice 06): one engine for the overview, the deta
   it('hub: open situations from now, analysis from the selected period; no overlap; counts by severity', () => {
     const now = full(), selected = declining()
     const hub = buildInsightHub(now, selected, money)
-    expect(hub.active.map((i) => i.kind)).toEqual(['payments_pending', 'period_blocked', 'product_attention'])
+    expect(hub.active.map((i) => i.kind)).toEqual(['period_blocked', 'product_attention', 'payments_pending'])
     expect(hub.period.every((i) => i.scope === 'period')).toBe(true)
     expect(hub.period.map((i) => i.kind)).toContain('production_decline')
     expect(hub.period.map((i) => i.kind)).not.toContain('production_up_result_down')
     const all = [...hub.active, ...hub.period]
     expect(new Set(all.map((i) => i.id)).size).toBe(all.length)
-    expect(hub.counts).toEqual({ ACTION_REQUIRED: 2, ATTENTION: all.filter((i) => i.severity === 'ATTENTION').length, INFORMATION: all.filter((i) => i.severity === 'INFORMATION').length })
+    expect(hub.counts).toEqual({ ACTION_REQUIRED: 1, ATTENTION: all.filter((i) => i.severity === 'ATTENTION').length, INFORMATION: all.filter((i) => i.severity === 'INFORMATION').length })
   })
 
   it('insufficient data: no analytical claim, the reason is kept', () => {

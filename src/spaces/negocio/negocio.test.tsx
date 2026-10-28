@@ -171,7 +171,7 @@ describe('Negócio · Visão geral', () => {
     expect(screen.getByTestId('retention').textContent).toContain('32,1%')
     const c = screen.getByTestId('changes').textContent!
     expect(c).toContain('Face a Semana 4: produção +20% (+20.000 Kz) · resultado −26% (−13.500 Kz).')
-    expect(c).toContain('Face à média dos últimos 3 períodos fechados: produção +28,6%')
+    expect(c).toContain('Face à média dos últimos 3 períodos aprovados: produção +28,6%')
     expect(c).toContain('Despesas +15.500 Kz · sobretudo Luz +14.000 Kz')
     expect(screen.getByText('Valores do fecho deste período.')).toBeTruthy()
   })
@@ -222,17 +222,21 @@ describe('Negócio · Visão geral', () => {
     expect(screen.getByText(/1 regra de remuneração por definir/)).toBeTruthy()
   })
 
-  it('insights: action first, at most 5, each explainable', async () => {
+  it('insights: by priority (the unpaid balance as information, last here), at most 5, each explainable', async () => {
     serve(base)
     renderAt()
     const cards = await screen.findAllByTestId('insight')
     // attention ordered by money at stake (Slice 06 priority): the category excess before the result drop here
-    expect(cards.map((c) => c.dataset.kind)).toEqual(['payments_pending', 'expense_category_high', 'production_up_result_down'])
-    fireEvent.click(within(cards[2]!).getByRole('button'))
+    expect(cards.map((c) => c.dataset.kind)).toEqual(['expense_category_high', 'production_up_result_down', 'payments_pending'])
+    expect(cards[2]!.textContent).toMatch(/A pagar à equipa \(acumulado\)/)
+    expect(within(cards[2]!).getByText('Informação')).toBeTruthy()
+    fireEvent.click(within(cards[1]!).getByRole('button'))
     const d = within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent!
-    expect(d).toContain('Semana 5 comparado com Semana 4 (fechado).')
+    expect(d).toContain('Semana 5 comparado com Semana 4 (aprovado).')
     expect(d).toContain('não indica que tenham sido a causa')
-    fireEvent.click(within(cards[0]!).getByRole('button'))
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button').at(-1)!)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(within(cards[2]!).getByRole('button'))
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Ver pagamentos' })).toBeTruthy()          // a team-finance holder
   })
 
@@ -458,7 +462,7 @@ describe('Negócio → Custos & Stock', () => {
     serve(base, status({ view: 'self' }), even, quietSv, { ...quietCs, comparison: { previous: okCmp, average_3: { available: false, reason: 'insufficient_history', window: 3 } },
       expenses: quietCs.expenses.map((x) => ({ ...x, average_3_minor: null, change_average_3: null })) })
     renderAt('/privado/negocio/custos')
-    expect((await screen.findByTestId('costs-average-unavailable')).textContent).toBe('Ainda não há períodos fechados suficientes para uma média.')
+    expect((await screen.findByTestId('costs-average-unavailable')).textContent).toBe('Ainda não há períodos aprovados suficientes para uma média.')
     expect(screen.getAllByTestId('category-change').map((c) => c.textContent).join()).not.toContain('média de 3')
   })
 })
@@ -483,6 +487,21 @@ describe('Negócio · Finanças', () => {
     renderAt()
     fireEvent.click(await screen.findByRole('button', { name: /Finanças/ }))
     expect(await screen.findByTestId('finance-summary')).toBeTruthy()
+  })
+
+  it('previous period approved but not closed: the fixed figures compare, Livre does not (the reserve can still change) and says why', async () => {
+    const open: BusinessFinance = { ...fin, metrics: fin.metrics.map((x) => x.key === 'free_minor' ? { ...x, previous: null, change_previous: null } : x) }
+    serve(f4Health, status(), even, quietSv, quietCs, open)
+    renderAt('/privado/negocio/financas')
+    const table = await screen.findByTestId('comparison-table')
+    expect(table.textContent).toMatch(/Livre—/)
+    expect(table.textContent).toMatch(/Produção\+10% \(\+20\.000 Kz\) · antes 200\.000 Kz/)
+    expect(screen.getByTestId('livre-closed-only').textContent).toBe('O Livre só é comparado com períodos fechados: até ao fecho, a reserva ainda pode mudar.')
+    cleanup()
+    serve(f4Health, status(), even, quietSv, quietCs, fin)                     // previous closed: Livre compares, no note
+    renderAt('/privado/negocio/financas')
+    await screen.findByTestId('comparison-table')
+    expect(screen.queryByTestId('livre-closed-only')).toBeNull()
   })
 
   it('not a business.health.read holder: the area says so', async () => {
@@ -540,8 +559,8 @@ describe('Negócio · Finanças', () => {
     serve(f4Health, status(), even, quietSv, cs)
     renderAt('/privado/negocio/financas')
     const cards = await screen.findAllByTestId('insight')
-    expect(cards.map((x) => x.dataset.kind)).toEqual(['payments_pending', 'production_up_result_down'])   // no product_attention here
-    fireEvent.click(within(cards[1]!).getByRole('button'))
+    expect(cards.map((x) => x.dataset.kind)).toEqual(['production_up_result_down', 'payments_pending'])   // no product_attention here
+    fireEvent.click(within(cards[0]!).getByRole('button'))
     expect(within(screen.getByRole('dialog')).getByTestId('insight-detail').textContent).toContain('Compras (parte do salão)')
   })
 
@@ -602,14 +621,12 @@ describe('Negócio → Insights', () => {
     serve(base, status(), team, sv, cs)
     renderAt('/privado/negocio/insights')
     const active = await screen.findByTestId('active'), analysis = screen.getByTestId('analysis')
-    expect(kinds(active)).toEqual(['payments_pending', 'product_attention'])
+    expect(kinds(active)).toEqual(['product_attention', 'payments_pending'])
     // attention by money at stake (Luz 14.667 above its average · result −13.500 · purchases +13.000), then kinds without an amount
     expect(kinds(analysis)).toEqual(['expense_category_high', 'production_up_result_down', 'purchases_up', 'service_decline', 'team_concentration', 'service_concentration', 'service_growth'])
-    expect(within(screen.getByTestId('severity-counts')).getAllByRole('definition').map((d) => d.textContent)).toEqual(['1', '6', '2'])
-    fireEvent.click(screen.getByRole('button', { name: 'Ação necessária' }))
-    expect(kinds(active)).toEqual(['payments_pending'])
-    expect(within(analysis).getByText('Nada com este filtro.')).toBeTruthy()
+    expect(within(screen.getByTestId('severity-counts')).getAllByRole('definition').map((d) => d.textContent)).toEqual(['0', '6', '3'])
     fireEvent.click(screen.getByRole('button', { name: 'Informação' }))
+    expect(kinds(active)).toEqual(['payments_pending'])                                      // the unpaid balance is information, still shown
     expect(kinds(analysis)).toEqual(['service_concentration', 'service_growth'])
     fireEvent.click(screen.getByRole('button', { name: 'Todos' }))
     expect(kinds(analysis)).toHaveLength(7)
@@ -653,7 +670,7 @@ describe('Negócio → Insights', () => {
     renderAt('/privado/negocio/insights')
     fireEvent.click(within(await screen.findByTestId('history')).getByRole('button', { name: 'Semana 4' }))
     expect(await screen.findByText('Em Semana 4')).toBeTruthy()
-    expect(kinds(screen.getByTestId('active'))).toEqual(['payments_pending', 'product_attention'])
+    expect(kinds(screen.getByTestId('active'))).toEqual(['product_attention', 'payments_pending'])
     expect(kinds(screen.getByTestId('analysis'))).not.toContain('production_up_result_down')
     expect(screen.getByTestId('insufficient').textContent).toContain('Ainda não há um período anterior para comparar.')
   })
