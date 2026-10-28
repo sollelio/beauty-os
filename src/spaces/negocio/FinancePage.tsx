@@ -168,6 +168,8 @@ const driverLabel = (d: FinanceDriver) => d.kind === 'team_earnings' ? 'Ganhos d
 function Changes({ f, m }: { f: BusinessFinance; m: (n: number) => string }) {
   const prev = f.comparison.previous, avg = f.comparison.average_3
   const rows = f.metrics.filter((x) => x.key !== 'operating_costs_minor')
+  // Livre is final only at close (the reserve can still change): against a period approved but not closed, no comparison
+  const livreOpen = rows.some((x) => x.key === 'free_minor' && x.current !== null && !x.hidden && !x.previous_hidden && x.previous === null)
   const rc = f.result_change
   return (
     <section className="stack" aria-labelledby="fin-mudou" data-testid="finance-changes">
@@ -193,6 +195,7 @@ function Changes({ f, m }: { f: BusinessFinance; m: (n: number) => string }) {
               {x.change_average_3 && <span className="muted"> · média {m(x.average_3!)}: {changeText(x.change_average_3, m)}</span>}</>])} />
         </>
       )}
+      {prev.available && livreOpen && <p className="note" data-testid="livre-closed-only">O Livre só é comparado com períodos fechados: até ao fecho, a reserva ainda pode mudar.</p>}
       {prev.available && !avg.available && <p className="note">{COMPARISON_UNAVAILABLE[avg.reason ?? 'insufficient_history']}</p>}
     </section>
   )

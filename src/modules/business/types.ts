@@ -68,7 +68,7 @@ export type BusinessTeam = {
   comparison: { available: boolean; reason: ComparisonReason | null; period: { id: string; label: string; state: PeriodState } | null }
   people: TeamMember[] | null   // named rows only for team.finance.read (07 D9 · B11)
 }
-export type ComparisonReason = 'current_incomplete' | 'no_previous_period' | 'previous_not_closed' | 'previous_not_comparable' | 'insufficient_history'
+export type ComparisonReason = 'current_incomplete' | 'no_previous_period' | 'previous_not_approved' | 'previous_not_closed' | 'previous_not_comparable' | 'insufficient_history'
 export type BusinessHealth = {
   current: PeriodMetrics
   previous: PeriodMetrics | null

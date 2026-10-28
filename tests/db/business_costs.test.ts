@@ -133,7 +133,7 @@ describe('insights', () => {
     const e = r.insights.find((i) => i.kind === 'expense_category_high')!
     expect(e).toMatchObject({ severity: 'ATTENTION', title: 'Materiais: 64% acima da média dos últimos 3 períodos.' })
     expect(e.detail.current).toBe('Materiais 18000 Kz (9% da produção)')
-    expect(e.detail.basis).toBe('Média de Semana K3, Semana K2, Semana K1 (fechados).')            // Luz: +31% but below 3% of production
+    expect(e.detail.basis).toBe('Média de Semana K3, Semana K2, Semana K1 (aprovados).')            // Luz: +31% but below 3% of production
     expect(buildInsights(await health('Semana K3'), money).skipped).toContainEqual({ kind: 'expense_category_high', reason: 'insufficient_history' })
   })
 

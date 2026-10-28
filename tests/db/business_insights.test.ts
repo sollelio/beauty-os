@@ -61,7 +61,7 @@ describe('team.finance.read viewer', () => {
   it('open situations now, the selected period\'s analysis; sources and periods', async () => {
     const h = await hub('Semana F4')
     const pending = h.active.find((i) => i.kind === 'payments_pending')!
-    expect(pending).toMatchObject({ scope: 'state', source: 'financas', severity: 'ACTION_REQUIRED' })
+    expect(pending).toMatchObject({ scope: 'state', source: 'financas', severity: 'INFORMATION' })   // a normal outstanding balance
     expect(pending.periods.map((p) => p.label)).toEqual(expect.arrayContaining(['Semana F5', 'Semana F9', 'Semana F10']))
     expect(pending.impact_minor).toBe(K(30000) + K(70000) + K(69000))
     // result −8.000 before Materiais +7.000 above its average (money at stake); purchases up folded in (Slice 04 rule)
@@ -82,7 +82,7 @@ describe('team.finance.read viewer', () => {
     expect(f1.period.map((i) => i.kind)).toEqual(['team_concentration'])           // needs no history; nothing comparative
     expect(f1.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'no_previous_period' })
     expect(f1.skipped).toContainEqual({ kind: 'expense_category_high', reason: 'insufficient_history' })
-    expect((await hub('Semana F6')).skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'previous_not_closed' })
+    expect((await hub('Semana F9')).skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'previous_not_approved' })   // F8 is Aberto
   })
 })
 
@@ -99,7 +99,7 @@ describe('business-only viewers: only what the reads already show them (07 D9 ·
     const h = await hub('Semana F4')
     const pending = h.active.find((i) => i.kind === 'payments_pending')!
     expect(pending.periods.map((p) => p.label)).toEqual(['Semana F10'])           // F5 (one owed) and F9 (one advanced) hidden
-    expect(pending.title).toBe(`Ainda faltam ${money(K(69000))} por pagar à equipa.`)
+    expect(pending.title).toBe(`A pagar à equipa (acumulado): ${money(K(69000))}.`)
     const txt = JSON.stringify(h)
     for (const label of ['Semana F5', 'Semana F9']) expect(txt, label).not.toContain(money(managerUnpaid[label]!))
     expect(txt).not.toMatch(/Profissional F|person_id|display_name/)
