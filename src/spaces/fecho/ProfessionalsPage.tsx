@@ -1,10 +1,11 @@
 // Profissionais (Slice 06 F3) with the review sheet (F4 determinate · F4b advances above earned). A pending person
 // shows "—", never 0. "Ver situação completa" hands off to Slice 04. Exceptions first: Decidir, then A rever, then
 // Pronto (quieter, still listed); each whole row opens the person; the sheet is a history entry (back closes it).
+// The sheet also splits the person's production by payment method (as the database gives it; nothing computed here).
 import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import type { PersonFigures } from '../../modules/period/api'
+import type { PersonFigures, ProductionByMethod } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
 import { formatDayShort } from '../../shared/time'
 import { AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
@@ -78,13 +79,15 @@ export function ProfessionalsPage() {
         })}
       </ListGroup>
       <p className="note support">Cada valor é a soma dos registos do período. Um valor «—» não é zero: ainda não existe até a regra ser definida.</p>
-      {person && <ReviewSheet x={person} f={f.period.state} periodLabel={f.period.label} onClose={sheets.close}
+      {person && <ReviewSheet x={person} methods={f.production_by_method?.find((y) => y.person_id === person.person_id)} f={f.period.state} periodLabel={f.period.label} onClose={sheets.close}
         onChangeRule={() => sheets.leaveTo(to(`/privado/fecho/regra/${person.person_id}`))} onFull={() => sheets.leaveTo(`/privado/situacao/${person.person_id}?p=${f.period.id}`)} />}
     </AppScreen>
   )
 }
 
-function ReviewSheet({ x, f, periodLabel, onClose, onChangeRule, onFull }: { x: PersonFigures; f: string; periodLabel: string; onClose: () => void; onChangeRule: () => void; onFull: () => void }) {
+function ReviewSheet({ x, methods, f, periodLabel, onClose, onChangeRule, onFull }: {
+  x: PersonFigures; methods?: ProductionByMethod; f: string; periodLabel: string; onClose: () => void; onChangeRule: () => void; onFull: () => void
+}) {
   const org = useOrganization()
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
@@ -105,6 +108,7 @@ function ReviewSheet({ x, f, periodLabel, onClose, onChangeRule, onFull }: { x: 
         [`Adiantamentos · ${x.advances.count}`, x.advances.count ? m(-x.advances.total_minor) : '—'],
         ['Pagamentos', x.payments.count ? m(-x.payments.total_minor) : '—'],
       ]} />
+      {methods && x.production.count > 0 && <ProductionMethods pm={methods} />}
       <div className="money-headline">
         <span className="label">Falta receber</span>
         <span className="amount" data-testid="review-remaining">{x.remaining_minor === null ? '—' : m(x.remaining_minor)}</span>
@@ -116,5 +120,21 @@ function ReviewSheet({ x, f, periodLabel, onClose, onChangeRule, onFull }: { x: 
         <button className="btn btn-secondary" onClick={onFull}>Ver situação completa</button>
       </div>
     </BottomSheet>
+  )
+}
+
+// What the customers paid, by method, for this person's production — not what the person earns or how they are paid.
+function ProductionMethods({ pm }: { pm: ProductionByMethod }) {
+  const org = useOrganization()
+  if (!pm.methods) {
+    return <p className="note support" data-testid="production-methods">Divisão por método de pagamento indisponível: os pagamentos registados não batem com a produção.</p>
+  }
+  const mixed = pm.mixed_count ?? 0
+  return (
+    <section className="stack stack-tight" aria-labelledby="pm-title" data-testid="production-methods">
+      <span id="pm-title" className="label">Produção por método de pagamento</span>
+      <KV rows={pm.methods.map((x): [string, string] => [x.label, formatMoney(x.amount_minor, org)])} />
+      {mixed > 0 && <p className="note support">Inclui {mixed} {mixed === 1 ? 'serviço pago' : 'serviços pagos'} com dois métodos: cada parte conta no seu método, pelo valor registado.</p>}
+    </section>
   )
 }

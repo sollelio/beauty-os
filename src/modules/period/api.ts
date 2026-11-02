@@ -60,6 +60,15 @@ export type Fecho = {
   close_statements_count: number
   /** absent from a database without 20261027000100 */
   week_end?: WeekEnd
+  /** absent from a database without 20261102000100 */
+  production_by_method?: ProductionByMethod[]
+}
+/** How much of one professional's production (service value) the customers paid by each payment method: exact, from
+ *  each service's stored parts (a mixed service counts each part under its own method). `methods` is null when that
+ *  person's records do not reconcile with the production total the Fecho shows — never an approximate breakdown. */
+export type ProductionByMethod = {
+  person_id: string; reconciled: boolean; mixed_count: number | null
+  methods: { code: string; label: string; amount_minor: number; count: number }[] | null
 }
 /** The operational end of the week (ADR-0010 §5 amendment, Slice 2): the organization's schedule gives the period's last
  *  operating day and usual closing time; a period.decide holder declares the week ended on that day. All times are

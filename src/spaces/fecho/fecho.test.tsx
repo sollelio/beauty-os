@@ -147,6 +147,45 @@ describe('Profissionais', () => {
     expect((screen.getByRole('button', { name: 'Aprovar valores a pagar' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('Defina as regras de Carla para aprovar.')).toBeTruthy()
   })
+
+  describe('production by payment method (in the review sheet)', () => {
+    const methods = (n: number, t: number) => [{ code: 'numerario', label: 'Numerário', amount_minor: K(n), count: 3 }, { code: 'transferencia', label: 'Transferência', amount_minor: K(t), count: 8 }]
+    const sheetOf = async (name: string) => {
+      fireEvent.click((await screen.findByText(name)).closest('button')!)
+      return screen.getByRole('dialog')
+    }
+    it('shows what the customers paid by each method, as given by the database, next to the production total', async () => {
+      vi.mocked(getFecho).mockResolvedValue(fecho({ production_by_method: [
+        { person_id: 'n', reconciled: true, mixed_count: 1, methods: methods(60000, 80000) },
+        { person_id: 'l', reconciled: true, mixed_count: 0, methods: methods(18000, 40000) },
+      ] }, [nadia, laurindo]))
+      renderAt('/privado/fecho/profissionais')
+      const sheet = await sheetOf('Nádia')
+      expect(within(sheet).getByText('10 serviços · 140.000 Kz')).toBeTruthy()
+      const block = within(sheet).getByTestId('production-methods')
+      expect(within(block).getByText('Produção por método de pagamento')).toBeTruthy()
+      expect(block.textContent).toContain('Numerário60.000 Kz')
+      expect(block.textContent).toContain('Transferência80.000 Kz')
+      expect(block.textContent).not.toContain('18.000')                                   // only this person's figures
+      expect(within(block).getByText('Inclui 1 serviço pago com dois métodos: cada parte conta no seu método, pelo valor registado.')).toBeTruthy()
+      expect(within(sheet).getByText('Ganho')).toBeTruthy()                                // earnings stay a separate figure
+    })
+    it('a breakdown that does not reconcile is not shown — never an approximation', async () => {
+      vi.mocked(getFecho).mockResolvedValue(fecho({ production_by_method: [{ person_id: 'n', reconciled: false, mixed_count: null, methods: null }] }, [nadia, laurindo]))
+      renderAt('/privado/fecho/profissionais')
+      const block = within(await sheetOf('Nádia')).getByTestId('production-methods')
+      expect(block.textContent).toBe('Divisão por método de pagamento indisponível: os pagamentos registados não batem com a produção.')
+      expect(block.textContent).not.toContain('Numerário')
+    })
+    it('nothing to split without services, or from a database without the breakdown', async () => {
+      const idle = person('z', 'Zé', 0, 0, { production: { count: 0, total_minor: 0 } })
+      vi.mocked(getFecho).mockResolvedValue(fecho({ production_by_method: [{ person_id: 'z', reconciled: true, mixed_count: 0, methods: [] }] }, [nadia, idle]))
+      renderAt('/privado/fecho/profissionais')
+      expect(within(await sheetOf('Zé')).queryByTestId('production-methods')).toBeNull()
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Fechar' }))
+      expect(within(await sheetOf('Nádia')).queryByTestId('production-methods')).toBeNull()   // no entry for her (older database)
+    })
+  })
 })
 
 describe('approval', () => {
