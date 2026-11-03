@@ -14,8 +14,10 @@
 --   · the current week works as before (rule, owners' decision, approval); a closed week is unchanged;
 --   · the removal procedure removes a never-used period (audited) and refuses a used, closed or recent one;
 --   · Business Health stays calendar-correct (20261103000200): the previous week is the immediately preceding one —
---     a missing week gives no comparison ('previous_missing'), never an older week; the 3-week average stops at a missing
---     week instead of reaching past it; any Business Health read of a period that has not started is PERIOD_NOT_STARTED.
+--     a missing week gives no comparison ('previous_missing'), never an older week; the 3-week average walks back
+--     through adjacent approved weeks and stops at a missing or not-yet-approved (Aberto) one (20261103000300) — once
+--     that week is approved the window is complete again; any Business Health read of a period that has not started is
+--     PERIOD_NOT_STARTED.
 -- Concurrent creation of one week by two transactions is checked separately (two sessions; see the report).
 -- Rollback: ONE statement (a DO block); every write happens in an inner block that always ends in an exception, so its
 -- savepoint is rolled back — 'probe_ok' on success (caught), the failed check otherwise (re-raised).
@@ -90,11 +92,12 @@ begin
     select review_revision into v_rev from public.periods where id = v_past;
     perform public.close_period(gen_random_uuid(), (public.verify_person(v_mgr, '454545') ->> 'grant_id')::uuid, v_past, v_rev);
 
-    -- Business Health, calendar-correct: weeks W1–W3, a missing week, W5–W8 (all approved, all past)
-    for i in 1..8 loop
+    -- Business Health, calendar-correct: weeks W1–W3, a missing week, W5–W12, all past; all approved but W10 (Aberto)
+    for i in 1..12 loop
       if i = 4 then w := w || null::uuid; continue; end if;
-      insert into public.periods (organization_id, label, starts_on, ends_on) values (v_org, 'W' || i, mon - 91 + 7 * i, mon - 86 + 7 * i) returning id into v_id;
+      insert into public.periods (organization_id, label, starts_on, ends_on) values (v_org, 'W' || i, mon - 140 + 7 * i, mon - 135 + 7 * i) returning id into v_id;
       w := w || v_id;
+      if i = 10 then continue; end if;
       select review_revision into v_rev from public.periods where id = v_id;
       perform public.approve_period(gen_random_uuid(), (public.verify_person(v_mgr, '454545') ->> 'grant_id')::uuid, v_id, v_rev);
     end loop;
@@ -119,6 +122,17 @@ begin
     if (v_bh ->> 'available')::boolean is not true then raise exception 'probe: W8 average %', v_bh; end if;
     if (select array_agg(x ->> 'id' order by x ->> 'id') from jsonb_array_elements(public.business_health(w[8]) -> 'average_3' -> 'periods') x)
        is distinct from (select array_agg(u::text order by u::text) from unnest(array[w[7], w[6], w[5]]) u) then raise exception 'probe: W8 window %', public.business_health(w[8]) -> 'average_3' -> 'periods'; end if;
+    -- an Aberto week inside the window stops it too: W12 (W11, W10 Aberto) has no average — W9 and W8 are not taken
+    v_bh := public.business_health(w[12]);
+    if (v_bh -> 'meta' -> 'comparison' -> 'average_3' ->> 'available')::boolean is not false
+       or v_bh -> 'meta' -> 'comparison' -> 'average_3' ->> 'reason' is distinct from 'insufficient_history' or v_bh -> 'average_3' <> 'null'::jsonb
+       or (v_bh -> 'meta' -> 'comparison' -> 'previous' ->> 'available')::boolean is not true then raise exception 'probe: W12 with W10 Aberto %', v_bh -> 'meta' -> 'comparison'; end if;
+    if (public.business_health(w[11]) -> 'meta' -> 'comparison' -> 'previous' ->> 'reason') is distinct from 'previous_not_approved' then raise exception 'probe: W11 previous unchanged'; end if;
+    -- once W10 is approved, W12 averages exactly W11, W10, W9
+    select review_revision into v_rev from public.periods where id = w[10];
+    perform public.approve_period(gen_random_uuid(), (public.verify_person(v_mgr, '454545') ->> 'grant_id')::uuid, w[10], v_rev);
+    if (select array_agg(x ->> 'id' order by x ->> 'id') from jsonb_array_elements(public.business_health(w[12]) -> 'average_3' -> 'periods') x)
+       is distinct from (select array_agg(u::text order by u::text) from unnest(array[w[11], w[10], w[9]]) u) then raise exception 'probe: W12 window after approval %', public.business_health(w[12]) -> 'average_3'; end if;
 
     -- Monday morning, before any record: the default is still the last started week (no current period yet) …
     f := public.fecho_period(null);

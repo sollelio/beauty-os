@@ -244,10 +244,9 @@ describe('unpaid total: team earnings − unpaid = advances + paid must not reso
     expect(f.obligations).toMatchObject({ unpaid_team_minor: null, paid_team_minor: null })
     expect(metric(f, 'team_earnings_minor').current).toBe(K(80000))           // the aggregate earnings stay
     const seen = ownNumbers(f)
-    // the average is of the approved weeks before F9 as this viewer sees them (F5, F4, F3); its result, 70.000, equals F9's
-    // hidden unpaid total only by coincidence of the fixture
-    const window = await Promise.all(['Semana F5', 'Semana F4', 'Semana F3'].map((l) => finance(l)))
-    expect(metric(f, 'operating_result_minor').average_3).toBe(Math.round(window.reduce((s, w) => s + metric(w, 'operating_result_minor').current!, 0) / 3))
+    // F9's window starts at F8, still Aberto: no average — an Aberto week is never skipped to reach F5, F4, F3 (20261103000300)
+    expect(metric(f, 'operating_result_minor').average_3).toBeNull()
+    expect(f.comparison.average_3).toMatchObject({ available: false, reason: 'insufficient_history' })
     expect(seen).not.toContain(K(70000))
     for (const v of seen) expect(K(80000) - v, String(v)).not.toBe(K(10000))  // no figure gives A's advance
     expect((await health('Semana F9')).current.unpaid_team_minor).toBeNull()  // the overview follows the same rule
