@@ -3,6 +3,7 @@
 // (one-shot verification, ADR-0009). The boundary is split into its form and its actions so a screen puts the final
 // action in the bottom bar and a sheet keeps it inside the sheet; the command, the grant and the messages are unchanged.
 import type { ReactNode } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { STATE_LABEL, STATE_ORDER, type PeriodState } from '../../modules/period/api'
 import { toAppError } from '../../shared/errors'
 import { AppScreen, BottomActionBar } from '../../shared/ui/AppShell'
@@ -73,13 +74,21 @@ export function SheetBoundary<I, R>(props: BoundaryProps<I, R>) {
   return <>{b.form}{b.actions && <div className="sheet-actions">{b.actions}</div>}</>
 }
 
-/** First load of a Fecho screen, or why it cannot be shown — inside the private bar, with a way back. */
+/** First load of a Fecho screen, or why it cannot be shown — inside the private bar, with a way back. A chosen period
+ *  (?p=) that cannot be shown (unknown, another organization's, malformed) offers the current one instead. */
 export function Loading({ q, title = 'Fecho' }: { q: { isError: boolean; error: unknown }; title?: string }) {
   const back = useAppBack('/privado')
+  const navigate = useNavigate()
+  const [sp] = useSearchParams()
   const code = q.isError ? toAppError(q.error).code : null
+  const badPeriod = !!sp.get('p') && q.isError && code !== 'NOT_AUTHORIZED' && code !== 'VERIFICATION_REQUIRED' && toAppError(q.error).kind !== 'network'
   return (
     <AppScreen bar={<PrivateBar title={title} onBack={back} />}>
-      {q.isError ? (
+      {badPeriod ? (
+        <ErrorState action={<button type="button" className="link-btn" onClick={() => navigate('/privado/fecho', { replace: true })}>Abrir o período actual</button>}>
+          Este período não está disponível.
+        </ErrorState>
+      ) : q.isError ? (
         <ErrorState action={<button type="button" className="link-btn" onClick={back}>Voltar</button>}>
           {code === 'NOT_AUTHORIZED' ? 'O Fecho só está disponível para quem gere as finanças da equipa.'
             : code === 'PERIOD_NOT_FOUND' ? 'Ainda não começou nenhum período.' : 'Não foi possível carregar o Fecho.'}

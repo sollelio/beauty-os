@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { OrganizationContext } from '../../modules/org/OrganizationContext'
@@ -20,7 +20,7 @@ vi.mock('../../modules/period/api', async (orig) => ({
   getFecho: vi.fn(), approvePeriod: vi.fn(), closePeriod: vi.fn(), confirmPayment: vi.fn(), getFechoHistory: vi.fn(), listFechoPeriods: vi.fn().mockResolvedValue([]), reopenPeriod: vi.fn(), getRulePreview: vi.fn(),
   declareWeekEnd: vi.fn(), withdrawWeekEnd: vi.fn(),
 }))
-import { approvePeriod, closePeriod, confirmPayment, declareWeekEnd, getFecho, getFechoHistory, getRulePreview, reopenPeriod, withdrawWeekEnd, type WeekEnd } from '../../modules/period/api'
+import { approvePeriod, closePeriod, confirmPayment, declareWeekEnd, getFecho, getFechoHistory, getRulePreview, listFechoPeriods, reopenPeriod, withdrawWeekEnd, type FechoPeriod, type WeekEnd } from '../../modules/period/api'
 import { RuleFlow } from './RuleFlow'
 import { ReopenPage } from './ReopenPage'
 import { FechoHome } from './FechoHome'
@@ -185,6 +185,113 @@ describe('Profissionais', () => {
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Fechar' }))
       expect(within(await sheetOf('Nádia')).queryByTestId('production-methods')).toBeNull()   // no entry for her (older database)
     })
+  })
+})
+
+describe('period picker', () => {
+  // Today is Tuesday 3 Nov 2026 (Luanda): one future week, the current one and three earlier ones (newest first, as the API).
+  const weeks: FechoPeriod[] = [
+    { id: 'w46', label: 'Semana 09/11–14/11', state: 'aberto', starts_on: '2026-11-09', ends_on: '2026-11-14' },
+    { id: 'w45', label: 'Semana 02/11–07/11', state: 'aberto', starts_on: '2026-11-02', ends_on: '2026-11-07' },
+    { id: 'w44', label: 'Semana 26/10–01/11', state: 'pronto_para_pagamento', starts_on: '2026-10-26', ends_on: '2026-11-01' },
+    { id: 'w43', label: 'Semana 19/10–25/10', state: 'fechado', starts_on: '2026-10-19', ends_on: '2026-10-25' },
+  ]
+  const laurindo44 = person('l', 'Laurindo', 4400, 0, { production: { count: 10, total_minor: K(8800) } })
+  const week = (id: string): Fecho => {
+    const w = weeks.find((x) => x.id === id)!
+    const base = id === 'w45' ? fecho({}, [nadia, laurindo]) : fecho({ production_by_method: [{ person_id: 'l', reconciled: true, mixed_count: 0, methods: [
+      { code: 'dinheiro', label: 'Dinheiro', amount_minor: K(6700), count: 7 }, { code: 'multicaixa_express', label: 'Multicaixa Express', amount_minor: K(2100), count: 3 }] }] }, [laurindo44])
+    const f = { ...base, period: { ...w, is_current: id === 'w45' } }
+    return w.state === 'fechado' ? { ...f, source: 'close_statement', exceptions: [], closed: { closed_at: '2026-10-27T10:00:00Z', closed_by: 'Mercy', calculation_version: '1', review_revision: 3 } } : f
+  }
+  const heading = () => screen.getByRole('heading', { level: 1 }).textContent
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-03T10:00:00Z'))
+    vi.mocked(listFechoPeriods).mockResolvedValue(weeks)
+    vi.mocked(getFecho).mockImplementation(async (p) => {
+      if (p !== null && !weeks.some((x) => x.id === p)) throw new AppError('domain', 'CROSS_TENANT_REFERENCE', 'CROSS_TENANT_REFERENCE')
+      return week(p ?? 'w45')
+    })
+  })
+  afterEach(() => { vi.useRealTimers(); vi.mocked(listFechoPeriods).mockResolvedValue([]) })
+
+  it('opens the current period by default; ‹ reaches last week in one tap; › stops at the current one (future weeks have nothing yet)', async () => {
+    const router = renderAt('/privado/fecho')
+    expect(await screen.findByRole('button', { name: 'Período anterior · Semana 26/10–01/11' })).toBeTruthy()
+    expect(vi.mocked(getFecho).mock.calls[0]![0]).toBeNull()
+    expect(heading()).toBe('Semana 02/11–07/11')
+    expect(screen.getByText(/· período actual$/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Sem período seguinte' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Aprovar valores a pagar' })).toBeTruthy()          // the current period's actions, unchanged
+    fireEvent.click(screen.getByRole('button', { name: 'Período anterior · Semana 26/10–01/11' }))
+    await waitFor(() => expect(heading()).toBe('Semana 26/10–01/11'))
+    expect(router.state.location.search).toBe('?p=w44')
+    expect(screen.getByTestId('state-strip').textContent).toContain('Pronto para pagamento')
+    expect(screen.getByText(/· período anterior$/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Período seguinte · Semana 02/11–07/11' }))
+    await waitFor(() => expect(heading()).toBe('Semana 02/11–07/11'))
+    expect(router.state.location.search).toBe('')                                                 // the current period needs no ?p=
+  })
+
+  it('the list shows the started periods, newest first, with their state; picking one shows it and offers the way back', async () => {
+    const router = renderAt('/privado/fecho')
+    fireEvent.click(await screen.findByRole('button', { name: 'Mudar de período · Semana 02/11–07/11' }))
+    const list = await screen.findByTestId('period-list')
+    const rows = within(list).getAllByRole('button')
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^Semana 02\/11–07\/11.*período actual.*Aberto/),
+      expect.stringMatching(/^Semana 26\/10–01\/11.*Pronto para pagamento/),
+      expect.stringMatching(/^Semana 19\/10–25\/10.*Fechado/),
+    ])
+    expect(screen.getByText('Os períodos seguintes aparecem aqui quando começarem.')).toBeTruthy()
+    fireEvent.click(rows[2]!)
+    await waitFor(() => expect(heading()).toBe('Semana 19/10–25/10'))
+    expect(router.state.location.search).toBe('?p=w43')
+    // a closed week stays read-only: no action bar, only the authorized reopen apart
+    expect(screen.getByText('Só de leitura; reabrir exige autorização e motivo.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Aprovar|Confirmar pagamentos|Fechar período/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar ao período actual · Semana 02/11–07/11' }))
+    await waitFor(() => expect(heading()).toBe('Semana 02/11–07/11'))
+    expect(router.state.location.search).toBe('')
+  })
+
+  it('acceptance: last week → Profissionais → Laurindo shows the payment-method breakdown of that week', async () => {
+    const router = renderAt('/privado/fecho')
+    fireEvent.click(await screen.findByRole('button', { name: 'Período anterior · Semana 26/10–01/11' }))
+    await waitFor(() => expect(heading()).toBe('Semana 26/10–01/11'))
+    fireEvent.click(screen.getByText('Profissionais').closest('button')!)
+    expect(await screen.findByText('Semana 26/10–01/11 · pronto para pagamento')).toBeTruthy()
+    expect(router.state.location.pathname + router.state.location.search).toBe('/privado/fecho/profissionais?p=w44')
+    fireEvent.click(screen.getByText('Laurindo').closest('button')!)
+    const sheet = screen.getByRole('dialog')
+    expect(within(sheet).getByText('10 serviços · 8.800 Kz')).toBeTruthy()
+    const block = within(sheet).getByTestId('production-methods')
+    expect(block.textContent).toContain('Dinheiro6.700 Kz')
+    expect(block.textContent).toContain('Multicaixa Express2.100 Kz')
+    expect(vi.mocked(getFecho).mock.calls.every(([p]) => p === null || p === 'w44')).toBe(true)
+  })
+
+  it('a period that has not started (reached by a link) is inert: no decision offered until its first day', async () => {
+    const next: FechoPeriod = { id: 'w46', label: 'Semana 09/11–14/11', state: 'aberto', starts_on: '2026-11-09', ends_on: '2026-11-14' }
+    vi.mocked(getFecho).mockResolvedValue({ ...fecho({}, [nadia, carla]), period: { ...next, is_current: false } })
+    renderAt('/privado/fecho?p=w46')
+    expect(await screen.findByText('Ainda não começou')).toBeTruthy()
+    expect(screen.getByText('Começa a 9 nov. Até lá não há nada a decidir neste período.')).toBeTruthy()
+    expect(screen.getByText(/· período seguinte$/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Precisa de atenção' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Aprovar|Decidir regra|Terminar a semana/ })).toBeNull()
+  })
+
+  it('a refresh keeps the chosen period; an unknown one fails safely with a way to the current period', async () => {
+    renderAt('/privado/fecho/profissionais?p=w44')
+    expect(await screen.findByText('Semana 26/10–01/11 · pronto para pagamento')).toBeTruthy()
+    cleanup()
+    const router = renderAt('/privado/fecho/profissionais?p=not-a-period')
+    expect(await screen.findByText('Este período não está disponível.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir o período actual' }))
+    await waitFor(() => expect(heading()).toBe('Semana 02/11–07/11'))
+    expect(router.state.location.pathname + router.state.location.search).toBe('/privado/fecho')
   })
 })
 

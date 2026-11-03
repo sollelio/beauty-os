@@ -783,6 +783,13 @@ describe('Negócio · private navigation (mobile shell)', () => {
 })
 
 describe('Negócio · states, hierarchy, sheets', () => {
+  it('a period that has not started, asked for by id, is refused by the server and said so — no empty future view', async () => {
+    serve({ error: 'PERIOD_NOT_STARTED' })
+    renderRouter(['/privado/negocio?p=futura'])
+    expect((await screen.findByRole('alert')).textContent).toContain('Este período ainda não começou: não há valores para mostrar.')
+    expect(rpc.mock.calls.find(([fn]) => fn === 'business_health')![1]).toEqual({ p_period_id: 'futura' })
+    expect(screen.queryByTestId('overview')).toBeNull()
+  })
   it('loading is a skeleton (never the empty or error text); then the summary', async () => {
     let resolve!: (v: { data: BusinessHealth; error: null }) => void
     serve(base)

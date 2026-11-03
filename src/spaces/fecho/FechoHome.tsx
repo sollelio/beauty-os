@@ -2,12 +2,15 @@
 // three-row summary and the one next valid action in the bottom bar. Every figure comes from the database review
 // (fecho_period). On the mobile shell: the private bar (← back inside the private area, never to Hoje), sheets as history
 // entries, and a closed period that reads as read-only — Reabrir sits apart at the end, never as the bar's action.
+// The period picker (UX debt, 2026-11-03): ‹ previous · the period (opens the list) · next ›, over the periods that have
+// started, newest first (future ones have no records yet). The choice lives in ?p= — what every Fecho page reads — and
+// changes only which period is shown: what can be done in it stays decided by its state and the server.
 import { useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '../../modules/org/OrganizationContext'
-import { annulApproval, fechoKeys, listFechoPeriods, STATE_LABEL, type Fecho, type FechoException, type PeriodState } from '../../modules/period/api'
+import { annulApproval, fechoKeys, listFechoPeriods, STATE_LABEL, type FechoException, type FechoPeriod, type PeriodState } from '../../modules/period/api'
 import { formatAmount, formatMoney } from '../../shared/money'
-import { formatTime, formatDayShort } from '../../shared/time'
+import { dayKey, formatTime, formatDayShort } from '../../shared/time'
 import { BottomSheet } from '../../shared/ui/BottomSheet'
 import { AppScreen, BottomActionBar, LockIcon } from '../../shared/ui/AppShell'
 import { Icon } from '../../shared/ui/Icon'
@@ -28,14 +31,23 @@ export function FechoHome() {
   const org = useOrganization()
   const navigate = useNavigate()
   const back = useAppBack('/privado')
-  const { q, to } = useFecho()
+  const { p, q, to } = useFecho()
   const sheets = useSheet<'period' | 'annul' | 'week-end' | 'week-continue'>()
+  const periods = usePeriods(org.timezone, !!q.data)
   if (!q.data) return <Loading q={q} />
   const f = q.data
+  // the neighbours of the shown period among the started ones (newest first); the period of today opens without ?p=
+  const i = periods.started.findIndex((x) => x.id === f.period.id)
+  const older = i >= 0 ? periods.started[i + 1] : undefined
+  const newer = i > 0 ? periods.started[i - 1] : undefined
+  const show = (x: FechoPeriod) => navigate(x.id === periods.today?.id ? '/privado/fecho' : `/privado/fecho?p=${encodeURIComponent(x.id)}`, { replace: true })
+  const relation = f.period.is_current ? 'período actual' : f.period.ends_on < periods.todayKey ? 'período anterior' : 'período seguinte'
   const m = (n: number) => formatMoney(n, org)
   const g = (n: number) => formatAmount(n, org)
   const pos = f.position
   const st = f.period.state
+  // a period that has not started (its first day is after today) takes no decision yet (PERIOD_NOT_STARTED)
+  const notStarted = st === 'aberto' && f.period.starts_on > periods.todayKey
   const pending = pos.pending
   const lines = f.approval?.lines.filter((l) => l.approved_minor > 0) ?? []
   const paidCount = lines.filter((l) => l.status === 'pago').length
@@ -63,6 +75,10 @@ export function FechoHome() {
   }
 
   const readiness = (() => {
+    if (notStarted) {
+      return <div className="notice notice-neutral" role="status"><strong style={{ display: 'block' }}>Ainda não começou</strong>
+        Começa a {formatDayShort(f.period.starts_on, org.timezone)}. Até lá não há nada a decidir neste período.</div>
+    }
     if (st === 'fechado' && f.closed) {
       return <div className="readonly-note" role="status"><LockIcon /><span className="stack stack-tight">
         <strong>Fechado em {formatDayShort(f.closed.closed_at, org.timezone)} às {formatTime(f.closed.closed_at, org.timezone)} por {f.closed.closed_by}</strong>
@@ -102,7 +118,7 @@ export function FechoHome() {
 
   // The one next valid action (and its companions) for every state but closed.
   const actions = (() => {
-    if (st === 'fechado') return null
+    if (st === 'fechado' || notStarted) return null
     if (st === 'aberto') {
       const first = f.exceptions.find((e) => e.kind === 'rule_pending')
       if (first && first.kind === 'rule_pending') {
@@ -138,20 +154,29 @@ export function FechoHome() {
       } />}
       actions={actions && <BottomActionBar>{actions}</BottomActionBar>}>
       <section className="stack" aria-label="Período">
-        <div className="row-between">
+        <div className="period-picker">
+          <button className="icon-btn" disabled={!older} aria-label={older ? `Período anterior · ${older.label}` : 'Sem período anterior'} onClick={() => older && show(older)}>
+            <Icon name="chevronLeft" />
+          </button>
           <span className="stack stack-tight">
-            <h1>{f.period.label}</h1>
-            <span className="support">{rangeLabel(f.period.starts_on, f.period.ends_on, org.timezone)} · {f.period.is_current ? 'período actual' : 'outro período'}</span>
+            <h1><button className="period-title-btn" aria-haspopup="dialog" aria-label={`Mudar de período · ${f.period.label}`} onClick={() => sheets.open('period')}>
+              {f.period.label}<Icon name="chevronDown" size={20} /></button></h1>
+            <span className="support">{rangeLabel(f.period.starts_on, f.period.ends_on, org.timezone)} · {relation}</span>
           </span>
-          <button className="chip chip-outline" aria-label={`Mudar de período · ${f.period.label}`} onClick={() => sheets.open('period')}>Período<Icon name="chevronDown" size={18} /></button>
+          <button className="icon-btn" disabled={!newer} aria-label={newer ? `Período seguinte · ${newer.label}` : 'Sem período seguinte'} onClick={() => newer && show(newer)}>
+            <Icon name="chevronRight" />
+          </button>
         </div>
         <StateStrip state={st} />
+        {p && !f.period.is_current && periods.today && (
+          <button type="button" className="link-btn" onClick={() => show(periods.today!)}>Voltar ao período actual · {periods.today.label}</button>
+        )}
       </section>
 
       {we && <WeekEndNotice we={we} timeZone={org.timezone} />}
       {readiness}
 
-      {f.exceptions.length > 0 && (
+      {f.exceptions.length > 0 && !notStarted && (
         <section className="stack" aria-label="Precisa de atenção">
           <span className="label">Precisa de atenção</span>
           <ListGroup>{f.exceptions.map(exceptionRow)}</ListGroup>
@@ -211,7 +236,8 @@ export function FechoHome() {
         </section>
       )}
 
-      {sheets.current === 'period' && <PeriodSheet current={f} onPick={(id) => sheets.leaveTo(`/privado/fecho?p=${encodeURIComponent(id)}`)} onClose={sheets.close} />}
+      {sheets.current === 'period' && <PeriodSheet periods={periods} shown={f.period.id}
+        onPick={(x) => sheets.leaveTo(x.id === periods.today?.id ? '/privado/fecho' : `/privado/fecho?p=${encodeURIComponent(x.id)}`)} onClose={sheets.close} />}
       {sheets.current === 'week-end' && (
         <BottomSheet labelledBy="week-end-title" onDismiss={sheets.close}>
           <div className="row-between">
@@ -246,27 +272,41 @@ export function FechoHome() {
   )
 }
 
-function PeriodSheet({ current, onPick, onClose }: { current: Fecho; onPick: (id: string) => void; onClose: () => void }) {
-  const periods = useQuery({ queryKey: fechoKeys.periods, queryFn: listFechoPeriods })
+/** The periods that have started (the one of today included), newest first; the period of today, if any. */
+function usePeriods(timeZone: string, enabled: boolean) {
+  const q = useQuery({ queryKey: fechoKeys.periods, queryFn: listFechoPeriods, enabled })
+  const todayKey = dayKey(new Date().toISOString(), timeZone)
+  const started = (q.data ?? []).filter((x) => x.starts_on <= todayKey)
+  return { q, todayKey, started, later: (q.data?.length ?? 0) - started.length,
+           today: started.find((x) => x.starts_on <= todayKey && todayKey <= x.ends_on) }
+}
+
+function PeriodSheet({ periods, shown, onPick, onClose }: {
+  periods: ReturnType<typeof usePeriods>; shown: string; onPick: (x: FechoPeriod) => void; onClose: () => void
+}) {
+  const org = useOrganization()
+  const { q } = periods
   return (
     <BottomSheet labelledBy="pe-title" onDismiss={onClose}>
       <div className="row-between">
-        <h2 id="pe-title" className="sheet-title">Período</h2>
+        <h2 id="pe-title" className="sheet-title">Escolher período</h2>
         <button className="icon-btn" aria-label="Fechar" onClick={onClose}><Icon name="close" /></button>
       </div>
-      {periods.isPending && <Skeleton rows={3} />}
-      {periods.isError && <ErrorState onRetry={() => periods.refetch()}>Não foi possível carregar os períodos.</ErrorState>}
-      {periods.data && (
-        <ListGroup>
-          {periods.data.map((p) => (
-            <ListRow key={p.id} as="button" current={p.id === current.period.id} onClick={() => onPick(p.id)} title={p.label}
+      {q.isPending && <Skeleton rows={3} />}
+      {q.isError && <ErrorState onRetry={() => q.refetch()}>Não foi possível carregar os períodos.</ErrorState>}
+      {q.data && (
+        <ListGroup data-testid="period-list">
+          {periods.started.map((x) => (
+            <ListRow key={x.id} as="button" current={x.id === shown} onClick={() => onPick(x)} title={x.label}
+              subtitle={`${rangeLabel(x.starts_on, x.ends_on, org.timezone)}${x.id === periods.today?.id ? ' · período actual' : ''}`}
               trailing={<>
-                <StatusChip tone={STATE_TONE[p.state]}>{STATE_LABEL[p.state]}</StatusChip>
-                {p.id === current.period.id && <span className="row-accent row-chevron"><Icon name="check" /></span>}
+                <StatusChip tone={STATE_TONE[x.state]}>{STATE_LABEL[x.state]}</StatusChip>
+                {x.id === shown && <span className="row-accent row-chevron"><Icon name="check" /></span>}
               </>} />
           ))}
         </ListGroup>
       )}
+      {periods.later > 0 && <p className="note support">Os períodos seguintes aparecem aqui quando começarem.</p>}
     </BottomSheet>
   )
 }

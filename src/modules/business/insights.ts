@@ -254,6 +254,7 @@ export function costDrivers(h: BusinessHealth, money: (minor: number) => string)
 export const COMPARISON_UNAVAILABLE: Record<ComparisonReason, string> = {
   current_incomplete: 'O período ainda está a decorrer: a comparação fica disponível quando terminar.',
   no_previous_period: 'Ainda não há um período anterior para comparar.',
+  previous_missing: 'O período imediatamente anterior não existe (sem atividade registada): não há com que comparar.',   // 20261103000200
   previous_not_approved: 'O período anterior ainda não foi aprovado: os valores dele podem mudar.',
   previous_not_closed: 'O período anterior ainda não está fechado: os valores dele podem mudar.',   // a database before 20261030000100
   previous_not_comparable: 'O período anterior tem uma duração diferente e não é comparável.',

@@ -22,7 +22,8 @@ export function NegocioState({ bar, error, what, onBack }: { bar: ReactNode; err
       {error ? (
         <ErrorState action={<button type="button" className="link-btn" onClick={onBack}>Voltar</button>}>
           {code === 'NOT_AUTHORIZED' ? 'Esta área é só para quem acompanha o negócio.'
-            : code === 'PERIOD_NOT_FOUND' ? 'Ainda não começou nenhum período.' : `Não foi possível mostrar ${what}.`}
+            : code === 'PERIOD_NOT_FOUND' ? 'Ainda não começou nenhum período.'
+            : code === 'PERIOD_NOT_STARTED' ? 'Este período ainda não começou: não há valores para mostrar.' : `Não foi possível mostrar ${what}.`}
         </ErrorState>
       ) : <Skeleton rows={4} headline />}
     </AppScreen>

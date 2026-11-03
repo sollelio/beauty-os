@@ -43,19 +43,33 @@ select private.admin_set_person_kind(:person, 'support', '<reason>');     -- bac
 1 = Monday … 6 = Saturday, 7 = Sunday) and the usual closing time, in the organization's timezone. Audited
 (`week_schedule_set`). Without it nothing changes: a week ends at its calendar end.
 ```sql
-select private.admin_set_week_schedule(:org, 6::smallint, time '20:00');   -- Saturday, usually closes at 20:00
-select private.admin_set_week_schedule(:org, null, null);                  -- remove it
+select private.admin_set_week_schedule(:org, 1::smallint, 6::smallint, time '20:00');   -- Monday–Saturday, usually closes at 20:00
+select private.admin_set_week_schedule(:org, 6::smallint, time '20:00');                 -- last day and closing time only (first day unchanged)
+select private.admin_set_week_schedule(:org, null, null);                                -- remove it
 ```
 
 ## 2. Periods
 
-Periods are explicit and never derived from the calendar (07 §10.3). They may leave out days the salon does not operate
-(e.g. Monday–Saturday weeks, Sunday closed). **Create each one well before it starts:** a service, advance, expense or
-purchase whose date falls in no period is refused (`NO_PERIOD_FOR_DATE`, "Não existe um período aberto para esta data") —
-online, and at sync for work saved offline, which then stays for review on the phone. It is never moved to another period.
+Periods are explicit, persisted entities (07 §10). They may leave out days the salon does not operate (e.g.
+Monday–Saturday weeks, Sunday closed). **With a complete schedule (first and last operating day, §1) they are generated
+automatically** (07 D7 *Period lifecycle*): the week of a record's day is created with that record, and today's week when
+the app opens the Fecho, Negócio or a team situation — nothing to create ahead, no horizon to extend. A period whose first
+day is after today is *scheduled*: no Fecho decision on it and not listed until it starts. A date in no period and on no
+operating day is refused (`NO_PERIOD_FOR_DATE`, "Não existe um período aberto para esta data") — online, and at sync for
+work saved offline, which then stays for review on the phone. It is never moved to another period. Without a complete
+schedule, create periods by hand, well before they start:
 
 ```sql
 select private.admin_create_period(:org, '<label>', '<first day>', '<last day>');   -- rejects overlaps
+```
+
+**A period that was never used** (Aberto, ended more than two days ago, and nothing on it: no record of any kind on its
+days — cancelled ones included — no approval, payment, close statement, rule or owners' decision, reserve movement,
+transition or week-end event) can be removed; anything else is refused (`PERIOD_NOT_EMPTY` lists what was found,
+`PERIOD_STATE_INVALID`, `PERIOD_IN_CAPTURE_WINDOW`). Audited `period_removed` with a snapshot; the `period_created` entry
+stays.
+```sql
+select private.admin_remove_empty_period(:period_id, '<reason>');
 ```
 
 **Future periods to the operating schedule** (organizations with a schedule, §1): ends each future period that is still

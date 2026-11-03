@@ -3,6 +3,7 @@
 // person's remuneration stays behind team.finance.read. All reads live under PRIVATE_ROOT (removed on exit).
 import { getSupabase } from '../../shared/supabase/client'
 import { toAppError } from '../../shared/errors'
+import { ensureCurrentPeriod, withCurrentPeriod } from '../../shared/periods/ensureCurrentPeriod'
 
 export type * from './types'
 import type { BusinessCosts, BusinessFinance, BusinessHealth, BusinessServices, BusinessTeam, PeriodRef } from './types'
@@ -24,9 +25,11 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T
 }
 
-export const getBusinessHealth = (period: string | null) => rpc<BusinessHealth>('business_health', { p_period_id: period })
-export const getBusinessTeam = (period: string | null) => rpc<BusinessTeam>('business_team', { p_period_id: period })
-export const getBusinessServices = (period: string | null) => rpc<BusinessServices>('business_services', { p_period_id: period })
-export const getBusinessCosts = (period: string | null) => rpc<BusinessCosts>('business_costs', { p_period_id: period })
-export const getBusinessFinance = (period: string | null) => rpc<BusinessFinance>('business_finance', { p_period_id: period })
-export const listBusinessPeriods = () => rpc<PeriodRef[]>('business_periods')
+// a null period is the current one: today's week is ensured first (period lifecycle)
+const read = <T>(fn: string, period: string | null) => withCurrentPeriod(period, () => rpc<T>(fn, { p_period_id: period }))
+export const getBusinessHealth = (period: string | null) => read<BusinessHealth>('business_health', period)
+export const getBusinessTeam = (period: string | null) => read<BusinessTeam>('business_team', period)
+export const getBusinessServices = (period: string | null) => read<BusinessServices>('business_services', period)
+export const getBusinessCosts = (period: string | null) => read<BusinessCosts>('business_costs', period)
+export const getBusinessFinance = (period: string | null) => read<BusinessFinance>('business_finance', period)
+export const listBusinessPeriods = () => ensureCurrentPeriod().then(() => rpc<PeriodRef[]>('business_periods'))

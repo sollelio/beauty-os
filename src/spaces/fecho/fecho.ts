@@ -24,6 +24,7 @@ export const FECHO_MESSAGES: Record<string, string> = {
   WEEK_END_NOT_AVAILABLE: 'Este período não tem um último dia de funcionamento definido.',
   PERIOD_WEEK_ENDED: 'A semana já está terminada.',
   WEEK_NOT_ENDED: 'A semana já não está terminada.',
+  PERIOD_NOT_STARTED: 'Este período ainda não começou: só pode ser decidido a partir do primeiro dia.',
 }
 
 /** The Fecho review of the period in ?p= (or the current one). Drops all private data if the context ended. */

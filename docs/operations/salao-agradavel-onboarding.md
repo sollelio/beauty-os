@@ -12,7 +12,7 @@ repository.
 | Name | Salão Agradável | `organizations.name` |
 | Country / timezone | Angola · `Africa/Luanda` | `organizations.timezone` |
 | Currency | AOA · 2 minor digits · symbol `Kz` (amounts typed in whole Kz) | `organizations.currency_*` |
-| Official period | Weekly, Monday → Sunday — **confirmed** (Sollelio, 2026-10-13); first period 12/10–18/10 (records start 14/10) | `admin_create_period` × 8 weeks (§5 step 3) |
+| Official period | Weekly, Monday → Sunday — **confirmed** (Sollelio, 2026-10-13); first period 12/10–18/10 (records start 14/10). Since 2026-11-02 Monday–Saturday, Sunday uncovered (07 D7); from the period lifecycle (2026-11-03) weeks are generated from the schedule (first day Monday, last Saturday, 20:00) | `admin_create_period` × 8 weeks (§5 step 3); then `admin_set_week_schedule(org, 1, 6, '20:00')` |
 | Customer payment methods | Dinheiro · Multicaixa Express | `payment_methods` (`dinheiro`, `multicaixa_express`) |
 | Purchase origin | Mercado do Kikolo | `purchase_origins` |
 | Reserve opening balance | 25.000 Kz | **not loadable as is** (§6.1) |
