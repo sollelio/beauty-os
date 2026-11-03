@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { costInsights, serviceInsights, teamConcentration, buildInsights, buildInsightHub, generateInsights, SOURCE_AREA, type Insight, type InsightKind } from './insights'
+import { costInsights, serviceInsights, teamConcentration, buildInsights, buildInsightHub, generateInsights, COMPARISON_UNAVAILABLE, SOURCE_AREA, type Insight, type InsightKind } from './insights'
 import { INSIGHT_THRESHOLDS } from './thresholds'
 import type { BusinessCosts, BusinessHealth, BusinessServices, BusinessTeam, Change, MetricKey, PeriodMetrics } from './types'
 
@@ -279,6 +279,14 @@ describe('shared insight model (Slice 06): one engine for the overview, the deta
     expect([...hub.active, ...hub.period]).toEqual([])
     expect(hub.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'no_previous_period' })
     expect(hub.skipped).toContainEqual({ kind: 'expense_category_high', reason: 'insufficient_history' })
+  })
+
+  it('the immediately previous period is missing (a week without activity): no comparison, the reason is said', () => {
+    const h = health()
+    h.meta.comparison.previous = { available: false, reason: 'previous_missing', period: null }
+    const hub = buildInsightHub({ health: h }, { health: h }, money)
+    expect(hub.skipped).toContainEqual({ kind: 'production_up_result_down', reason: 'previous_missing' })
+    expect(COMPARISON_UNAVAILABLE.previous_missing).toBe('O período imediatamente anterior não existe (sem atividade registada): não há com que comparar.')
   })
 
   it('privacy: a hidden figure feeds no insight, driver or amount (07 D9 · B11)', () => {

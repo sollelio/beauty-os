@@ -3,6 +3,7 @@
 // (ADR-0005 R-3) and a command_id per intent (ADR-0006). All reads live under PRIVATE_ROOT (removed on exit).
 import { getSupabase } from '../../shared/supabase/client'
 import { toAppError } from '../../shared/errors'
+import { ensureCurrentPeriod, withCurrentPeriod } from '../../shared/periods/ensureCurrentPeriod'
 
 export type PeriodState = 'aberto' | 'pronto_para_pagamento' | 'em_pagamento' | 'fechado'
 export const STATE_LABEL: Record<PeriodState, string> = {
@@ -119,8 +120,8 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T
 }
 
-export const getFecho = (period: string | null) => rpc<Fecho>('fecho_period', { p_period_id: period })
-export const listFechoPeriods = () => rpc<FechoPeriod[]>('fecho_periods')
+export const getFecho = (period: string | null) => withCurrentPeriod(period, () => rpc<Fecho>('fecho_period', { p_period_id: period }))
+export const listFechoPeriods = () => ensureCurrentPeriod().then(() => rpc<FechoPeriod[]>('fecho_periods'))
 export const getMoneyReview = (period: string | null) => rpc<MoneyReview>('fecho_money', { p_period_id: period })
 export const getFechoHistory = (period: string | null) => rpc<HistoryEntry[]>('fecho_history', { p_period_id: period })
 export const getRulePreview = (period: string, person: string, percent: number | null) =>

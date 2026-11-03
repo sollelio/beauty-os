@@ -2,6 +2,7 @@
 // excess, the difference and the rule shares — is computed by the database (ADR-0004); this layer only reads.
 import { getSupabase } from '../../shared/supabase/client'
 import { toAppError } from '../../shared/errors'
+import { ensureCurrentPeriod, withCurrentPeriod } from '../../shared/periods/ensureCurrentPeriod'
 
 export type PeriodState = 'aberto' | 'pronto_para_pagamento' | 'em_pagamento' | 'fechado'
 export type Period = { id: string; label: string; state: PeriodState; starts_on: string; ends_on: string }
@@ -44,9 +45,10 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T
 }
 
+// a null period is the current one: today's week is ensured first (period lifecycle)
 export const getSituation = (personId: string, periodId: string | null) =>
-  rpc<Situation>('team_situation', { p_person_id: personId, p_period_id: periodId })
+  withCurrentPeriod(periodId, () => rpc<Situation>('team_situation', { p_person_id: personId, p_period_id: periodId }))
 export const getHistory = (personId: string, periodId: string | null, kind: HistoryKind | null) =>
-  rpc<History>('team_history', { p_person_id: personId, p_period_id: periodId, p_kind: kind, p_limit: 50 })
-export const listPeriods = (personId: string) => rpc<PeriodSummary[]>('team_periods', { p_person_id: personId })
+  withCurrentPeriod(periodId, () => rpc<History>('team_history', { p_person_id: personId, p_period_id: periodId, p_kind: kind, p_limit: 50 }))
+export const listPeriods = (personId: string) => ensureCurrentPeriod().then(() => rpc<PeriodSummary[]>('team_periods', { p_person_id: personId }))
 export const listTeamPeople = () => rpc<TeamPerson[]>('team_people')

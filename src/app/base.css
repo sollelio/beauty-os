@@ -220,6 +220,15 @@ h2 { font-size: var(--t-title); line-height: 1.2; font-weight: 700; margin: 0; l
 .avatar { width: 2.75rem; height: 2.75rem; border-radius: 50%; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent); font-weight: 700; font-size: 1.05rem; flex: 0 0 auto; }
 .chip-outline { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); white-space: nowrap; }
 .chip-outline[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Fecho period picker: ‹ previous · the period (opens the list) · next › */
+.period-picker { display: flex; align-items: center; gap: var(--s-1); margin-inline: calc(-1 * var(--s-2)); }
+.period-picker > .stack { flex: 1 1 auto; min-width: 0; text-align: center; }
+.period-picker h1 { margin: 0; font-size: var(--t-title); line-height: 1.2; }
+.period-picker .icon-btn:disabled { opacity: 0.3; }
+.period-title-btn { display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%; border: 0; background: transparent; color: inherit;
+  font: inherit; letter-spacing: inherit; padding: 0; text-align: center; overflow-wrap: anywhere; cursor: pointer; }
+.period-title-btn svg { flex: 0 0 auto; color: var(--muted); }
+.period-title-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 .headline { display: flex; flex-direction: column; gap: 0.25rem; text-align: left; background: none; border: 0; padding: 0; color: var(--ink); min-height: 2.75rem; }
 .headline-value { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .headline-link { color: var(--accent); font-weight: 600; font-size: 0.95rem; min-height: 1.75rem; display: flex; align-items: center; }
